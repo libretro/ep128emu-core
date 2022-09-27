@@ -23,7 +23,9 @@
 #include "ep128emu.hpp"
 
 #include <vector>
+#ifndef EXCLUDE_SOUND_LIBS
 #include <sndfile.h>
+#endif // EXCLUDE_SOUND_LIBS
 
 namespace Ep128Emu {
 
@@ -402,6 +404,7 @@ namespace Ep128Emu {
     virtual void deleteAllCuePoints();
   };
 
+#ifndef EXCLUDE_SOUND_LIBS
   class Tape_SoundFile : public Tape {
    public:
     class TapeFilter {
@@ -484,6 +487,7 @@ namespace Ep128Emu {
     void setParameters(int requestedChannel_, bool enableFIRFilter_,
                        float filterMinFreq_, float filterMaxFreq_);
   };
+#endif // EXCLUDE_SOUND_LIBS
 
   /*!
    * Open tape file 'fileName'. If the file does not exist yet, it may be

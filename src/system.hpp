@@ -204,6 +204,8 @@ namespace Ep128Emu {
    */
   void setProcessPriority(int n);
 
+  bool does_file_exist(const char *fileName);
+
   /*!
    * If 'fileName' does not already have an extension (starting with a dot
    * character), append a dot character and 's' to the file name.

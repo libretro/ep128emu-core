@@ -53,6 +53,7 @@ namespace Ep128Emu {
       avgTimesliceLength(0.002f),
       prvTime(0.0),
       nxtTime(0.0),
+      allowedRuntime(0),
       userData(userData_),
       errorCallback(&defaultErrorCallback),
       processCallback((void (*)(void *)) 0)
@@ -156,13 +157,20 @@ namespace Ep128Emu {
       freeMessageStack = m;
     }
     nxtTime += double(timesliceLength);
+#ifdef EP128EMU_LIBRETRO_CORE
+    bool runAllowed = allowedRuntime >= 2000 ? true : false;
+#endif // EP128EMU_LIBRETRO_CORE
     mutex_.unlock();
     // run emulation, or wait if paused
     double  curTime = prvTime;
     try {
       if (processCallback)
         processCallback(userData);
+#ifdef EP128EMU_LIBRETRO_CORE
+      if (!pauseFlag && runAllowed) {
+#else
       if (!pauseFlag) {
+#endif // EP128EMU_LIBRETRO_CORE
         vm.run(2000);
         curTime = speedTimer.getRealTime();
         if (curTime < nxtTime)
@@ -171,7 +179,9 @@ namespace Ep128Emu {
           nxtTime = curTime;
       }
       else {
+#ifndef EP128EMU_LIBRETRO_CORE
         Timer::wait(0.01);
+#endif // EP128EMU_LIBRETRO_CORE
         curTime = speedTimer.getRealTime();
         nxtTime = curTime;
       }
@@ -191,6 +201,9 @@ namespace Ep128Emu {
     }
     // update status information
     mutex_.lock();
+#ifdef EP128EMU_LIBRETRO_CORE
+    if (runAllowed) allowedRuntime -= 2000;
+#endif // EP128EMU_LIBRETRO_CORE
     float   deltaTime = float(curTime - prvTime);
     prvTime = curTime;
     deltaTime = (deltaTime > 0.0f ? deltaTime : 0.0f);
@@ -401,6 +414,22 @@ namespace Ep128Emu {
       timesliceLength = 0.0f;
     mutex_.unlock();
   }
+
+  void VMThread::allowRunFor(size_t microseconds)
+  {
+    mutex_.lock();
+    allowedRuntime = allowedRuntime > microseconds * 10 ? allowedRuntime : allowedRuntime + microseconds;
+    //allowedRuntime = allowedRuntime + microseconds;
+    mutex_.unlock();
+  }
+
+  bool VMThread::isReady(void)
+  {
+    if (allowedRuntime > 2000)
+      return false;
+    else return true;
+  }
+
 
   VMThread::Message * VMThread::allocateMessage_()
   {

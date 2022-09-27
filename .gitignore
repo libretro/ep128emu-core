@@ -2,6 +2,7 @@
 /.sconsign.dblite
 /config.log
 *.o
+*.so
 *.a
 *_fl.cpp
 *_fl.hpp

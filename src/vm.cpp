@@ -85,15 +85,17 @@ namespace Ep128Emu {
     AudioOutput&  audioOutput_;
     int16_t       buf[32];
     size_t        bufPos;
+    bool          forceMono;
    public:
     AudioConverter_(AudioOutput& audioOutput__,
                     float inputSampleRate_,
                     float outputSampleRate_,
                     float dcBlockFreq1 = 10.0f,
                     float dcBlockFreq2 = 10.0f,
-                    float ampScale_ = 0.7071f)
+                    float ampScale_ = 0.7071f,
+                    bool forceMono_ = false)
       : T(inputSampleRate_, outputSampleRate_,
-          dcBlockFreq1, dcBlockFreq2, ampScale_),
+          dcBlockFreq1, dcBlockFreq2, ampScale_, forceMono_),
         audioOutput_(audioOutput__),
         bufPos(0)
     {
@@ -103,8 +105,13 @@ namespace Ep128Emu {
     }
     virtual void audioOutput(int16_t left, int16_t right)
     {
-      buf[bufPos++] = left;
-      buf[bufPos++] = right;
+      if(forceMono) {
+        buf[bufPos++] = (left+right)/2;
+        buf[bufPos++] = (left+right)/2;
+      } else {
+        buf[bufPos++] = left;
+        buf[bufPos++] = right;
+      }
       if (bufPos >= 32) {
         bufPos = 0;
         audioOutput_.sendAudioData(&(buf[0]), 16);
@@ -120,6 +127,7 @@ namespace Ep128Emu {
       writingAudioOutput(false),
       audioOutputEnabled(true),
       audioOutputHighQuality(false),
+      forceMono(false),
       displayEnabled(true),
       audioConverterSampleRate(0.0f),
       audioOutputSampleRate(0.0f),
@@ -178,13 +186,13 @@ namespace Ep128Emu {
                 audioOutput,
                 audioConverterSampleRate, audioOutputSampleRate,
                 audioOutputFilter1Freq, audioOutputFilter2Freq,
-                audioOutputVolume);
+                audioOutputVolume, forceMono);
           else
             audioConverter = new AudioConverter_<AudioConverterLowQuality>(
                 audioOutput,
                 audioConverterSampleRate, audioOutputSampleRate,
                 audioOutputFilter1Freq, audioOutputFilter2Freq,
-                audioOutputVolume);
+                audioOutputVolume, forceMono);
           audioConverter->setEqualizerParameters(audioOutputEQMode,
                                                  audioOutputEQFrequency,
                                                  audioOutputEQLevel,
@@ -261,13 +269,13 @@ namespace Ep128Emu {
               audioOutput,
               audioConverterSampleRate, audioOutputSampleRate,
               audioOutputFilter1Freq, audioOutputFilter2Freq,
-              audioOutputVolume);
+              audioOutputVolume, forceMono);
         else
           audioConverter = new AudioConverter_<AudioConverterLowQuality>(
               audioOutput,
               audioConverterSampleRate, audioOutputSampleRate,
               audioOutputFilter1Freq, audioOutputFilter2Freq,
-              audioOutputVolume);
+              audioOutputVolume, forceMono);
         audioConverter->setEqualizerParameters(audioOutputEQMode,
                                                audioOutputEQFrequency,
                                                audioOutputEQLevel,
@@ -322,6 +330,11 @@ namespace Ep128Emu {
         (ampScale_ > 0.01f ? (ampScale_ < 1.0f ? ampScale_ : 1.0f) : 0.01f);
     if (audioConverter)
       audioConverter->setOutputVolume(audioOutputVolume);
+  }
+
+  void VirtualMachine::setAudioOutputMono(bool forceMono_)
+  {
+    forceMono = forceMono_;
   }
 
   void VirtualMachine::setEnableAudioOutput(bool isEnabled)
@@ -608,6 +621,7 @@ namespace Ep128Emu {
     tapeSoundFileFilterMinFreq = filterMinFreq_;
     tapeSoundFileFilterMaxFreq = filterMaxFreq_;
     if (tape) {
+#ifndef EXCLUDE_SOUND_LIBS
       if (typeid(*tape) == typeid(Tape_SoundFile)) {
         Tape_SoundFile& tape_ = *(dynamic_cast<Tape_SoundFile *>(tape));
         tape_.setParameters(tapeSoundFileChannel,
@@ -615,6 +629,7 @@ namespace Ep128Emu {
                             tapeSoundFileFilterMinFreq,
                             tapeSoundFileFilterMaxFreq);
       }
+#endif // EXCLUDE_SOUND_LIBS
     }
   }
 
@@ -830,6 +845,7 @@ namespace Ep128Emu {
       return;
     tape = openTapeFile(fileName.c_str(), 0,
                         defaultTapeSampleRate, bitsPerSample);
+#ifndef EXCLUDE_SOUND_LIBS
     if (typeid(*tape) == typeid(Tape_SoundFile)) {
       Tape_SoundFile& tape_ = *(dynamic_cast<Tape_SoundFile *>(tape));
       tape_.setParameters(tapeSoundFileChannel,
@@ -837,6 +853,7 @@ namespace Ep128Emu {
                           tapeSoundFileFilterMinFreq,
                           tapeSoundFileFilterMaxFreq);
     }
+#endif // EXCLUDE_SOUND_LIBS
     if (tapeRecordOn)
       tape->record();
     else if (tapePlaybackOn)
@@ -868,13 +885,13 @@ namespace Ep128Emu {
               audioOutput,
               audioConverterSampleRate, audioOutputSampleRate,
               audioOutputFilter1Freq, audioOutputFilter2Freq,
-              audioOutputVolume);
+              audioOutputVolume, forceMono);
         else
           audioConverter = new AudioConverter_<AudioConverterLowQuality>(
               audioOutput,
               audioConverterSampleRate, audioOutputSampleRate,
               audioOutputFilter1Freq, audioOutputFilter2Freq,
-              audioOutputVolume);
+              audioOutputVolume, forceMono);
         audioConverter->setEqualizerParameters(audioOutputEQMode,
                                                audioOutputEQFrequency,
                                                audioOutputEQLevel,

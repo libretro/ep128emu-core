@@ -22,7 +22,9 @@
 #include "system.hpp"
 
 #include <cmath>
+#ifndef EXCLUDE_SOUND_LIBS
 #include <sndfile.h>
+#endif // EXCLUDE_SOUND_LIBS
 
 #define EPTEHEADERLEN 512
 static const char *epteFileMagic = "ENTERPRISE 128K TAPE FILE       ";
@@ -1535,6 +1537,7 @@ namespace Ep128Emu {
   }
 
   // --------------------------------------------------------------------------
+#ifndef EXCLUDE_SOUND_LIBS
 
   Tape_SoundFile::TapeFilter::TapeFilter(size_t irSamples)
   {
@@ -1984,6 +1987,7 @@ namespace Ep128Emu {
                                     filterMinFreq_, filterMaxFreq_);
     }
   }
+#endif // EXCLUDE_SOUND_LIBS
 
   // --------------------------------------------------------------------------
 
@@ -2000,12 +2004,16 @@ namespace Ep128Emu {
           t = new Tape_EPTE(fileName, bitsPerSample);
         }
         catch (...) {
+#ifndef EXCLUDE_SOUND_LIBS
           try {
             t = new Tape_SoundFile(fileName, mode, bitsPerSample);
           }
           catch (...) {
+#endif // EXCLUDE_SOUND_LIBS
             t = new Tape_Ep128Emu(fileName, mode, sampleRate_, bitsPerSample);
+#ifndef EXCLUDE_SOUND_LIBS
           }
+#endif // EXCLUDE_SOUND_LIBS
         }
       }
     }

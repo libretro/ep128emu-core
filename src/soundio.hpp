@@ -23,8 +23,10 @@
 #include "ep128emu.hpp"
 #include "system.hpp"
 
+#ifndef EXCLUDE_SOUND_LIBS
 #include <sndfile.h>
 #include <portaudio.h>
+#endif // EXCLUDE_SOUND_LIBS
 #ifdef ENABLE_MIDI_PORT
 #  include <portmidi.h>
 #  include <porttime.h>
@@ -36,7 +38,9 @@ namespace Ep128Emu {
   class AudioOutput {
    private:
     std::string outputFileName;
+#ifndef EXCLUDE_SOUND_LIBS
     SNDFILE *soundFile;
+#endif // EXCLUDE_SOUND_LIBS
    protected:
     int     deviceNumber;
     float   sampleRate;
@@ -68,6 +72,9 @@ namespace Ep128Emu {
      * (in 16 bit signed PCM format) to the audio output device and file.
      */
     virtual void sendAudioData(const int16_t *buf, size_t nFrames);
+#ifdef EP128EMU_LIBRETRO_CORE
+    virtual void forwardAudioData(int16_t *buf_out, size_t* nFrames, int expectedFrames)=0;
+#endif
     /*!
      * Close the audio device.
      */
@@ -81,6 +88,7 @@ namespace Ep128Emu {
     virtual void openDevice();
   };
 
+#ifndef EXCLUDE_SOUND_LIBS
   class AudioOutput_PortAudio : public AudioOutput {
    private:
     struct Buffer {
@@ -129,7 +137,9 @@ namespace Ep128Emu {
     virtual void openDevice();
   };
 
-  // --------------------------------------------------------------------------
+#endif // EXCLUDE_SOUND_LIBS
+
+// --------------------------------------------------------------------------
 
 #ifdef ENABLE_MIDI_PORT
   class VirtualMachine;

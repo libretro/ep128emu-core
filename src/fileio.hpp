@@ -137,9 +137,14 @@ namespace Ep128Emu {
     void processAllChunks();
     void writeFile(const char *fileName, bool useHomeDirectory = false,
                    bool enableCompression = false);
+    void writeMem(void * data, size_t maxMemSize);
+    void writeFileOrMem(const char *fileName, bool useHomeDirectory,
+                   bool enableCompression, bool useMem, void * data, size_t maxMemSize);
+
     void registerChunkType(ChunkTypeHandler *);
     File();
     File(const char *fileName, bool useHomeDirectory = false);
+    File(unsigned char * data, size_t size);
     ~File();
     inline size_t getBufferDataSize() const
     {

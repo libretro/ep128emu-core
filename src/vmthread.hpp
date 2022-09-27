@@ -58,6 +58,7 @@ namespace Ep128Emu {
     float           avgTimesliceLength;
     double          prvTime;
     double          nxtTime;
+    volatile size_t allowedRuntime;
     VirtualMachine::VMStatus  vmStatus;
     void            *userData;
     void            (*errorCallback)(void *userData_, const char *msg);
@@ -86,6 +87,14 @@ namespace Ep128Emu {
      * Returns false after quit() was called or a fatal error occured.
      */
     bool process();
+    /*!
+     * Allow execution for a short period of time (one frame of frontend)
+     */
+    void allowRunFor(size_t microseconds);
+    /*!
+     * True if VM has already consumed the execution time set up in allowRunFor.
+     */
+    bool isReady(void);
     /*!
      * Pause emulation if 'n' is true, or continue if 'n' is false.
      * NOTE: the initial state is pause=true.

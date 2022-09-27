@@ -37,6 +37,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fstream>
 
 namespace Ep128Emu {
 
@@ -524,6 +525,12 @@ namespace Ep128Emu {
 #else
     (void) n;
 #endif
+  }
+
+  bool does_file_exist(const char *fileName)
+  {
+    std::ifstream infile(fileName);
+    return infile.good();
   }
 
   void addFileNameExtension(std::string& fileName, const char *s)

@@ -22,13 +22,16 @@
 #include "soundio.hpp"
 #include "vm.hpp"
 
+#ifndef EXCLUDE_SOUND_LIBS
 #include <sndfile.h>
 #include <portaudio.h>
+#endif // EXCLUDE_SOUND_LIBS
 #ifdef ENABLE_MIDI_PORT
 #  include <portmidi.h>
 #  include <porttime.h>
 #endif
 #include <vector>
+#ifndef EXCLUDE_SOUND_LIBS
 
 #ifdef ENABLE_SOUND_DEBUG
 
@@ -59,12 +62,15 @@ static inline bool isPortAudioError(const char *msg, PaError paError)
 }
 
 #endif
+#endif // EXCLUDE_SOUND_LIBS
 
 namespace Ep128Emu {
 
   AudioOutput::AudioOutput()
     : outputFileName(""),
+#ifndef EXCLUDE_SOUND_LIBS
       soundFile((SNDFILE *) 0),
+#endif // EXCLUDE_SOUND_LIBS
       deviceNumber(-1),
       sampleRate(0.0f),
       totalLatency(0.0f),
@@ -77,10 +83,12 @@ namespace Ep128Emu {
   {
     // NOTE: the destructor of a derived class is responsible for closing
     // the audio device if it is open
+#ifndef EXCLUDE_SOUND_LIBS
     if (soundFile) {
       sf_close(soundFile);
       soundFile = (SNDFILE *) 0;
     }
+#endif // EXCLUDE_SOUND_LIBS
   }
 
   void AudioOutput::setParameters(int deviceNumber_, float sampleRate_,
@@ -116,6 +124,7 @@ namespace Ep128Emu {
     nPeriodsSW = nPeriodsSW_;
     if (sampleRate_ != sampleRate) {
       sampleRate = sampleRate_;
+#ifndef EXCLUDE_SOUND_LIBS
       if (soundFile != (SNDFILE *) 0) {
         sf_close(soundFile);
         soundFile = (SNDFILE *) 0;
@@ -133,6 +142,7 @@ namespace Ep128Emu {
           throw Exception("error opening output sound file");
         }
       }
+#endif // EXCLUDE_SOUND_LIBS
     }
     deviceNumber = deviceNumber_;
     sampleRate = sampleRate_;
@@ -149,6 +159,7 @@ namespace Ep128Emu {
 
   void AudioOutput::setOutputFile(const std::string& fileName)
   {
+#ifndef EXCLUDE_SOUND_LIBS
     if (fileName == outputFileName)
       return;
     outputFileName = "";
@@ -168,12 +179,14 @@ namespace Ep128Emu {
         throw Exception("error opening output sound file");
       outputFileName = fileName;
     }
+#endif // EXCLUDE_SOUND_LIBS
   }
 
   void AudioOutput::sendAudioData(const int16_t *buf, size_t nFrames)
   {
     // NOTE: AudioOutput::sendAudioData() should be called by derived classes
     // so that the sound file can be written
+#ifndef EXCLUDE_SOUND_LIBS
     if (soundFile) {
       // need to cast away const qualification to work around compile
       // error with old versions of libsndfile
@@ -187,6 +200,7 @@ namespace Ep128Emu {
         throw Exception("error writing sound file -- is the disk full ?");
       }
     }
+#endif // EXCLUDE_SOUND_LIBS
   }
 
   void AudioOutput::closeDevice()
@@ -208,6 +222,7 @@ namespace Ep128Emu {
 
   // --------------------------------------------------------------------------
 
+#ifndef EXCLUDE_SOUND_LIBS
   AudioOutput_PortAudio::AudioOutput_PortAudio()
     : AudioOutput(),
       paInitialized(false),
@@ -586,7 +601,7 @@ namespace Ep128Emu {
     }
     Pa_StartStream(paStream);
   }
-
+#endif // EXCLUDE_SOUND_LIBS
   // --------------------------------------------------------------------------
 
 #ifdef ENABLE_MIDI_PORT

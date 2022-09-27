@@ -172,13 +172,14 @@ namespace Ep128Emu {
   AudioConverter::AudioConverter(float inputSampleRate_,
                                  float outputSampleRate_,
                                  float dcBlockFreq1, float dcBlockFreq2,
-                                 float ampScale_)
+                                 float ampScale_, bool forceMono_)
     : inputSampleRate(inputSampleRate_),
       outputSampleRate(outputSampleRate_),
       dcBlock1L(outputSampleRate_, dcBlockFreq1),
       dcBlock1R(outputSampleRate_, dcBlockFreq1),
       dcBlock2L(outputSampleRate_, dcBlockFreq2),
-      dcBlock2R(outputSampleRate_, dcBlockFreq2)
+      dcBlock2R(outputSampleRate_, dcBlockFreq2),
+      forceMono(forceMono_)
   {
     setOutputVolume(ampScale_);
   }
@@ -277,9 +278,10 @@ namespace Ep128Emu {
                                                      float outputSampleRate_,
                                                      float dcBlockFreq1,
                                                      float dcBlockFreq2,
-                                                     float ampScale_)
+                                                     float ampScale_,
+                                                     bool forceMono_)
     : AudioConverter(inputSampleRate_, outputSampleRate_,
-                     dcBlockFreq1, dcBlockFreq2, ampScale_)
+                     dcBlockFreq1, dcBlockFreq2, ampScale_, forceMono_)
   {
     prvInputL = 0.0f;
     prvInputR = 0.0f;
@@ -415,9 +417,10 @@ namespace Ep128Emu {
                                                        float outputSampleRate_,
                                                        float dcBlockFreq1,
                                                        float dcBlockFreq2,
-                                                       float ampScale_)
+                                                       float ampScale_,
+                                                       bool forceMono_)
     : AudioConverter(inputSampleRate_, outputSampleRate_,
-                     dcBlockFreq1, dcBlockFreq2, ampScale_)
+                     dcBlockFreq1, dcBlockFreq2, ampScale_, forceMono_)
   {
     for (int i = 0; i < bufSize; i++) {
       bufL[i] = 0.0f;

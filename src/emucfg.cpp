@@ -124,6 +124,9 @@ namespace Ep128Emu {
     defineConfigurationVariable(*this, "vm.enableFileIO",
                                 vm.enableFileIO, false,
                                 vmConfigurationChanged);
+    defineConfigurationVariable(*this, "machineDetailedType",
+                                machineDetailedType, std::string(""),
+                                memoryConfigurationChanged);
     // ----------------
     defineConfigurationVariable(*this, "memory.ram.size",
                                 memory.ram.size, 128,
@@ -222,6 +225,9 @@ namespace Ep128Emu {
     defineConfigurationVariable(*this, "sound.highQuality",
                                 sound.highQuality, true,
                                 soundSettingsChanged);
+    defineConfigurationVariable(*this, "sound.mono",
+                                sound.mono, false,
+                                soundSettingsChanged);
     defineConfigurationVariable(*this, "sound.device",
                                 sound.device, int(0),
                                 soundSettingsChanged, -1.0, 1000.0);
@@ -278,6 +284,25 @@ namespace Ep128Emu {
                                     keyboardMapChanged, -1.0, 65535.0);
       }
     }
+    char  jtmpBuf[24];
+    char  *js = &(jtmpBuf[0]);
+    for (int i = 0; i < 16; i++) {
+      std::sprintf(js, "joypad.%s",joypadButtons[i].c_str());
+      //printf("Defining %s\n",js);
+      defineConfigurationVariable(*this, std::string(js),
+                                  joypad[i], std::string(""),
+                                  keyboardMapChanged);
+    }
+    for (int i = 0; i < 6; i++) {
+      std::sprintf(js, "joypad.user%d",i+1);
+      defineConfigurationVariable(*this, std::string(js),
+                                  joypadUser[i], std::string(""),
+                                  keyboardMapChanged);
+    }
+    defineConfigurationVariable(*this, std::string("contentfilename"),
+                                  contentFileName, std::string(""),
+                                  keyboardMapChanged);
+
     // ----------------
     joystickSettingsChanged = true;
     joystick.registerConfigurationVariables(*this);
@@ -643,6 +668,7 @@ namespace Ep128Emu {
         }
       }
       vm_.setAudioOutputHighQuality(sound.highQuality);
+      vm_.setAudioOutputMono(sound.mono);
       vm_.setAudioOutputVolume(float(sound.volume));
       vm_.setAudioOutputFilters(float(sound.dcBlockFilter1Freq),
                                 float(sound.dcBlockFilter2Freq));

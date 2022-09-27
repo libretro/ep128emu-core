@@ -54,10 +54,11 @@ namespace Ep128Emu {
     ParametricEqualizer eqL;
     ParametricEqualizer eqR;
     float   ampScale;
+    bool    forceMono;
    public:
     AudioConverter(float inputSampleRate_, float outputSampleRate_,
                    float dcBlockFreq1 = 10.0f, float dcBlockFreq2 = 10.0f,
-                   float ampScale_ = 0.7071f);
+                   float ampScale_ = 0.7071f, bool forceMono_ = false);
     virtual ~AudioConverter();
     virtual void sendInputSignal(uint32_t audioInput) = 0;
     virtual void sendMonoInputSignal(int32_t audioInput) = 0;
@@ -82,7 +83,8 @@ namespace Ep128Emu {
                              float outputSampleRate_,
                              float dcBlockFreq1 = 10.0f,
                              float dcBlockFreq2 = 10.0f,
-                             float ampScale_ = 0.7071f);
+                             float ampScale_ = 0.7071f,
+                             bool forceMono_ = false);
     virtual ~AudioConverterLowQuality();
     virtual void sendInputSignal(uint32_t audioInput);
     virtual void sendMonoInputSignal(int32_t audioInput);
@@ -110,13 +112,15 @@ namespace Ep128Emu {
     float   bufR[16];
     float   bufPos, nxtPos;
     float   resampleRatio;
+    bool    forceMono;
     // ----------------
    public:
     AudioConverterHighQuality(float inputSampleRate_,
                               float outputSampleRate_,
                               float dcBlockFreq1 = 10.0f,
                               float dcBlockFreq2 = 10.0f,
-                              float ampScale_ = 0.7071f);
+                              float ampScale_ = 0.7071f,
+                              bool forceMono_ = false);
     virtual ~AudioConverterHighQuality();
     virtual void sendInputSignal(uint32_t audioInput);
     virtual void sendMonoInputSignal(int32_t audioInput);

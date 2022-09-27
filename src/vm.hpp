@@ -43,6 +43,7 @@ namespace Ep128Emu {
     bool            writingAudioOutput;
     bool            audioOutputEnabled;
     bool            audioOutputHighQuality;
+    bool            forceMono;
     bool            displayEnabled;
     float           audioConverterSampleRate;
     float           audioOutputSampleRate;
@@ -178,6 +179,10 @@ namespace Ep128Emu {
      * Set amplitude scale for audio output (defaults to 0.7071).
      */
     virtual void setAudioOutputVolume(float ampScale_);
+    /*!
+     * Set audio output stereo property.
+     */
+    virtual void setAudioOutputMono(bool forceMono);
     /*!
      * Set if audio data is sent to sound card and output file (disabling
      * this also makes the emulation run faster than real time).

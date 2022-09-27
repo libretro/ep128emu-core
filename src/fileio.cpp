@@ -578,6 +578,16 @@ namespace Ep128Emu {
     }
   }
 
+  File::File(unsigned char * data, size_t size)
+  {
+    // Copy contents to buffer directly. Header is ignored.
+    for (size_t i = 16; i < size; i++)
+    {
+      buf.writeByte((unsigned char) (data[i] & 0xFF));
+    }
+    buf.setPosition(0);
+  }
+
   File::~File()
   {
     std::map< int, ChunkTypeHandler * >::iterator   i;
@@ -636,6 +646,17 @@ namespace Ep128Emu {
   void File::writeFile(const char *fileName, bool useHomeDirectory,
                        bool enableCompression)
   {
+    writeFileOrMem(fileName,useHomeDirectory,enableCompression,false,nullptr,0);
+  }
+
+  void File::writeMem(void * data, size_t maxMemSize)
+  {
+    writeFileOrMem("",false,false,true,data, maxMemSize);
+  }
+
+  void File::writeFileOrMem(const char *fileName, bool useHomeDirectory,
+                   bool enableCompression, bool useMem, void * data, size_t maxMemSize)
+  {
     size_t  startPos = buf.getPosition();
     bool    err = true;
 
@@ -670,6 +691,16 @@ namespace Ep128Emu {
         throw Exception("error compressing file");
       }
     }
+    if (useMem) {
+        std::memcpy(data,&(ep128EmuFile_Magic[0]),16);
+        if (buf.getDataSize()+16 > maxMemSize) {
+          err=true;
+        } else {
+          std::memcpy((unsigned char*) data+16,buf.getData(),buf.getDataSize());
+          err=false;
+        }
+    }
+    else 
     if (fileName != (char*) 0 && fileName[0] != '\0') {
       std::string fullName;
       if (useHomeDirectory)
