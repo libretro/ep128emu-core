@@ -270,6 +270,7 @@ namespace Ep128Emu {
     size_t    leaderSampleCnt;
     size_t    chunkBytesRemaining;
     size_t    chunkCnt;
+    uint32_t  chunkArray[128]; // for EPTE/TAPir chunk pointers stored in header
    public:
     /*!
      * Open EPTE format tape file 'fileName' read-only.

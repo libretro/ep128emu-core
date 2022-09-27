@@ -24,7 +24,9 @@
 #include <cmath>
 #include <sndfile.h>
 
+#define EPTEHEADERLEN 512
 static const char *epteFileMagic = "ENTERPRISE 128K TAPE FILE       ";
+static const char *TAPirFileMagic = "\x00\x6a\xff";
 static const char *tzxFileMagic = "ZXTape!\032\001";
 
 static int cuePointCmpFunc(const void *p1, const void *p2)
@@ -597,8 +599,11 @@ namespace Ep128Emu {
     if (!f)
       throw Exception("error opening tape file");
     bool    isEPTEFile = false;
+    bool    isTAPirFile = false;
+    size_t fileSize;
     if (std::fseek(f, 0L, SEEK_END) >= 0) {
-      if (std::ftell(f) >= 512L) {
+      fileSize = std::ftell(f);
+      if (fileSize >= EPTEHEADERLEN) {
         std::fseek(f, 128L, SEEK_SET);
         for (int i = 0; i < 32; i++) {
           if (std::fgetc(f) != int(epteFileMagic[i]))
@@ -606,11 +611,75 @@ namespace Ep128Emu {
           if (i == 31)
             isEPTEFile = true;
         }
+        if(!isEPTEFile) {
+          std::fseek(f, EPTEHEADERLEN, SEEK_SET);
+          for (int i = 0; i < 3; i++) {
+            if (std::fgetc(f) != int(TAPirFileMagic[i]))
+              break;
+            if (i == 1)
+              isTAPirFile = true;
+          }
+        }
       }
     }
-    if (!isEPTEFile) {
+    if (!isEPTEFile && !isTAPirFile) {
       std::fclose(f);
+      //printf("EPTE/TAPir file not detected!\n");
       throw Exception("invalid tape file header");
+    }
+    // Read headers (pointers to chunks)
+    uint32_t tmpChunkArray[128];
+    for (int i = 0; i < 128; i++) {
+      std::fseek(f, 4L*i, SEEK_SET);
+      uint32_t currChunkPointer;
+      currChunkPointer = uint32_t(std::fgetc(f) & 0xFF);
+      currChunkPointer |= (uint32_t(std::fgetc(f) & 0xFF) << 8);
+      currChunkPointer |= (uint32_t(std::fgetc(f) & 0xFF) << 16);
+      currChunkPointer |= (uint32_t(std::fgetc(f) & 0xFF) << 24);
+      // EPTE header: all chunks have pointers, final array can be filled.
+      if(isEPTEFile) {
+        chunkArray[i] = currChunkPointer;
+      }
+      else {
+        tmpChunkArray[i] = currChunkPointer;
+      }
+      //printf("Detected chunk: %d %08x\n",i,currChunkPointer);
+    }
+    bool firstZero = true;
+    for (int i = 0, j = 0; isTAPirFile && i < 127; i++) {
+      if (tmpChunkArray[i] == 0) {
+        if(!firstZero) {
+          break;
+        }
+        else {
+          firstZero = false;
+        }
+      }
+      // extend TAPir chunk list (file only contains pointers to header and first data chunks)
+      uint32_t startOffset = tmpChunkArray[i] + EPTEHEADERLEN;
+      uint32_t endOffset = tmpChunkArray[i+1] == 0 ? fileSize : tmpChunkArray[i+1] + EPTEHEADERLEN;
+      //printf("Analyzing chunk: %08x %08x\n",startOffset,endOffset);
+      for(uint32_t k = startOffset; k<endOffset; ) {
+        std::fseek(f, k, SEEK_SET);
+        // check for chunk header 00 6A
+        if (std::fgetc(f) != 0x0 || (std::fgetc(f) & 0xFF) != 0x6A ) {
+          throw Exception("invalid tape chunk header");
+        }
+        // header OK, store chunk
+        chunkArray[j] = k-0x200;
+        //printf("Stored extra chunk %03d %08x - %03d %08x\n",i,tmpChunkArray[i],j,chunkArray[j]);
+        j++;
+        uint8_t blockCount = uint8_t(std::fgetc(f) & 0xFF);
+        k += 3;
+        for(int l = 0; l < blockCount; l++) {
+          unsigned byteCount = uint8_t(std::fgetc(f) & 0xFF);
+          if (byteCount == 0) byteCount = 256;
+          k += 1 + byteCount + 2;
+          std::fseek(f, k, SEEK_SET);
+          //printf("Data block %d bytecount %d endpos %x \n",l,byteCount,k);
+          if (blockCount == 0xFF) break;
+        }
+      }
     }
     this->seek(0.0);
   }
@@ -679,16 +748,9 @@ namespace Ep128Emu {
         size_t  startPos = 0;
         size_t  endPos = 0;
         if (chunkCnt < 128) {
-          std::fseek(f, long(chunkCnt << 2), SEEK_SET);
-          startPos = size_t(std::fgetc(f) & 0xFF);
-          startPos |= (size_t(std::fgetc(f) & 0xFF) << 8);
-          startPos |= (size_t(std::fgetc(f) & 0xFF) << 16);
-          startPos |= (size_t(std::fgetc(f) & 0xFF) << 24);
+          startPos = chunkArray[chunkCnt];
           if (++chunkCnt < 128) {
-            endPos = size_t(std::fgetc(f) & 0xFF);
-            endPos |= (size_t(std::fgetc(f) & 0xFF) << 8);
-            endPos |= (size_t(std::fgetc(f) & 0xFF) << 16);
-            endPos |= (size_t(std::fgetc(f) & 0xFF) << 24);
+            endPos = chunkArray[chunkCnt];
           }
           std::fseek(f, long(startPos + 512), SEEK_SET);
         }
