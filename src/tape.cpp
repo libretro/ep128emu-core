@@ -2211,21 +2211,21 @@ namespace Ep128Emu {
           t = new Tape_EPTE(fileName, bitsPerSample);
         }
         catch (...) {
-#ifndef EXCLUDE_SOUND_LIBS
           try {
-            t = new Tape_SoundFile(fileName, mode, bitsPerSample);
+              t = new Tape_WAV(fileName, bitsPerSample);
           }
           catch (...) {
-#endif // EXCLUDE_SOUND_LIBS
+#ifndef EXCLUDE_SOUND_LIBS
             try {
-              t = new Tape_WAV(fileName, bitsPerSample);
+              t = new Tape_SoundFile(fileName, mode, bitsPerSample);
             }
             catch (...) {
-              t = new Tape_Ep128Emu(fileName, mode, sampleRate_, bitsPerSample);
-            }
-#ifndef EXCLUDE_SOUND_LIBS
-          }
 #endif // EXCLUDE_SOUND_LIBS
+              t = new Tape_Ep128Emu(fileName, mode, sampleRate_, bitsPerSample);
+#ifndef EXCLUDE_SOUND_LIBS
+            }
+#endif // EXCLUDE_SOUND_LIBS
+          }
         }
       }
     }
