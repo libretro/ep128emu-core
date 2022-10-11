@@ -24,14 +24,16 @@
 
 #ifndef EXCLUDE_SOUND_LIBS
 #include <sndfile.h>
-#include <portaudio.h>
 #endif // EXCLUDE_SOUND_LIBS
+#ifndef EP128EMU_LIBRETRO_CORE
+#include <portaudio.h>
+#endif // EP128EMU_LIBRETRO_CORE
 #ifdef ENABLE_MIDI_PORT
 #  include <portmidi.h>
 #  include <porttime.h>
 #endif
 #include <vector>
-#ifndef EXCLUDE_SOUND_LIBS
+#ifndef EP128EMU_LIBRETRO_CORE
 
 #ifdef ENABLE_SOUND_DEBUG
 
@@ -62,7 +64,7 @@ static inline bool isPortAudioError(const char *msg, PaError paError)
 }
 
 #endif
-#endif // EXCLUDE_SOUND_LIBS
+#endif // EP128EMU_LIBRETRO_CORE
 
 namespace Ep128Emu {
 
@@ -222,7 +224,7 @@ namespace Ep128Emu {
 
   // --------------------------------------------------------------------------
 
-#ifndef EXCLUDE_SOUND_LIBS
+#ifndef EP128EMU_LIBRETRO_CORE
   AudioOutput_PortAudio::AudioOutput_PortAudio()
     : AudioOutput(),
       paInitialized(false),
@@ -601,7 +603,7 @@ namespace Ep128Emu {
     }
     Pa_StartStream(paStream);
   }
-#endif // EXCLUDE_SOUND_LIBS
+#endif // EP128EMU_LIBRETRO_CORE
   // --------------------------------------------------------------------------
 
 #ifdef ENABLE_MIDI_PORT

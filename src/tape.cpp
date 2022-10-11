@@ -371,7 +371,8 @@ namespace Ep128Emu {
         std::fseek(f, 0L, SEEK_SET);
         // check file header
         if (fSize >= 4096L) {
-          std::fread(buf, 1, 4096, f);
+          if (!std::fread(buf, 1, 4096, f))
+            throw Exception("error reading header");
           for (size_t i = 0; i < 4096; i += 4) {
             uint32_t  tmp;
             tmp =   (uint32_t(buf[i + 0]) << 24) | (uint32_t(buf[i + 1]) << 16)
@@ -579,6 +580,212 @@ namespace Ep128Emu {
     if (!writeHeader_())
       throw Exception("error updating cue point table");
   }
+
+  // --------------------------------------------------------------------------
+
+  bool Tape_WAV::readBuffer_()
+  {
+    bool    err = false;
+    long    n = 0L;
+    size_t  blockSize = 512U * (unsigned int) fileBitsPerSample;
+    if ((tapePosition & 0xFFFFF000UL) < tapeLength) {
+      // calculate file position
+      size_t  filePos = (tapePosition >> 12) * blockSize;
+      if (usingNewFormat)
+        filePos = filePos + 44;
+      if (std::fseek(f, long(filePos), SEEK_SET) >= 0) {
+        // read data
+        n = long(std::fread(buf, sizeof(uint8_t), blockSize, f));
+        n = (n >= 0L ? n : 0L);
+      }
+    }
+    if (n < long(blockSize)) {
+      err = true;
+      // pad with zero bytes
+      do {
+        buf[n] = 0;
+      } while (++n < long(blockSize));
+    }
+    return (!err);
+  }
+
+  void Tape_WAV::unpackSamples_()
+  {
+    uint8_t *buf_ = buf;
+    if (fileBitsPerSample != 8) {
+      int     nBits = fileBitsPerSample;
+      int     byteBuf = 0;
+      int     bitCnt = 0;
+      int     bitMask = (1 << fileBitsPerSample) - 1;
+      size_t  readPos = 512U * (unsigned int) fileBitsPerSample;
+      for (size_t i = 4096; i != 0; ) {
+        if (!bitCnt) {
+          byteBuf = int(buf_[--readPos]);
+          bitCnt = 8;
+        }
+        buf_[--i] = uint8_t(byteBuf & bitMask);
+        byteBuf = byteBuf >> nBits;
+        bitCnt = bitCnt - nBits;
+      }
+    }
+    if (fileBitsPerSample < requestedBitsPerSample) {
+      uint8_t lShift = uint8_t(requestedBitsPerSample - fileBitsPerSample);
+      for (size_t i = 0; i < 4096; i++)
+        buf_[i] = buf_[i] << lShift;
+    }
+    else if (fileBitsPerSample > requestedBitsPerSample) {
+      uint8_t rShift = uint8_t(fileBitsPerSample - requestedBitsPerSample);
+      for (size_t i = 0; i < 4096; i++)
+        buf_[i] = buf_[i] >> rShift;
+    }
+  }
+
+  // Simple WAV file handling for readonly support of mono PCM files.
+  // Needed mostly for 1-bit WAV handling (TVC archive) because it isn't recognized by sndfile.
+  // TODO: merge with Tape_Ep128Emu because the data format is the same.
+  Tape_WAV::Tape_WAV(const char *fileName, int bitsPerSample)
+    : Tape(bitsPerSample),
+      f((std::FILE *) 0),
+      buf((uint8_t *) 0),
+      fileHeader((uint32_t *) 0),
+      usingNewFormat(false)
+  {
+    isReadOnly = false;
+    try {
+      if (fileName == (char *) 0 || fileName[0] == '\0')
+        throw Exception("invalid tape file name");
+      buf = new uint8_t[4096];
+      for (size_t i = 0; i < 4096; i++)
+        buf[i] = 0;
+      fileHeader = new uint32_t[44];
+      f = fileOpen(fileName, "rb");
+      isReadOnly = true;
+      if (!f)
+        throw Exception("error opening tape file");
+      if (!usingNewFormat) {            // if opening an already existing file:
+        if (std::fseek(f, 0L, SEEK_END) < 0)
+          throw Exception("error setting tape file position");
+        long  fSize = std::ftell(f);
+        if (fSize < 0L)
+          throw Exception("cannot find out length of tape file");
+        std::fseek(f, 0L, SEEK_SET);
+        // check file header
+        if (fSize >= 44L) {
+          if(!std::fread(buf, 1, 44, f))
+            throw Exception("error reading header");
+          for (size_t i = 0; i < 44; i += 4) {
+            uint32_t  tmp;
+            tmp =   (uint32_t(buf[i + 0]) << 24) | (uint32_t(buf[i + 1]) << 16)
+                  | (uint32_t(buf[i + 2]) << 8)  |  uint32_t(buf[i + 3]);
+            fileHeader[i >> 2] = tmp;
+          }
+          uint32_t fileSampleRate = (uint32_t(buf[27]) << 24) | (uint32_t(buf[26]) << 16)
+                  | (uint32_t(buf[25]) << 8)  |  uint32_t(buf[24]);
+          uint32_t fileSampleBits = (uint32_t(buf[35]) << 8)  |  uint32_t(buf[34]);
+          // WAVE RIFF fmt, PCM, linear, 1 channel
+          if (fileHeader[0] == 0x52494646U && fileHeader[2] == 0x57415645U &&
+              fileHeader[3] == 0x666D7420U && fileHeader[4] == 0x10000000U && fileHeader[5] == 0x01000100U &&
+              (fileSampleBits == 1U || fileSampleBits == 2U ||
+               fileSampleBits == 4U || fileSampleBits == 8U) &&
+              (fileSampleRate >= 10000U && fileSampleRate <= 120000U)) {
+            usingNewFormat = true;
+            sampleRate = long(fileSampleRate);
+            fileBitsPerSample = int(fileSampleBits);
+          } else {
+            throw Exception("not a simple WAV file");
+          }
+        }
+        tapeLength = size_t(fSize);
+        tapeLength = tapeLength - 44;
+        tapeLength = (tapeLength << 3) / (unsigned int) fileBitsPerSample;
+        //printf("WAV detected, sample %d bits %d length %d\n",sampleRate, fileBitsPerSample, tapeLength);
+
+        // fill buffer
+        readBuffer_();
+        unpackSamples_();
+      }
+    }
+    catch (...) {
+      if (f)
+        std::fclose(f);
+      if (fileHeader)
+        delete[] fileHeader;
+      if (buf)
+        delete[] buf;
+      throw;
+    }
+  }
+
+  Tape_WAV::~Tape_WAV()
+  {
+    std::fclose(f);
+    delete[] fileHeader;
+    delete[] buf;
+  }
+
+  void Tape_WAV::runOneSample_()
+  {
+    outputState = buf[tapePosition & 0x0FFF];
+    size_t  pos = tapePosition + 1;
+    // unless recording, clamp position to tape length
+    pos = ((pos < tapeLength || isRecordOn) ? pos : tapeLength);
+    size_t  oldBlockNum = (tapePosition >> 12);
+    size_t  newBlockNum = (pos >> 12);
+
+    if (newBlockNum == oldBlockNum) {
+      tapePosition = pos;
+      return;
+    }
+    tapePosition = pos;
+    readBuffer_();
+    unpackSamples_();
+  }
+
+  void Tape_WAV::setIsMotorOn(bool newState)
+  {
+    isMotorOn = newState;
+  }
+
+  void Tape_WAV::stop()
+  {
+    isPlaybackOn = false;
+    isRecordOn = false;
+  }
+
+  void Tape_WAV::seek(double t)
+  {
+    if (t <= 0.0) {
+      tapeLength = 0;
+      tapePosition = 0;
+      outputState = 0;
+      if (std::fseek(f, 0L, SEEK_END) >= 0) {
+        long    n = std::ftell(f);
+        if (n > 44L) {
+          std::fseek(f, 44L, SEEK_SET);
+        }
+      }
+    }
+  }
+
+  void Tape_WAV::seekToCuePoint(bool isForward, double t)
+  {
+    (void) t;
+    if (!isForward)
+      this->seek(0.0);
+  }
+
+  void Tape_WAV::addCuePoint()
+  {
+  }
+
+  void Tape_WAV::deleteNearestCuePoint()
+  {
+  }
+
+  void Tape_WAV::deleteAllCuePoints()
+  {
+  }
+
 
   // --------------------------------------------------------------------------
 
@@ -2010,7 +2217,12 @@ namespace Ep128Emu {
           }
           catch (...) {
 #endif // EXCLUDE_SOUND_LIBS
-            t = new Tape_Ep128Emu(fileName, mode, sampleRate_, bitsPerSample);
+            try {
+              t = new Tape_WAV(fileName, bitsPerSample);
+            }
+            catch (...) {
+              t = new Tape_Ep128Emu(fileName, mode, sampleRate_, bitsPerSample);
+            }
 #ifndef EXCLUDE_SOUND_LIBS
           }
 #endif // EXCLUDE_SOUND_LIBS

@@ -29,6 +29,7 @@
 #include "tvc64vm.hpp"
 #include "debuglib.hpp"
 #include "videorec.hpp"
+#include "roms/roms.hpp"
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
@@ -1484,23 +1485,36 @@ namespace TVC64 {
     }
     // load file into memory
     std::vector<uint8_t>  buf;
-    buf.resize(0x4000, 0xFF);
-    std::FILE *f = Ep128Emu::fileOpen(fileName, "rb");
-    if (!f)
-      throw Ep128Emu::Exception("cannot open ROM file");
-    std::fseek(f, 0L, SEEK_END);
-    long    dataSize = std::ftell(f) - long(offs);
-    if (dataSize < 0x0400L) {
+    long dataSize;
+    std::map<std::string, const unsigned char*>::const_iterator  iter_builtin_rom;
+    iter_builtin_rom = Ep128Emu::builtin_rom.find(fileName);
+    if (iter_builtin_rom != Ep128Emu::builtin_rom.end()) {
+      dataSize = Ep128Emu::builtin_rom_length.at(fileName) - offs;
+      if (n == 0x02 || n == 0x04)
+        dataSize = (dataSize < 0x2000L ? dataSize : 0x2000L);
+      else
+        dataSize = (dataSize < 0x4000L ? dataSize : 0x4000L);
+      buf.insert(buf.begin(), (*iter_builtin_rom).second+offs, (*iter_builtin_rom).second + offs + dataSize);
+    } else {
+      buf.resize(0x4000, 0xFF);
+      std::FILE *f = Ep128Emu::fileOpen(fileName, "rb");
+      if (!f)
+        throw Ep128Emu::Exception("cannot open ROM file");
+      std::fseek(f, 0L, SEEK_END);
+      dataSize = std::ftell(f) - long(offs);
+      if (dataSize < 0x0400L) {
+        std::fclose(f);
+        throw Ep128Emu::Exception("ROM file is shorter than expected");
+      }
+      if (n == 0x02 || n == 0x04)
+        dataSize = (dataSize < 0x2000L ? dataSize : 0x2000L);
+      else
+        dataSize = (dataSize < 0x4000L ? dataSize : 0x4000L);
+      std::fseek(f, long(offs), SEEK_SET);
+      if(!std::fread(&(buf.front()), sizeof(uint8_t), size_t(dataSize), f))
+        throw Ep128Emu::Exception("ROM file read error");
       std::fclose(f);
-      throw Ep128Emu::Exception("ROM file is shorter than expected");
     }
-    if (n == 0x02 || n == 0x04)
-      dataSize = (dataSize < 0x2000L ? dataSize : 0x2000L);
-    else
-      dataSize = (dataSize < 0x4000L ? dataSize : 0x4000L);
-    std::fseek(f, long(offs), SEEK_SET);
-    std::fread(&(buf.front()), sizeof(uint8_t), size_t(dataSize), f);
-    std::fclose(f);
     // load new segment, or replace existing ROM
     memory.loadROMSegment(n, &(buf.front()), size_t(dataSize));
   }

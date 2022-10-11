@@ -32,6 +32,7 @@
 #include "videorec.hpp"
 #include "fdc765.hpp"
 #include "cpcdisk.hpp"
+#include "roms/roms.hpp"
 
 #include <vector>
 
@@ -1167,18 +1168,25 @@ namespace CPC464 {
     }
     // load file into memory
     std::vector<uint8_t>  buf;
-    buf.resize(0x4000);
-    std::FILE   *f = Ep128Emu::fileOpen(fileName, "rb");
-    if (!f)
-      throw Ep128Emu::Exception("cannot open ROM file");
-    std::fseek(f, 0L, SEEK_END);
-    if (std::ftell(f) < long(offs + 0x4000)) {
+    std::map<std::string, const unsigned char*>::const_iterator  iter_builtin_rom;
+    iter_builtin_rom = Ep128Emu::builtin_rom.find(fileName);
+    if (iter_builtin_rom != Ep128Emu::builtin_rom.end()) {
+      buf.insert(buf.begin(), (*iter_builtin_rom).second+offs, (*iter_builtin_rom).second + offs + 0x4000);
+    } else {
+      buf.resize(0x4000);
+      std::FILE   *f = Ep128Emu::fileOpen(fileName, "rb");
+      if (!f)
+        throw Ep128Emu::Exception("cannot open ROM file");
+      std::fseek(f, 0L, SEEK_END);
+      if (std::ftell(f) < long(offs + 0x4000)) {
+        std::fclose(f);
+        throw Ep128Emu::Exception("ROM file is shorter than expected");
+      }
+      std::fseek(f, long(offs), SEEK_SET);
+      if(!std::fread(&(buf.front()), 1, 0x4000, f))
+        throw Ep128Emu::Exception("ROM file read error");
       std::fclose(f);
-      throw Ep128Emu::Exception("ROM file is shorter than expected");
     }
-    std::fseek(f, long(offs), SEEK_SET);
-    std::fread(&(buf.front()), 1, 0x4000, f);
-    std::fclose(f);
     // load new segment, or replace existing ROM
     memory.loadROMSegment(n, &(buf.front()), 0x4000);
   }

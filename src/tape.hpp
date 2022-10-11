@@ -260,6 +260,75 @@ namespace Ep128Emu {
     virtual void deleteAllCuePoints();
   };
 
+  class Tape_WAV : public Tape {
+   private:
+    std::FILE *f;               // wave file
+    uint8_t   *buf;             // 4096 bytes
+    uint32_t  *fileHeader;      // 44 byte long header:
+/*
+0         4   ChunkID          Contains the letters "RIFF" in ASCII form
+4         4   ChunkSize        ignored here
+8         4   Format           Contains the letters "WAVE"
+12        4   Subchunk1ID      Contains the letters "fmt "
+16        4   Subchunk1Size    16 for PCM.
+20        2   AudioFormat      PCM = 1 (i.e. Linear quantization)
+22        2   NumChannels      Mono = 1, Stereo = 2, etc.
+24        4   SampleRate       8000, 44100, etc.
+28        4   ByteRate         ignored here
+32        2   BlockAlign       ignored here
+34        2   BitsPerSample    8 bits = 8, 16 bits = 16, etc.
+36        4   Subchunk2ID      Contains the letters "data"
+40        4   Subchunk2Size    ignored here
+44        *   Data             The actual sound data.
+*/
+    bool      usingNewFormat;
+    // ----------------
+    bool readBuffer_();
+    void unpackSamples_();
+   public:
+    /*!
+     * Open tape file 'fileName'.
+     */
+    Tape_WAV(const char *fileName, int bitsPerSample = 1);
+    virtual ~Tape_WAV();
+    /*!
+     * Run tape emulation for a period of 1.0 / getSampleRate() seconds.
+     */
+   protected:
+    virtual void runOneSample_();
+   public:
+    /*!
+     * Turn motor on (newState = true) or off (newState = false).
+     */
+    virtual void setIsMotorOn(bool newState);
+    /*!
+     * Stop playback and recording.
+     */
+    virtual void stop();
+    /*!
+     * Seek to the specified time (in seconds).
+     */
+    virtual void seek(double t);
+    /*!
+     * Not supported for this format.
+     */
+    virtual void seekToCuePoint(bool isForward = true, double t = 10.0);
+    /*!
+     * Not supported for this format.
+     */
+    virtual void addCuePoint();
+    /*!
+     * Not supported for this format.
+     */
+    virtual void deleteNearestCuePoint();
+    /*!
+     * Not supported for this format.
+     */
+    virtual void deleteAllCuePoints();
+  };
+
+
+
   class Tape_EPTE : public Tape {
    private:
     std::FILE *f;
