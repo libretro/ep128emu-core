@@ -690,6 +690,12 @@ namespace Ep128Emu {
     return 0x00;
   }
 
+  void * VirtualMachine::getSegmentPtr(int n) const
+  {
+    (void) n;
+    return nullptr;
+  }
+
   uint8_t VirtualMachine::readMemory(uint32_t addr, bool isCPUAddress) const
   {
     (void) addr;

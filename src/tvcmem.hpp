@@ -105,6 +105,7 @@ namespace TVC64 {
     inline const uint8_t * getVideoMemory() const;
     inline bool isSegmentROM(uint8_t segment) const;
     inline bool isSegmentRAM(uint8_t segment) const;
+    inline void * getSegmentPtr(uint8_t segment) const;
     bool checkIgnoreBreakPoint(uint16_t addr) const;
     void clearRAM();
     Ep128Emu::BreakPointList getBreakPointList();
@@ -219,6 +220,11 @@ namespace TVC64 {
   {
     return (segmentTable[segment] != (uint8_t *) 0 &&
             !segmentROMTable[segment]);
+  }
+
+  inline void * Memory::getSegmentPtr(uint8_t segment) const
+  {
+    return (segmentTable[segment]);
   }
 
 }       // namespace TVC64

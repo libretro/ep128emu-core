@@ -1838,6 +1838,13 @@ namespace TVC64 {
     return memory.getPage(uint8_t(n & 3));
   }
 
+  void * TVC64VM::getSegmentPtr(int n) const
+  {
+    if (memory.isSegmentRAM(uint8_t(n & 0xFF)))
+      return memory.getSegmentPtr(uint8_t(n & 0xFF));
+    return nullptr;
+  }
+
   uint8_t TVC64VM::readMemory(uint32_t addr, bool isCPUAddress) const
   {
     if (isCPUAddress)

@@ -1342,6 +1342,13 @@ namespace ZX128 {
     return memory.getPage(uint8_t(n & 3));
   }
 
+  void * ZX128VM::getSegmentPtr(int n) const
+  {
+    if (memory.isSegmentRAM(uint8_t(n & 0xFF)))
+      return memory.getSegmentPtr(uint8_t(n & 0xFF));
+    return nullptr;
+  }
+
   uint8_t ZX128VM::readMemory(uint32_t addr, bool isCPUAddress) const
   {
     if (isCPUAddress)

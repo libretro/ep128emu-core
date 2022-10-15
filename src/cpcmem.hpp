@@ -81,6 +81,7 @@ namespace CPC464 {
     inline const uint8_t * getVideoMemory() const;
     inline bool isSegmentROM(uint8_t segment) const;
     inline bool isSegmentRAM(uint8_t segment) const;
+    inline void * getSegmentPtr(uint8_t segment) const;
     bool checkIgnoreBreakPoint(uint16_t addr) const;
     Ep128Emu::BreakPointList getBreakPointList();
     void saveState(Ep128Emu::File::Buffer&);
@@ -175,6 +176,11 @@ namespace CPC464 {
   {
     return (segmentTable[segment] != (uint8_t *) 0 &&
             !segmentROMTable[segment]);
+  }
+
+  inline void * Memory::getSegmentPtr(uint8_t segment) const
+  {
+    return (segmentTable[segment]);
   }
 
 }       // namespace CPC464

@@ -473,6 +473,10 @@ namespace Ep128Emu {
      */
     virtual uint8_t getMemoryPage(int n) const;
     /*!
+     * Returns a memory pointer to page 'n' (0x00 to 0xFF).
+     */
+    virtual void * getSegmentPtr(int n) const;
+    /*!
      * Read a byte from memory. If 'isCPUAddress' is false, bits 14 to 21 of
      * 'addr' define the segment number, while bits 0 to 13 are the offset
      * (0 to 0x3FFF) within the segment; otherwise, 'addr' is interpreted as
