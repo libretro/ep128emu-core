@@ -52,7 +52,7 @@
 #  if defined(__i386__) || defined(__x86_64__) || defined(WIN32)
 #    define CPC_LSB_FIRST 1
 #  endif
-#  if defined(__arm__)
+#  if defined(__arm__) || defined(__aarch64__)
 #    if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #      define CPC_LSB_FIRST 1
 #    endif
