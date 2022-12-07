@@ -1,3 +1,16 @@
+Changes in version 2.0.11.2-core1
+---------------------------
+
+  * fixed TVC compilation without SDEXT emulation
+  * backend support for external joysticks 3..6 (no GUI representation)
+  * speaker on/off support
+  * support of TAP files created by TAPir (read only)
+  * crude internal WAV handler for special formats like 1-bit WAV for TVC
+  * include ROMs in source (untested here)
+  * fixed byte order detection on aarch64 (arm64) platforms
+  * other code changes without functional effect, to be able to keep the 
+    code similar to the libretro core version
+
 Changes in version 2.0.11.2
 ---------------------------
 
