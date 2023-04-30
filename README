@@ -1,4 +1,4 @@
-ep128emu 2.0.11.2-core1
+ep128emu 2.0.11.2-core2
 =======================
 
 ep128emu is an open source, portable emulator of the Enterprise 128,
@@ -43,9 +43,9 @@ General
     locations (useful for tapes with multiple files); uses custom file
     format which is PCM audio data with 1 to 8 bits of sample resolution
     and variable sample rate, and header including the table of markers;
-    there is also limited (read only) support for EPTE format tape
-    files, as well as read-write (although without markers) support for
-    sound files like WAV, AIFF, etc.
+    there is also limited (read only) support for EPTE, TAPir format tape
+    files and special "1-bit" TVC WAV files, as well as read-write 
+    (although without markers) support for sound files like WAV, AIFF, etc.
   * GUI tape editor utility for copying Enterprise files from/to
     ep128emu tape images
   * GUI debugger with support for breakpoints/watchpoints, viewing the
