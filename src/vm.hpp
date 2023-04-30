@@ -90,6 +90,8 @@ namespace Ep128Emu {
       //   0x00000002: floppy drive 0 green LED is on
       //   0x00000004: IDE drive 0 red LED is on (low priority)
       //   0x0000000C: IDE drive 0 red LED is on (high priority)
+      //   0x00000040: tape red "LED" (input present, negative)
+      //   0x00000080: tape green "LED" (input present, positive)
       //   0x00000100: floppy drive 1 red LED is on
       //   0x00000200: floppy drive 1 green LED is on
       //   0x00000400: IDE drive 1 red LED is on (low priority)

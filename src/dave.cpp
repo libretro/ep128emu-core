@@ -782,6 +782,12 @@ namespace Ep128 {
     tape_input_level = (level > 0 ? 1 : 0);
   }
 
+  uint8_t Dave::getTapeInput()
+  {
+    return uint8_t(tape_input ? 0x40 : 0x0 | tape_input_level ? 0x80 : 0x0);
+    /*(tape_input_level - 1) & 0x40) | ((tape_input - 1) & 0x80);*/
+  }
+  
   void Dave::setKeyboardState(int keyCode, int state)
   {
     int     row = (keyCode & 0x78) >> 3;

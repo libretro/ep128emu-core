@@ -198,6 +198,10 @@ namespace Ep128 {
      */
     void setTapeInput(int state, int level);
     /*!
+     * Get tape input state, and level (same as port 0x16 read).
+     */
+    uint8_t getTapeInput();
+    /*!
      * Set state of key 'keyCode' (0 to 127, see table below) to pressed
      * (state != 0) or released (state == 0).
      *        +-------+-------+-------+-------+-------+-------+-------+-------+

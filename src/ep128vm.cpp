@@ -2181,6 +2181,11 @@ namespace Ep128 {
       n = n << 8;
       n |= uint32_t(floppyDrives[i].getLEDState());
     }
+    if (haveTape() && getIsTapeMotorOn()) {
+      //   0x00000080: tape red "LED" (input present)
+      //   0x00000040: tape green "LED" (level present)
+      n |= uint32_t(dave.getTapeInput());
+    }
 #ifdef ENABLE_SDEXT
     n = n | sdext.getLEDState();
 #endif
