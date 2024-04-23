@@ -24,6 +24,7 @@
 #include "tvc64vm.hpp"
 #include "system.hpp"
 #include "guicolor.hpp"
+#include "devtool.hpp"
 
 #include <typeinfo>
 

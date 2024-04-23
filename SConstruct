@@ -190,13 +190,13 @@ if not mingwCrossCompile:
 if sys.platform[:6] == 'darwin':
     ep128emuLibEnvironment.Append(CPPPATH = ['/usr/X11R6/include'])
 if not linux32CrossCompile:
-    linkFlags = ' -L. '
+    linkFlags = ' -L. -Lmingw32/lib'
 else:
     linkFlags = ' -m32 -L. -L/usr/X11R6/lib '
 ep128emuLibEnvironment.Append(LINKFLAGS = Split(linkFlags))
 if mingwCrossCompile:
     wordSize = ['32', '64'][int(bool(win64CrossCompile))]
-    mingwPrefix = 'C:/mingw' + wordSize
+    mingwPrefix = 'mingw' + wordSize
     ep128emuLibEnvironment.Prepend(CCFLAGS = ['-m' + wordSize])
     ep128emuLibEnvironment.Prepend(LINKFLAGS = ['-m' + wordSize])
     ep128emuLibEnvironment.Append(CPPPATH = [mingwPrefix + '/include'])
@@ -205,7 +205,7 @@ if mingwCrossCompile:
     elif win64CrossCompile:
         toolNamePrefix = 'x86_64-w64-mingw32-'
     else:
-        toolNamePrefix = 'i686-w64-mingw32-'
+        toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
     ep128emuLibEnvironment['AR'] = toolNamePrefix + 'ar'
     ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc'
     ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp'
@@ -522,8 +522,10 @@ if mingwCrossCompile:
         ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
          'resource/ep128emu.ico', 'resource/tvc64emu.ico',
          'resource/zx128emu.ico'],
+#        toolNamePrefix + 'windres -v --use-temp-file '
+#        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
+#        + '-o $TARGET resource/ep128emu.rc')
         toolNamePrefix + 'windres -v --use-temp-file '
-        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
         + '-o $TARGET resource/ep128emu.rc')
     ep128emuSources += [ep128emuResourceObject]
 ep128emu = ep128emuEnvironment.Program('ep128emu', ep128emuSources)
@@ -543,7 +545,7 @@ if mingwCrossCompile:
         'resource/te_resrc.o',
         ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
         toolNamePrefix + 'windres -v --use-temp-file '
-        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
+#        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
         + '-o $TARGET resource/tapeedit.rc')
     tapeeditSources += [tapeeditResourceObject]
 tapeedit = tapeeditEnvironment.Program('tapeedit', tapeeditSources)
