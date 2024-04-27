@@ -24,7 +24,6 @@
 #include "tvc64vm.hpp"
 #include "system.hpp"
 #include "guicolor.hpp"
-#include "devtool.hpp"
 
 #include <typeinfo>
 
@@ -76,7 +75,12 @@ int main(int argc, char **argv)
   Ep128Emu::File  *snapshotFile = (Ep128Emu::File *) 0;
   int       snapshotNameIndex = 0;
   int       colorScheme = 0;
-  int8_t    machineType = -1;   // 0: EP (default), 1: ZX, 2: CPC, 3: TVC
+#ifdef ENABLE_DEVTOOL
+  // Hardcoded TVC type for devtool integration, to be replaced later.
+  int8_t    machineType = 3;   //-1 // 0: EP (default), 1: ZX, 2: CPC, 3: TVC
+#else
+  int8_t    machineType = -1;   //-1 // 0: EP (default), 1: ZX, 2: CPC, 3: TVC
+#endif // ENABLE_DEVTOOL
   int8_t    retval = 0;
 #ifdef DISABLE_OPENGL_DISPLAY
   bool      glEnabled = false;

@@ -23,7 +23,9 @@
 #include "zx128vm.hpp"
 #include "cpc464vm.hpp"
 #include "pngwrite.hpp"
-
+#ifdef ENABLE_DEVTOOL
+#include "devtool.hpp"
+#endif
 #include <typeinfo>
 
 #ifdef LINUX_FLTK_VERSION
@@ -748,9 +750,15 @@ void Ep128EmuGUI::run()
   vm.setBreakPointCallback(&Ep128EmuGUI_DebugWindow::breakPointCallback,
                            (void *) debugWindow);
   applyEmulatorConfiguration();
+
   vmThread.unlock();
   // run emulation
   vmThread.pause(false);
+#ifdef ENABLE_DEVTOOL
+  // Load devtool bridge. At this point, the vm is already up and running so all dtInit parameters can be retrieved.
+  updateDisplay();
+  dtBridge::loadDevtoolDLL((HWND)fl_xid(mainWindow), (HWND)fl_xid(emulatorWindow), &vm);
+#endif
   do {
     updateDisplay();
   } while (mainWindow->shown() && !exitFlag);

@@ -24,6 +24,9 @@
 
 #include "z80macros.hpp"
 #include "z80funcs.hpp"
+#ifdef ENABLE_DEVTOOL
+#include "../gui/devtool.hpp"
+#endif // ENABLE_DEVTOOL
 
 /***************************************************************************/
 
@@ -5001,6 +5004,11 @@ namespace Ep128 {
   void Z80::executeInstruction()
   {
     uint8_t Opcode;
+#ifdef ENABLE_DEVTOOL
+    dtBridge::z80_state_t currStateConverted;
+    saveStateToBridge(&currStateConverted);
+    dtExecInstrBridge(&currStateConverted);
+#endif // ENABLE_DEVTOOL
     Opcode = readOpcodeFirstByte();
     switch (Opcode) {
     case 0x000:

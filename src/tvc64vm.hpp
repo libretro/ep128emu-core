@@ -470,6 +470,16 @@ namespace TVC64 {
     {
       return z80.getReg();
     }
+
+    /*!
+     * Returns a reference to a structure containing all CRTC registers;
+     * for devtool use only.
+     */
+    virtual inline uint8_t * getVideoRegisters()
+    {
+      return crtc.getRegisterPtr();
+    }
+
     // ------------------------------- FILE I/O -------------------------------
     /*!
      * Save snapshot of virtual machine state, including all ROM and RAM

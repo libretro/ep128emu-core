@@ -22,6 +22,9 @@
 #include "z80.hpp"
 #include "z80macros.hpp"
 #include "system.hpp"
+#ifdef ENABLE_DEVTOOL
+#include "../gui/devtool.hpp"
+#endif // ENABLE_DEVTOOL
 
 namespace Ep128 {
 
@@ -387,6 +390,9 @@ namespace Ep128 {
     (void) addr;
     (void) value;
     updateCycles(3);
+#ifdef ENABLE_DEVTOOL
+    dtBridge::dtWriteCallbackBridge(addr, value, 0);
+#endif // ENABLE_DEVTOOL
   }
 
   EP128EMU_REGPARM2 uint16_t Z80::readMemoryWord(uint16_t addr)
@@ -521,6 +527,48 @@ namespace Ep128 {
     this->saveState(buf);
     f.addChunk(Ep128Emu::File::EP128EMU_CHUNKTYPE_Z80_STATE, buf);
   }
+#ifdef ENABLE_DEVTOOL
+  void Z80::saveStateToBridge(dtBridge::z80_state_t* buf)
+  {
+    buf->pc.byte.low  = R.PC.B.l;
+    buf->pc.byte.high = R.PC.B.h;
+    buf->af.byte.low  = R.AF.B.l;
+    buf->af.byte.high = R.AF.B.h;
+    buf->bc.byte.low  = R.BC.B.l;
+    buf->bc.byte.high = R.BC.B.h;
+    buf->de.byte.low  = R.DE.B.l;
+    buf->de.byte.high = R.DE.B.h;
+    buf->hl.byte.low  = R.HL.B.l;
+    buf->hl.byte.high = R.HL.B.h;
+    buf->sp.byte.low  = R.SP.B.l;
+    buf->sp.byte.high = R.SP.B.h;
+    buf->ix.byte.low  = R.IX.B.l;
+    buf->ix.byte.high = R.IX.B.h;
+    buf->iy.byte.low  = R.IY.B.l;
+    buf->iy.byte.high = R.IY.B.h;
+
+    buf->af_prime.byte.high = R.altAF.B.h;
+    buf->af_prime.byte.low  = R.altAF.B.l;
+    buf->bc_prime.byte.low  = R.altBC.B.l;
+    buf->bc_prime.byte.high = R.altBC.B.h;
+    buf->de_prime.byte.low  = R.altDE.B.l;
+    buf->de_prime.byte.high = R.altDE.B.h;
+    buf->hl_prime.byte.low  = R.altHL.B.l;
+    buf->hl_prime.byte.high = R.altHL.B.h;
+
+    buf->i = R.I;
+    buf->r = R.R;
+    buf->iff1 = R.IFF1;
+    buf->iff2 = R.IFF2;
+    buf->interrupt_mode = R.IM;
+
+    /*buf.writeUInt32(R.IndexPlusOffset);
+    buf.writeByte(R.RBit7);
+    buf.writeByte(R.InterruptVectorBase);
+    buf.writeUInt32(uint32_t(R.Flags));
+    buf.writeInt32(newPCAddress);*/
+  }
+#endif // ENABLE_DEVTOOL
 
   void Z80::loadState(Ep128Emu::File::Buffer& buf)
   {

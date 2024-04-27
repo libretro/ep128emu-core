@@ -23,6 +23,9 @@
 #define __Z80_HEADER_INCLUDED__
 
 #include "ep128emu.hpp"
+#ifdef ENABLE_DEVTOOL
+#include "../gui/devtool.hpp"
+#endif // ENABLE_DEVTOOL
 #include <stddef.h>
 
 #define Z80_ZERO_FLAG_BIT                       6
@@ -61,6 +64,9 @@
 
 namespace Ep128 {
 
+#ifdef ENABLE_DEVTOOL
+  using dtBridge::z80_state_t;
+#endif // ENABLE_DEVTOOL
   /* size defines */
   typedef uint8_t   Z80_BYTE;
   typedef uint16_t  Z80_WORD;
@@ -271,6 +277,9 @@ namespace Ep128 {
      */
     void saveState(Ep128Emu::File::Buffer&);
     void saveState(Ep128Emu::File&);
+#ifdef ENABLE_DEVTOOL
+    void saveStateToBridge(dtBridge::z80_state_t*);
+#endif // ENABLE_DEVTOOL
     /*!
      * Load snapshot.
      */

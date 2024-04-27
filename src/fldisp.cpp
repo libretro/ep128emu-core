@@ -960,7 +960,11 @@ namespace Ep128Emu {
     }
     if (noInputTimer.getRealTime() > 0.5) {
       noInputTimer.reset(0.25);
+#ifndef ENABLE_DEVTOOL
       redrawFlag = true;
+#else
+      // TODO: stop this timed redraw only when in dtExecInstr
+#endif // ENABLE_DEVTOOL
       if (screenshotCallbackFlag)
         checkScreenshotCallback();
     }

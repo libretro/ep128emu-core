@@ -402,6 +402,16 @@ namespace ZX128 {
     {
       return z80.getReg();
     }
+
+    /*!
+     * Returns a reference to a structure containing all video registers;
+     * for devtool use only, not implemented for ZX.
+     */
+    virtual inline uint8_t * getVideoRegisters()
+    {
+      return nullptr;
+    }
+
     // ------------------------------- FILE I/O -------------------------------
     /*!
      * Save snapshot of virtual machine state, including all ROM and RAM

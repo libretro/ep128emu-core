@@ -612,6 +612,17 @@ namespace Ep128 {
      * counter, and the LPB video memory address multiplied by 16.
      */
     virtual void getVideoPosition(int& xPos, int& yPos) const;
+
+    /*!
+     * Returns a reference to a structure containing all video registers;
+     * for devtool use only. Currently unimplemented, maybe NICK registers
+     * will be placed here.
+     */
+    virtual inline uint8_t * getVideoRegisters()
+    {
+      return nullptr;
+    }
+
     // ------------------------------- FILE I/O -------------------------------
     /*!
      * Save snapshot of virtual machine state, including all ROM and RAM

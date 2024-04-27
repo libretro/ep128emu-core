@@ -562,6 +562,16 @@ namespace Ep128Emu {
     /*!
      * Returns the current horizontal and vertical video position.
      */
+
+    /*!
+     * Returns a reference to a structure containing all video registers;
+     * for devtool use only.
+     */
+    virtual inline uint8_t * getVideoRegisters()
+    {
+      return nullptr;
+    }
+
     virtual void getVideoPosition(int& xPos, int& yPos) const;
     /*!
      * Open 'fileName' with openFileInWorkingDirectory(), and load it to the

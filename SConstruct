@@ -5,6 +5,9 @@ import sys, os
 
 win64CrossCompile = int(ARGUMENTS.get('win64', 0))
 mingwCrossCompile = win64CrossCompile or int(ARGUMENTS.get('win32', 0))
+if mingwCrossCompile:
+    enableDevtoolIntegration = int(ARGUMENTS.get('devtool', 0))
+
 linux32CrossCompile = int(ARGUMENTS.get('linux32', 0))
 # on Linux, statically linked SDL version >= 1.2.10 that was not built
 # without video support (--disable-video) breaks FLTK
@@ -37,7 +40,7 @@ if buildRelease:
         compilerFlags = ' -march=pentium2 '
 if enableDebug and not buildRelease:
     compilerFlags = ' -Wno-long-long -Wshadow -g -O0 ' + compilerFlags
-    compilerFlags = ' -Wall -W -pedantic ' + compilerFlags
+    compilerFlags = ' -Wall -W -pedantic -gstabs ' + compilerFlags
 else:
     compilerFlags = ' -Wall -O3 ' + compilerFlags
     if (os.uname()[4][:5] == 'armv7'):
@@ -231,6 +234,9 @@ if enableMIDI:
     ep128emuLibEnvironment.Append(CPPPATH = ['./portmidi/pm_common',
                                              './portmidi/porttime'])
 
+if enableDevtoolIntegration:
+    ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_DEVTOOL'])
+
 ep128emuGUIEnvironment = copyEnvironment(ep128emuLibEnvironment)
 if mingwCrossCompile:
     ep128emuGUIEnvironment.Prepend(LINKFLAGS = ['-mwindows'])
@@ -250,7 +256,7 @@ configurePackage(ep128emuGUIEnvironment, 'PortAudio')
 
 ep128emuGLGUIEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 disableOpenGL = 1
-if configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
+if not enableDevtoolIntegration and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
     configure = ep128emuGLGUIEnvironment.Configure()
     if configure.CheckCHeader('GL/gl.h'):
         disableOpenGL = 0
@@ -515,7 +521,11 @@ ep128emuSources += fluidCompile(['gui/gui.fl', 'gui/disk_cfg.fl',
                                  'gui/disp_cfg.fl', 'gui/kbd_cfg.fl',
                                  'gui/snd_cfg.fl', 'gui/vm_cfg.fl',
                                  'gui/debug.fl', 'gui/about.fl'])
-ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp']
+if enableDevtoolIntegration:
+    ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp', 'gui/devtool.cpp']
+else:
+    ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp']
+
 if mingwCrossCompile:
     ep128emuResourceObject = ep128emuEnvironment.Command(
         'resource/resource.o',

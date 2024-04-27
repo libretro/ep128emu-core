@@ -22,6 +22,9 @@
 
 #include "ep128emu.hpp"
 #include "bplist.hpp"
+#ifdef ENABLE_DEVTOOL
+#include "../gui/devtool.hpp"
+#endif // ENABLE_DEVTOOL
 
 namespace Ep128 {
 
@@ -103,6 +106,9 @@ namespace Ep128 {
     }
     portValues[offs] = value;
     cb.func(cb.userData_, cb.addr_, value);
+#ifdef ENABLE_DEVTOOL
+    dtBridge::dtWriteCallbackBridge(offs,value,1);
+#endif // ENABLE_DEVTOOL
   }
 
   inline uint8_t IOPorts::getLastValueWritten(uint16_t addr) const

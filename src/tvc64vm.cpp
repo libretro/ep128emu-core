@@ -1840,7 +1840,11 @@ namespace TVC64 {
 
   void * TVC64VM::getSegmentPtr(int n) const
   {
+    
+#ifndef ENABLE_DEVTOOL
+    // For devtool, return all segments including ROM.
     if (memory.isSegmentRAM(uint8_t(n & 0xFF)))
+#endif
       return memory.getSegmentPtr(uint8_t(n & 0xFF));
     return nullptr;
   }

@@ -51,7 +51,12 @@ namespace CPC464 {
     // register 15: cursor address low (bits 0 to 7)
     // register 16: lightpen address high (bits 8 to 13)
     // register 17: lightpen address low (bits 0 to 7)
+#ifdef ENABLE_DEVTOOL
+    // 32 byte only if devtool (since it defines it as 32-byte area and pointer is passed directly)
+    uint8_t     registers[32];
+#else
     uint8_t     registers[18];
+#endif // ENABLE_DEVTOOL
     uint8_t     horizontalPos;
     // bit 1: 1: display enabled (b6=1 and b7=1)
     // bit 6: 1: display enabled H
@@ -179,6 +184,12 @@ namespace CPC464 {
     EP128EMU_REGPARM2 uint8_t readRegister(uint16_t addr) const;
     EP128EMU_REGPARM3 void writeRegister(uint16_t addr, uint8_t value);
     EP128EMU_REGPARM2 uint8_t readRegisterDebug(uint16_t addr) const;
+
+    EP128EMU_INLINE uint8_t * getRegisterPtr()
+    {
+      return registers;
+    }
+
     void setHSyncStateChangeCallback(
         EP128EMU_REGPARM2 void (*func)(void *userData, bool newState),
         void *userData_);
