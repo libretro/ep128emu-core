@@ -399,6 +399,11 @@ int main(int argc, char **argv)
       }
     }
 #endif
+#ifdef ENABLE_DEVTOOL
+    /* In case of devtool, force single buffer. GL is disabled already in scons. */
+    config->display.bufferingMode = 0;
+    config->displaySettingsChanged = true;
+#endif // ENABLE_DEVTOOL
     config->applySettings();
     if (snapshotFile) {
       vm->registerChunkTypes(*snapshotFile);

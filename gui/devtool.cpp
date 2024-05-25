@@ -68,9 +68,15 @@ static machine_t getModel()
       return MODEL_64;
 }
 
-static void resetDummy()
+static void resetSoft()
 {
-   std::cout << "[devtool] dummy reset" << std::endl;
+   runningVm->reset(false);
+   return;
+}
+
+static void resetHard()
+{
+   runningVm->reset(true);
    return;
 }
 
@@ -111,8 +117,8 @@ static void createTransferStructures(Ep128Emu::VirtualMachine *vm)
    machine_state_actual.cpu = &z80_state_bridge;
 
    machine_functions_bridge.machine_init =           (TMachine_init)           placeholderDummy2;
-	machine_functions_bridge.Machine_reset =          (TMachine_reset)          resetDummy; 
-	machine_functions_bridge.Machine_hard_reset =     (TMachine_hard_reset)     resetDummy; 
+	machine_functions_bridge.Machine_reset =          (TMachine_reset)          resetSoft;
+	machine_functions_bridge.Machine_hard_reset =     (TMachine_hard_reset)     resetHard;
 	machine_functions_bridge.Machine_run =            (TMachine_run)            placeholderDummy;
 	machine_functions_bridge.Machine_do_some_frames = (TMachine_do_some_frames) placeholderDummy3;
 	machine_functions_bridge.Machine_type_text =      (TMachine_type_text)      typeTextDummy;
