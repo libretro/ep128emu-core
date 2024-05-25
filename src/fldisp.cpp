@@ -552,7 +552,8 @@ namespace Ep128Emu {
       forceUpdateLineMask(0),
       redrawFlag(false),
       prvFrameWasOdd(false),
-      lastLineNum(-2)
+      lastLineNum(-2),
+      redrawForbidden(false)
   {
     displayParameters.displayQuality = 0;
     displayParameters.bufferingMode = 0;
@@ -960,11 +961,7 @@ namespace Ep128Emu {
     }
     if (noInputTimer.getRealTime() > 0.5) {
       noInputTimer.reset(0.25);
-#ifndef ENABLE_DEVTOOL
       redrawFlag = true;
-#else
-      // TODO: stop this timed redraw only when in dtExecInstr
-#endif // ENABLE_DEVTOOL
       if (screenshotCallbackFlag)
         checkScreenshotCallback();
     }
@@ -974,7 +971,11 @@ namespace Ep128Emu {
       forceUpdateLineCnt &= uint8_t(7);
       forceUpdateTimer.reset();
     }
+#ifndef ENABLE_DEVTOOL
     return redrawFlag;
+#else
+    return redrawFlag && !redrawForbidden;
+#endif // ENABLE_DEVTOOL
   }
 
   int FLTKDisplay::handle(int event)

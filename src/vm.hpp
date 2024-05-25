@@ -195,6 +195,11 @@ namespace Ep128Emu {
      */
     virtual void setEnableDisplay(bool isEnabled);
     /*!
+     * Set if display refresh should not be done (for blocking screen
+     * overwrite in case of DevTool breakpoint).
+     */
+    virtual void denyDisplayRefresh(bool isDenied);
+    /*!
      * Set CPU clock frequency (in Hz).
      */
     virtual void setCPUFrequency(size_t freq_);

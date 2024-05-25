@@ -291,6 +291,7 @@ namespace Ep128Emu {
      * redraw() needs to be called to update the display.
      */
     virtual bool checkEvents();
+    bool redrawForbidden;
    protected:
     virtual void draw();
    public:

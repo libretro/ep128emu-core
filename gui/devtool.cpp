@@ -1,6 +1,14 @@
 #include "devtool.hpp"
-#include <iostream>
 #ifdef ENABLE_DEVTOOL
+
+#include "fldisp.hpp"
+#include "ep128vm.hpp"
+#include "zx128vm.hpp"
+#include "cpc464vm.hpp"
+#include "tvc64vm.hpp"
+#include <iostream>
+#include <typeinfo>
+
 namespace dtBridge {
 
 // Globals for state transfer to devtool
@@ -44,10 +52,20 @@ static void placeholderDummy5(unsigned int tmp)
    return;
 }
 
-static machine_t getModelDummy()
+static machine_t getModel()
 {
-   std::cout << "[devtool] dummy get model" << std::endl;
-   return MODEL_64;
+   /* Placeholder - to be seen if model will be used for EP */
+   std::cout << "[devtool] get model" << std::endl;
+   if      (typeid(runningVm) == typeid(Ep128::Ep128VM))
+      return MODEL_64;
+   else if (typeid(runningVm) == typeid(TVC64::TVC64VM))
+      return MODEL_64;
+   else if (typeid(runningVm) == typeid(CPC464::CPC464VM))
+      return MODEL_64;
+   else if (typeid(runningVm) == typeid(ZX128::ZX128VM))
+      return MODEL_64;
+   else
+      return MODEL_64;
 }
 
 static void resetDummy()
@@ -100,7 +118,7 @@ static void createTransferStructures(Ep128Emu::VirtualMachine *vm)
 	machine_functions_bridge.Machine_type_text =      (TMachine_type_text)      typeTextDummy;
 	machine_functions_bridge.machine_autostart_file = (TMachine_autostart_file) placeholderDummy4;
 	machine_functions_bridge.Machine_set_model =      (TMachine_set_model)      placeholderDummy5;
-	machine_functions_bridge.Machine_get_model =      (TMachine_get_model)      getModelDummy;
+	machine_functions_bridge.Machine_get_model =      (TMachine_get_model)      getModel;
 	machine_functions_bridge.Machine_update_screen =  (TMachine_update_screen)  placeholderDummy;
 }
 
@@ -108,6 +126,7 @@ static void createTransferStructures(Ep128Emu::VirtualMachine *vm)
 void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
 {
   int retval;
+  unsigned int vmType = ID_EP128_TVC;
   runningVm = vm;
   HINSTANCE hGetProcIDDLL = LoadLibrary("dtdebug.dll");
   if (!hGetProcIDDLL) {
@@ -136,10 +155,20 @@ void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
   }
   createTransferStructures(vm);
   std::cout << "[devtool] Transfer structures created" << std::endl;
+
+  if      (typeid(runningVm) == typeid(Ep128::Ep128VM))
+    vmType = ID_EP128_EP;
+  else if (typeid(runningVm) == typeid(TVC64::TVC64VM))
+    vmType = ID_EP128_TVC;
+  else if (typeid(runningVm) == typeid(CPC464::CPC464VM))
+    vmType = ID_EP128_CPC;
+  else if (typeid(runningVm) == typeid(ZX128::ZX128VM))
+    vmType = ID_EP128_SPECCY;
+
 #ifdef DEVTOOL_DLL_0420
   retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge);
 #else
-  retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge, ID_EP128_TVC, hwnd2);
+  retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge, vmType, hwnd2);
 #endif
   std::cout << "[devtool] dtInit returned " << retval << std::endl;
 
@@ -153,9 +182,11 @@ void dtExecInstrBridge(z80_state_t *currStateConverted)
   if (!dtExecInstrFromDll)
    return;
   z80_state_bridge = *currStateConverted;
+  runningVm->denyDisplayRefresh(true);
   /*if (machine_state_actual.cpu->pc.word == 0xdad3)
    std::cout << "[devtool] dtExec ping should be OK, pc: " << machine_state_actual.cpu->pc.word << std::endl;*/
   dtExecInstrFromDll(0);
+  runningVm->denyDisplayRefresh(false);
 }
 
 void dtWriteCallbackBridge(unsigned short addr, unsigned char byte, unsigned int type)

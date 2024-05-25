@@ -26,7 +26,7 @@
 #include "tape.hpp"
 #include "vm.hpp"
 #include "debuglib.hpp"
-
+#include "fldisp.hpp"
 #include <typeinfo>
 
 #include <sys/types.h>
@@ -347,6 +347,12 @@ namespace Ep128Emu {
   void VirtualMachine::setEnableDisplay(bool isEnabled)
   {
     displayEnabled = isEnabled;
+  }
+
+  void VirtualMachine::denyDisplayRefresh(bool isDenied)
+  {
+    VideoDisplay* ptr = &getVideoDisplay();
+    dynamic_cast<Ep128Emu::FLTKDisplay *>(ptr)->redrawForbidden = isDenied;
   }
 
   void VirtualMachine::setCPUFrequency(size_t freq_)
