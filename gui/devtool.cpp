@@ -56,13 +56,13 @@ static machine_t getModel()
 {
    /* Placeholder - to be seen if model will be used for EP */
    std::cout << "[devtool] get model" << std::endl;
-   if      (typeid(runningVm) == typeid(Ep128::Ep128VM))
+   if      (typeid(*runningVm) == typeid(Ep128::Ep128VM))
       return MODEL_64;
-   else if (typeid(runningVm) == typeid(TVC64::TVC64VM))
+   else if (typeid(*runningVm) == typeid(TVC64::TVC64VM))
       return MODEL_64;
-   else if (typeid(runningVm) == typeid(CPC464::CPC464VM))
+   else if (typeid(*runningVm) == typeid(CPC464::CPC464VM))
       return MODEL_64;
-   else if (typeid(runningVm) == typeid(ZX128::ZX128VM))
+   else if (typeid(*runningVm) == typeid(ZX128::ZX128VM))
       return MODEL_64;
    else
       return MODEL_64;
@@ -162,21 +162,24 @@ void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
   createTransferStructures(vm);
   std::cout << "[devtool] Transfer structures created" << std::endl;
 
-  if      (typeid(runningVm) == typeid(Ep128::Ep128VM))
+  if      (typeid(*runningVm) == typeid(Ep128::Ep128VM))
     vmType = ID_EP128_EP;
-  else if (typeid(runningVm) == typeid(TVC64::TVC64VM))
+  else if (typeid(*runningVm) == typeid(TVC64::TVC64VM))
     vmType = ID_EP128_TVC;
-  else if (typeid(runningVm) == typeid(CPC464::CPC464VM))
+  else if (typeid(*runningVm) == typeid(CPC464::CPC464VM))
     vmType = ID_EP128_CPC;
-  else if (typeid(runningVm) == typeid(ZX128::ZX128VM))
+  else if (typeid(*runningVm) == typeid(ZX128::ZX128VM))
     vmType = ID_EP128_SPECCY;
+
 
 #ifdef DEVTOOL_DLL_0420
   retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge);
 #else
   retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge, vmType, hwnd2);
 #endif
-  std::cout << "[devtool] dtInit returned " << retval << std::endl;
+
+  std::cout << "[devtool] dtInit call with vmType: " << vmType << std::endl;
+//  std::cout << "[devtool] dtInit returned " << retval << std::endl;
 
   return;
 }
