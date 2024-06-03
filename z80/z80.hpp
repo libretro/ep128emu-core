@@ -279,6 +279,7 @@ namespace Ep128 {
     void saveState(Ep128Emu::File&);
 #ifdef ENABLE_DEVTOOL
     void saveStateToBridge(dtBridge::z80_state_t*);
+    void loadStateFromBridge(dtBridge::z80_state_t*);
 #endif // ENABLE_DEVTOOL
     /*!
      * Load snapshot.

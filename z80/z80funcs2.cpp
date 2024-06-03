@@ -568,6 +568,48 @@ namespace Ep128 {
     buf.writeUInt32(uint32_t(R.Flags));
     buf.writeInt32(newPCAddress);*/
   }
+
+  void Z80::loadStateFromBridge(dtBridge::z80_state_t* buf)
+  {
+    R.PC.B.l = buf->pc.byte.low ;
+    R.PC.B.h = buf->pc.byte.high;
+    R.AF.B.l = buf->af.byte.low ;
+    R.AF.B.h = buf->af.byte.high;
+    R.BC.B.l = buf->bc.byte.low ;
+    R.BC.B.h = buf->bc.byte.high;
+    R.DE.B.l = buf->de.byte.low ;
+    R.DE.B.h = buf->de.byte.high;
+    R.HL.B.l = buf->hl.byte.low ;
+    R.HL.B.h = buf->hl.byte.high;
+    R.SP.B.l = buf->sp.byte.low ;
+    R.SP.B.h = buf->sp.byte.high;
+    R.IX.B.l = buf->ix.byte.low ;
+    R.IX.B.h = buf->ix.byte.high;
+    R.IY.B.l = buf->iy.byte.low ;
+    R.IY.B.h = buf->iy.byte.high;
+
+    R.altAF.B.h = buf->af_prime.byte.high;
+    R.altAF.B.l = buf->af_prime.byte.low ;
+    R.altBC.B.l = buf->bc_prime.byte.low ;
+    R.altBC.B.h = buf->bc_prime.byte.high;
+    R.altDE.B.l = buf->de_prime.byte.low ;
+    R.altDE.B.h = buf->de_prime.byte.high;
+    R.altHL.B.l = buf->hl_prime.byte.low ;
+    R.altHL.B.h = buf->hl_prime.byte.high;
+
+    R.I = buf->i;
+    R.R = buf->r;
+    R.IFF1 = buf->iff1;
+    R.IFF2 = buf->iff2;
+    R.IM = buf->interrupt_mode;
+
+    /*buf.writeUInt32(R.IndexPlusOffset);
+    buf.writeByte(R.RBit7);
+    buf.writeByte(R.InterruptVectorBase);
+    buf.writeUInt32(uint32_t(R.Flags));
+    buf.writeInt32(newPCAddress);*/
+  }
+
 #endif // ENABLE_DEVTOOL
 
   void Z80::loadState(Ep128Emu::File::Buffer& buf)

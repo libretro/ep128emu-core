@@ -5007,7 +5007,8 @@ namespace Ep128 {
 #ifdef ENABLE_DEVTOOL
     dtBridge::z80_state_t currStateConverted;
     saveStateToBridge(&currStateConverted);
-    dtExecInstrBridge(&currStateConverted);
+    if(dtExecInstrBridge(&currStateConverted))
+      loadStateFromBridge(&currStateConverted);
 #endif // ENABLE_DEVTOOL
     Opcode = readOpcodeFirstByte();
     switch (Opcode) {

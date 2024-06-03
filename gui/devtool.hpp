@@ -152,7 +152,7 @@ typedef int (__stdcall *WRITECBPTR)(unsigned short, unsigned char, unsigned int)
 
 // Bridge counterparts
 void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine  *vm);
-void dtExecInstrBridge(z80_state_t *currStateConverted);
+bool dtExecInstrBridge(z80_state_t *currStateConverted);
 void dtWriteCallbackBridge(unsigned short addr, unsigned char byte, unsigned int type);
 }
 

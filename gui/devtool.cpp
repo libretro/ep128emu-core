@@ -186,16 +186,20 @@ void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
 
 /* Actual bridge called before each z80 instruction.
  * Z80 state is converted, I/O ports accounted in this file, RAM and video registers are currently exposed directly. */
-void dtExecInstrBridge(z80_state_t *currStateConverted)
+bool dtExecInstrBridge(z80_state_t *currStateConverted)
 {
   if (!dtExecInstrFromDll)
-   return;
+   return false;
   z80_state_bridge = *currStateConverted;
   runningVm->denyDisplayRefresh(true);
   /*if (machine_state_actual.cpu->pc.word == 0xdad3)
    std::cout << "[devtool] dtExec ping should be OK, pc: " << machine_state_actual.cpu->pc.word << std::endl;*/
   dtExecInstrFromDll(0);
   runningVm->denyDisplayRefresh(false);
+  /* Notify z80 if the z80 state is changed from the DLL */
+  if (memcmp(&z80_state_bridge, currStateConverted, sizeof(z80_state_bridge)) == 0)
+    return false;
+  return true;
 }
 
 void dtWriteCallbackBridge(unsigned short addr, unsigned char byte, unsigned int type)
