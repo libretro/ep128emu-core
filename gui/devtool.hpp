@@ -7,8 +7,6 @@
 
 #include <windows.h>
 #include "vm.hpp"
-// Old interface in the publicly available 0.420 version. It will not work, memory interface has changed, for reference only.
-//#define DEVTOOL_DLL_0420 1
 
 namespace dtBridge {
 
@@ -83,6 +81,7 @@ typedef struct //_Z80_STATE // DEVTOOL uses only the registers
 	int bp_reached;          // NOT USED BY DEVTOOL
 } z80_state_t;
 
+/* TVC model types from WinTVC. Not mapped to ep128emu configs yet. */
 enum machine_t {
 	MODEL_32,
 	MODEL_32_64,
@@ -95,11 +94,11 @@ enum machine_t {
 };
 
 typedef void (WINAPI* TMachine_init)(char* exe_path);                      // NOT USED BY DEVTOOL
-typedef void (WINAPI* TMachine_reset)();                                   // TODO
-typedef void (WINAPI* TMachine_hard_reset)();                              // TODO
+typedef void (WINAPI* TMachine_reset)();
+typedef void (WINAPI* TMachine_hard_reset)();
 typedef void (WINAPI* TMachine_run)();                                     // NOT USED BY DEVTOOL
 typedef void (WINAPI* TMachine_do_some_frames)(int nr, int update_video);  // NOT USED BY DEVTOOL
-typedef void (WINAPI* TMachine_type_text)(char* text);                     // TODO
+typedef void (WINAPI* TMachine_type_text)(char* text);                     // Maybe TODO - a way to start the program execution ("RUN\r")
 typedef void (WINAPI* TMachine_autostart_file)(char* filename, int reset); // NOT USED BY DEVTOOL
 typedef void (WINAPI* TMachine_set_model)(unsigned int m);                 // NOT USED BY DEVTOOL
 typedef machine_t (WINAPI* TMachine_get_model)();
@@ -130,23 +129,19 @@ typedef struct MACHINE_STATE
 	unsigned char* video_ram;    /* 16384 elements */ /* Not filled currently */
 	unsigned char* io_shadow;    /* 256 elements */   /* Readonly copy passed */
 	unsigned char* crtc_shadow;  /* 32 elements */    /* Direct CRTC register structure passed */
-	unsigned char* rom;          /* Not filled, see segment table. ep128emu default cfg: memory.rom.00 */
-	unsigned char* ext_rom;      /* Not filled, see segment table. ep128emu default cfg: memory.rom.02 */
+	unsigned char* rom;          /* Filled as segment table 00, TVC default ROM segment   */
+	unsigned char* ext_rom;      /* Filled as segment table 02, TVC extension ROM segment */
 
 } machine_state_t;
 
 // Functions are very dynamically imported from DLL and used via pointers, to avoid compile time dependency.
 // This also means a jump in the dark and hope that functions in the dll are really as described here.
 // Tries to find following functions from DLL:
-// extern "C" __declspec(dllimport) int __stdcall dtInit(HWND hWnd, machine_state_t* machine_state,machine_functions_t *machine_functions, unsigned int emulatorID);
+// extern "C" __declspec(dllimport) int __stdcall dtInit(HWND hWnd, machine_state_t* machine_state,machine_functions_t *machine_functions, unsigned int emulatorID, HWND hWnd);
 // extern "C" __declspec(dllimport) int __stdcall dtExecInstr(int last_cycle);
 // extern "C" __declspec(dllimport) int __stdcall dtWriteCallback(unsigned short addr, unsigned char byte, unsigned int type);
 
-#ifdef DEVTOOL_DLL_0420
-typedef int (__stdcall *INITPTR)(HWND,machine_state_t*,machine_functions_t*);
-#else
 typedef int (__stdcall *INITPTR)(HWND,machine_state_t*,machine_functions_t*,unsigned int,HWND);
-#endif // DEVTOOL_DLL_0420
 typedef int (__stdcall *EXECINSTRPTR)(int);
 typedef int (__stdcall *WRITECBPTR)(unsigned short, unsigned char, unsigned int);
 

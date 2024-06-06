@@ -12,9 +12,9 @@
 namespace dtBridge {
 
 // Globals for state transfer to devtool
-machine_state_t machine_state_actual = {0};
+machine_state_t machine_state_actual         = {0};
 machine_functions_t machine_functions_bridge = {0};
-z80_state_t z80_state_bridge = {0};
+z80_state_t z80_state_bridge                 = {0};
 void * ram_segment_table[256];
 Ep128Emu::VirtualMachine *runningVm;
 // Function pointers from DLL
@@ -128,7 +128,6 @@ static void createTransferStructures(Ep128Emu::VirtualMachine *vm)
 	machine_functions_bridge.Machine_update_screen =  (TMachine_update_screen)  placeholderDummy;
 }
 
-
 void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
 {
   int retval;
@@ -136,27 +135,23 @@ void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
   runningVm = vm;
   HINSTANCE hGetProcIDDLL = LoadLibrary("dtdebug.dll");
   if (!hGetProcIDDLL) {
-    std::cout << "could not load the dynamic library" << std::endl;
+    std::cout << "Could not load the dynamic library dtdebug.dll, all DevTool integration functions disabled" << std::endl;
     return;
   }
 
-#ifdef DEVTOOL_DLL_0420
-  dtInitFromDll = (INITPTR)GetProcAddress(hGetProcIDDLL, "dtInit");
-#else
   dtInitFromDll = (INITPTR)GetProcAddress(hGetProcIDDLL, "dtInitEP");
-#endif
   if (!dtInitFromDll) {
-    std::cout << "Could not locate the dtInit procedure" << std::endl;
+    std::cout << "Could not locate the dtInitEP procedure in dtdebug.dll" << std::endl;
     return;
   }
   dtExecInstrFromDll = (EXECINSTRPTR)GetProcAddress(hGetProcIDDLL, "dtExecInstr");
   if (!dtExecInstrFromDll) {
-    std::cout << "Could not locate the dtExecInstr procedure" << std::endl;
+    std::cout << "Could not locate the dtExecInstr procedure in dtdebug.dll" << std::endl;
     return;
   }
   dtWriteCallbackFromDll = (WRITECBPTR)GetProcAddress(hGetProcIDDLL, "dtWriteCallback");
   if (!dtWriteCallbackFromDll) {
-    std::cout << "Could not locate the dtWriteCallback procedure" << std::endl;
+    std::cout << "Could not locate the dtWriteCallback procedure in dtdebug.dll" << std::endl;
     return;
   }
   createTransferStructures(vm);
@@ -171,16 +166,9 @@ void loadDevtoolDLL(HWND hwnd1, HWND hwnd2, Ep128Emu::VirtualMachine *vm)
   else if (typeid(*runningVm) == typeid(ZX128::ZX128VM))
     vmType = ID_EP128_SPECCY;
 
-
-#ifdef DEVTOOL_DLL_0420
-  retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge);
-#else
   retval = dtInitFromDll(hwnd1, &machine_state_actual, &machine_functions_bridge, vmType, hwnd2);
-#endif
-
-  std::cout << "[devtool] dtInit call with vmType: " << vmType << std::endl;
+//  std::cout << "[devtool] dtInit call with vmType: " << vmType << std::endl;
 //  std::cout << "[devtool] dtInit returned " << retval << std::endl;
-
   return;
 }
 
@@ -196,18 +184,22 @@ bool dtExecInstrBridge(z80_state_t *currStateConverted)
    std::cout << "[devtool] dtExec ping should be OK, pc: " << machine_state_actual.cpu->pc.word << std::endl;*/
   dtExecInstrFromDll(0);
   runningVm->denyDisplayRefresh(false);
-  /* Notify z80 if the z80 state is changed from the DLL */
+  /* Check if the z80 state was modified from the DLL */
   if (memcmp(&z80_state_bridge, currStateConverted, sizeof(z80_state_bridge)) == 0)
     return false;
+  /* If it was, notify z80 and transfer the changes. */
+  std::cout << "[devtool] mem state changed, pc: " << machine_state_actual.cpu->pc.word << std::endl;
+  *currStateConverted = z80_state_bridge;
   return true;
 }
 
+/* Bridge for each memory / port write operation. Type 0: mem, type 1: port*/
 void dtWriteCallbackBridge(unsigned short addr, unsigned char byte, unsigned int type)
 {
   if (!dtWriteCallbackFromDll)
    return;
-  // I/O port writes are accounted locally. Note: this shows the last value written to the ports,
-  // which may not be the same as normal emulated read (if read is allowed at all).
+  // I/O port writes are shadowed locally. Note: this shows the last value written to the ports,
+  // which may not be the same as normal emulated read (if read is allowed at all for that port).
   if (type == 1 && addr < 256)
     machine_state_actual.io_shadow[addr] = byte;
   dtWriteCallbackFromDll(addr, byte, type);
