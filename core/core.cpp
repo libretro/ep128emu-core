@@ -22,7 +22,7 @@
 namespace Ep128Emu {
 
 LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_, int contentLocale, bool canSkipFrames_, const char* romDirectory_, const char* saveDirectory_,
-                           const char* startSequence_, const char* cfgFile, bool useHalfFrame_, bool enhancedRom)
+                           const char* startSequence_, const char* cfgFile, bool useCfgFile, bool useHalfFrame_, bool enhancedRom)
   : log_cb(log_cb_),
     autofireFrame(0),
     autofireButtonId(256),
@@ -47,6 +47,11 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
 {
   std::string romBasePath(romDirectory_);
   std::string configBaseFile(romDirectory_);
+  std::string configContentDirFile;
+  std::string configContentDirTmp;
+  std::string configOrigFilename(cfgFile);
+  Ep128Emu::splitPath(configOrigFilename,configContentDirFile,configContentDirTmp);
+  
 #ifdef WIN32
   romBasePath.append("\\ep128emu\\roms\\");
   configBaseFile.append("\\ep128emu\\config\\");
@@ -54,6 +59,32 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
   romBasePath.append("/ep128emu/roms/");
   configBaseFile.append("/ep128emu/config/");
 #endif
+// check for existence of content dir cfg file, and override machineType accordingly
+
+  configContentDirTmp = configContentDirFile + "tvc.ep128cfg";
+  if(Ep128Emu::does_file_exist(configContentDirTmp.c_str()))
+  {
+    machineDetailedType = VM_config.at("TVC64_DISK");
+    log_cb(RETRO_LOG_INFO, "VM type forced to TVC\n");
+  }
+  configContentDirTmp = configContentDirFile + "cpc.ep128cfg";
+  if(Ep128Emu::does_file_exist(configContentDirTmp.c_str()))
+  {
+    machineDetailedType = VM_config.at("CPC_DISK");
+    log_cb(RETRO_LOG_INFO, "VM type forced to CPC\n");
+  }
+  configContentDirTmp = configContentDirFile + "zx.ep128cfg";
+  if(Ep128Emu::does_file_exist(configContentDirTmp.c_str()))
+  {
+    machineDetailedType = VM_config.at("ZX128_TAPE");
+    log_cb(RETRO_LOG_INFO, "VM type forced to ZX\n");
+  }
+  configContentDirTmp = configContentDirFile + "enterprise.ep128cfg";
+  if(Ep128Emu::does_file_exist(configContentDirTmp.c_str()))
+  {
+    machineDetailedType = VM_config.at("EP128_DISK");
+    log_cb(RETRO_LOG_INFO, "VM type forced to EP\n");
+  }
 
   if(machineDetailedType == VM_config.at("TVC64_DISK") || machineDetailedType == VM_config.at("TVC64_FILE")
      || machineDetailedType == VM_config.at("TVC64_TAPE"))
@@ -61,12 +92,14 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
     machineType = MACHINE_TVC;
     log_cb(RETRO_LOG_INFO, "Emulated machine: TVC\n");
     configBaseFile = configBaseFile + "tvc.ep128cfg";
+    configContentDirFile = configContentDirFile + "tvc.ep128cfg";
   }
   else if(machineDetailedType == VM_config.at("CPC_DISK") || machineDetailedType == VM_config.at("CPC_TAPE"))
   {
     machineType = MACHINE_CPC;
     log_cb(RETRO_LOG_INFO, "Emulated machine: CPC\n");
     configBaseFile = configBaseFile + "cpc.ep128cfg";
+    configContentDirFile = configContentDirFile + "cpc.ep128cfg";
   }
   else if(machineDetailedType == VM_config.at("ZX16_TAPE")  || machineDetailedType == VM_config.at("ZX16_FILE") ||
           machineDetailedType == VM_config.at("ZX48_TAPE")  || machineDetailedType == VM_config.at("ZX48_FILE") ||
@@ -75,11 +108,13 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
     machineType = MACHINE_ZX;
     log_cb(RETRO_LOG_INFO, "Emulated machine: ZX\n");
     configBaseFile = configBaseFile + "zx.ep128cfg";
+    configContentDirFile = configContentDirFile + "zx.ep128cfg";
   }
   else
   {
     log_cb(RETRO_LOG_INFO, "Emulated machine: EP\n");
     configBaseFile = configBaseFile + "enterprise.ep128cfg";
+    configContentDirFile = configContentDirFile + "enterprise.ep128cfg";
   }
   if(machineDetailedType == VM_config.at("VM_CONFIG_UNKNOWN"))
   {
@@ -128,7 +163,12 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
     log_cb(RETRO_LOG_INFO, "Loading system wide configuration file: %s\n",configBaseFile.c_str());
     config->loadState(configBaseFile.c_str(),false);
   }
-  if (cfgFile[0])
+  if(Ep128Emu::does_file_exist(configContentDirFile.c_str()))
+  {
+    log_cb(RETRO_LOG_INFO, "Loading content dir wide configuration file: %s\n",configContentDirFile.c_str());
+    config->loadState(configContentDirFile.c_str(),false);
+  }
+  if (useCfgFile)
   {
     log_cb(RETRO_LOG_INFO, "Loading content specific configuration file: %s\n",cfgFile);
     config->loadState(cfgFile,false);
@@ -402,8 +442,12 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
   {
     config->loadState(configBaseFile.c_str(),false);
   }
+  if(Ep128Emu::does_file_exist(configContentDirFile.c_str()))
+  {
+    config->loadState(configContentDirFile.c_str(),false);
+  }
   // highest: content-specific file
-  if (cfgFile[0])
+  if (useCfgFile)
   {
     config->loadState(cfgFile,false);
   }
@@ -1022,6 +1066,14 @@ void LibretroCore::update_input(retro_input_state_t input_state_cb, retro_enviro
       }
     }
   }
+  // Mouse handling
+  int16_t dX = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_X);
+  int16_t dY = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_Y);
+  uint8_t mouseButtonState = input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_LEFT) ? 1 : 0;
+  uint8_t mouseWheelEvent = 
+    input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_WHEELUP  ) ? 1<<0 : 0 |
+    input_state_cb(0, RETRO_DEVICE_MOUSE, 0, RETRO_DEVICE_ID_MOUSE_WHEELDOWN) ? 1<<1 : 0;
+  vmThread->setMouseState((int8_t)dX*-1, (int8_t)dY*-1, mouseButtonState, mouseWheelEvent);
   // startSequence handling.
   // Send keyboard input at specific frames (down presses)
   if (startSequenceIndex < startSequence.length())

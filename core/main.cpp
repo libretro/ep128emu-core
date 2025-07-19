@@ -38,9 +38,8 @@ tzx trainer support: ~20 out of all zx tosec, and 1 from cpc tosec
 EP IDE support
 demo record/play
 support for content in zip
-EP Mouse support
 achievement support
-test mp3 support with sndfile 1.1 - cmake won't find lame / mpeg123 when compiling libsndfile
+test mp3 support with sndfile 1.1
 led driver for tape loading - see comments inside
 */
 
@@ -358,7 +357,7 @@ static bool set_image_index_cb(unsigned index) {
         log_cb(RETRO_LOG_DEBUG, "Disk control: new file is %s\n",diskPaths[index].c_str());
      }
      config->applySettings();
-     if(tapeContent)
+     if(tapeContent || config->tape.forceMotorOn)
         core->vm->tapePlay();
     }
   }
@@ -607,7 +606,7 @@ void retro_init(void)
   timeBeginPeriod(1U);
 #endif
   log_cb(RETRO_LOG_DEBUG, "Creating core...\n");
-  core = new Ep128Emu::LibretroCore(log_cb, Ep128Emu::VM_config.at("EP128_DISK"), Ep128Emu::LOCALE_UK, canSkipFrames, retro_system_bios_directory, retro_system_save_directory,"","",useHalfFrame, enhancedRom);
+  core = new Ep128Emu::LibretroCore(log_cb, Ep128Emu::VM_config.at("EP128_DISK"), Ep128Emu::LOCALE_UK, canSkipFrames, retro_system_bios_directory, retro_system_save_directory,"","",false,useHalfFrame, enhancedRom);
   config = core->config;
   config->setErrorCallback(&cfgErrorFunc, (void *) 0);
   vmThread = core->vmThread;
@@ -865,6 +864,7 @@ bool retro_load_game(const struct retro_game_info *info)
     std::string contentBasename;
     std::string configFile;
     std::string configFileExt(".ep128cfg");
+    bool useConfigFile = false;
 
     size_t idx = filename.rfind('.');
     if(idx != std::string::npos)
@@ -897,11 +897,12 @@ bool retro_load_game(const struct retro_game_info *info)
 
     if(Ep128Emu::does_file_exist(configFile.c_str()))
     {
+      useConfigFile = true;
       log_cb(RETRO_LOG_INFO, "Content specific configuration file: %s \n",configFile.c_str());
     }
     else
     {
-      configFile = "";
+      useConfigFile = false;
       log_cb(RETRO_LOG_DEBUG, "No content specific config file exists\n");
     }
 
@@ -1071,10 +1072,16 @@ bool retro_load_game(const struct retro_game_info *info)
       check_variables();
       core = new Ep128Emu::LibretroCore(log_cb, detectedMachineDetailedType, contentLocale, canSkipFrames,
                                         retro_system_bios_directory, retro_system_save_directory,
-                                        startupSequence,configFile.c_str(),useHalfFrame, enhancedRom);
+                                        startupSequence,configFile.c_str(), useConfigFile, useHalfFrame, enhancedRom);
       log_cb(RETRO_LOG_DEBUG, "Core created\n");
       config = core->config;
       check_variables();
+      if (core->machineDetailedType == Ep128Emu::VM_config.at("EP128_TAPE")) {
+        tapeContent = true;
+        fileContent = false;
+        diskContent = false;
+        log_cb(RETRO_LOG_DEBUG, "Tape content override\n");
+      }
       if (diskContent)
       {
         config->floppy.a.imageFile = info->path;

@@ -305,7 +305,7 @@ public:
   // ----------------
 
   LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType, int contentLocale, bool canSkipFrames_, const char* romDirectory_, const char* saveDirectory_,
-  const char* startSequence_, const char* cfgFile, bool useHalfFrame, bool enhancedRom);
+  const char* startSequence_, const char* cfgFile, bool useCfgFile, bool useHalfFrame, bool enhancedRom);
   virtual ~LibretroCore();
 
   void initialize_keyboard_map(void);
