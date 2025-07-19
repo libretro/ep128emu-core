@@ -91,6 +91,179 @@ else ifeq ($(platform), osx)
 	CFLAGS  += $(ARCHFLAGS)
 	CXXFLAGS  += $(ARCHFLAGS)
 	LDFLAGS += $(ARCHFLAGS)
+
+# iOS
+else ifneq (,$(findstring ios,$(platform)))
+
+	TARGET := $(TARGET_NAME)_libretro_ios.dylib
+	fpic := -fPIC
+	SHARED := -dynamiclib
+        MINVERSION :=
+
+	ifeq ($(IOSSDK),)
+		IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
+	endif
+
+ifeq ($(platform),ios-arm64)
+	CC    = cc -arch arm64 -isysroot $(IOSSDK)
+	CC_AS = perl ./tools/gas-preprocessor.pl $(CC)
+	CXX   = c++ -arch arm64 -isysroot $(IOSSDK)
+else
+	CC    = cc -arch armv7 -isysroot $(IOSSDK)
+	CC_AS = perl ./tools/gas-preprocessor.pl $(CC)
+	CXX   = c++ -arch armv7 -isysroot $(IOSSDK)
+endif
+ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
+	MINVERSION = -miphoneos-version-min=8.0
+else
+	MINVERSION = -miphoneos-version-min=5.0
+endif
+	PLATFORM_DEFINES := $(MINVERSION)
+
+# tvOS
+else ifeq ($(platform), tvos-arm64)
+	TARGET := $(TARGET_NAME)_libretro_tvos.dylib
+	fpic := -fPIC
+	SHARED := -dynamiclib
+
+	ifeq ($(IOSSDK),)
+		IOSSDK := $(shell xcodebuild -version -sdk appletvos Path)
+	endif
+
+	CC    = cc -arch arm64 -isysroot $(IOSSDK)
+	CC_AS = perl ./tools/gas-preprocessor.pl $(CC)
+	CXX   = c++ -arch arm64 -isysroot $(IOSSDK)
+
+
+# Lightweight PS3 Homebrew SDK
+else ifneq (,$(filter $(platform), ps3 psl1ght))
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)gcc$(EXE_EXT)
+	CC_AS = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)gcc$(EXE_EXT)
+    CXX = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)g++$(EXE_EXT)
+    AR = $(PS3DEV)/ppu/bin/ppu-$(COMMONLV)ar$(EXE_EXT)
+	PLATFORM_DEFINES := -D__PS3__
+	STATIC_LINKING = 1
+	HAVE_COMPAT = 1
+    ifeq ($(platform), psl1ght)
+        PLATFORM_DEFINES += -D__PSL1GHT__
+    endif
+
+# PS2
+else ifeq ($(platform), ps2)
+   EXT=a
+   TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
+   CC = mips64r5900el-ps2-elf-gcc$(EXE_EXT)
+   AR = mips64r5900el-ps2-elf-ar$(EXE_EXT)
+   CXX = mips64r5900el-ps2-elf-g++$(EXE_EXT)
+   PLATFORM_DEFINES := -DPS2 -G0 -DABGR8888
+   STATIC_LINKING = 1
+
+# PSP
+else ifeq ($(platform), psp1)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = psp-gcc$(EXE_EXT)
+	CC_AS = psp-gcc$(EXE_EXT)
+	CXX = psp-g++$(EXE_EXT)
+	AR = psp-ar$(EXE_EXT)
+	PLATFORM_DEFINES := -DPSP
+	CFLAGS += -G0
+	CXXFLAGS += -G0
+	STATIC_LINKING = 1
+	HAVE_COMPAT = 1
+	EXTRA_INCLUDES := -I$(shell psp-config --pspsdk-path)/include
+
+# Vita
+else ifeq ($(platform), vita)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = arm-vita-eabi-gcc$(EXE_EXT)
+	CXX = arm-vita-eabi-g++$(EXE_EXT)
+	AR = arm-vita-eabi-ar$(EXE_EXT)
+	PLATFORM_DEFINES := -DVITA -DNO_UNALIGNED_ACCESS
+	STATIC_LINKING = 1
+
+# CTR (3DS)
+else ifeq ($(platform), ctr)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = $(DEVKITARM)/bin/arm-none-eabi-gcc$(EXE_EXT)
+	CXX = $(DEVKITARM)/bin/arm-none-eabi-g++$(EXE_EXT)
+	AR = $(DEVKITARM)/bin/arm-none-eabi-ar$(EXE_EXT)
+	PLATFORM_DEFINES := -DARM11 -D_3DS -DNO_UNALIGNED_ACCESS -DM16B -DLOWRES
+	PLATFORM_DEFINES += -march=armv6k -mtune=mpcore -mfloat-abi=hard
+	PLATFORM_DEFINES += -Wall -mword-relocations
+	PLATFORM_DEFINES += -fomit-frame-pointer -ffast-math
+	CXXFLAGS += -fno-rtti -fno-exceptions
+	STATIC_LINKING = 1
+
+# Xbox 360
+else ifeq ($(platform), xenon)
+	TARGET := $(TARGET_NAME)_libretro_xenon360.a
+	CC = xenon-gcc$(EXE_EXT)
+	CC_AS = xenon-gcc$(EXE_EXT)
+	CXX = xenon-g++$(EXE_EXT)
+	AR = xenon-ar$(EXE_EXT)
+	PLATFORM_DEFINES := -D__LIBXENON__
+	STATIC_LINKING = 1
+
+# Nintendo Game Cube
+else ifeq ($(platform), ngc)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+	CC_AS = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+	CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
+	PLATFORM_DEFINES += -DGEKKO -DHW_DOL -mrvl -mcpu=750 -meabi -mhard-float
+	STATIC_LINKING = 1
+	HAVE_COMPAT = 1
+
+# Nintendo Wii U
+else ifeq ($(platform), wiiu)
+       TARGET := $(TARGET_NAME)_libretro_$(platform).a
+       CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+       CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+       AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
+       COMMONFLAGS += -DGEKKO -DWIIU -DHW_RVL -mcpu=750 -meabi -mhard-float
+       STATIC_LINKING = 1
+       PLATFORM_DEFINES += $(COMMONFLAGS) -Iutils/zlib
+       HAVE_COMPAT = 1
+
+# Nintendo Wii
+else ifeq ($(platform), wii)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+	CC_AS = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+	CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
+	PLATFORM_DEFINES += -DGEKKO -DHW_RVL -DLOWRES -mrvl -mcpu=750 -meabi -mhard-float
+	STATIC_LINKING = 1
+	HAVE_COMPAT = 1
+
+# Nintendo Switch (libnx)
+else ifeq ($(platform), libnx)
+	include $(DEVKITPRO)/libnx/switch_rules
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CFLAGS += -O3 -fomit-frame-pointer -ffast-math -I$(DEVKITPRO)/libnx/include/ -fPIE -Wl,--allow-multiple-definition
+	CFLAGS += -specs=$(DEVKITPRO)/libnx/switch.specs
+	CFLAGS += -D__SWITCH__ -DHAVE_LIBNX -DHAVE_GETPWUID=0 -DHAVE_GETCWD=1
+	CFLAGS += -march=armv8-a -mtune=cortex-a57 -mtp=soft -ffast-math -mcpu=cortex-a57+crc+fp+simd -ffunction-sections
+	CFLAGS += -Ifrontend/switch -ftree-vectorize
+	STATIC_LINKING = 1
+
+# ARM
+else ifneq (,$(findstring armv,$(platform)))
+	TARGET := $(TARGET_NAME)_libretro.so
+	fpic := -fPIC
+	SHARED := -shared -Wl,-version-script=link.T
+	LDFLAGS += -static-libgcc -static-libstdc++
+	ifneq (,$(findstring cortexa8,$(platform)))
+		PLATFORM_DEFINES += -marm -mcpu=cortex-a8
+	else ifneq (,$(findstring cortexa9,$(platform)))
+		PLATFORM_DEFINES += -marm -mcpu=cortex-a9
+	endif
+	PLATFORM_DEFINES += -marm
+	PLATFORM_DEFINES += -mtune=generic-armv7-a -mhard-float
+  LDFLAGS += -Wl,--as-needed
+
 # Windows cross-compilation
 # If variables are set up externally by buildbot, do not override.
 else ifeq ($(platform), win64)
@@ -132,6 +305,13 @@ else ifeq ($(platform), emscripten)
 	SHARED := -shared -s TOTAL_MEMORY=184842208
 	STATIC_LINKING=1
 
+# Playstation Vita
+else ifeq ($(platform), vita)
+	TARGET := $(TARGET_NAME)_libretro_$(platform).a
+	CC = arm-vita-eabi-gcc
+	AR = arm-vita-eabi-ar
+	CXXFLAGS += -Wl,-q -Wall -O3
+	STATIC_LINKING=1
 
 # Windows MSVC 2017 all architectures
 else ifneq (,$(findstring windows_msvc2017,$(platform)))
