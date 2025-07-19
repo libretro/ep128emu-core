@@ -9,7 +9,7 @@ Note: The actual documentation is best viewed in [Retroarch docs](https://docs.l
 
 ## Features
 
-For the emulation features, see the [original README](README). Since GUI is replaced by retroarch, features that would require own window (debugger, keyboard layout setting, etc) are not available. Some extra features not required for original games are also excluded (SD card, SID, MIDI, Spectrum emulation card for EP, mouse).
+For the emulation features, see the [original README](README). Since GUI is replaced by retroarch, features that would require own window (debugger, keyboard layout setting, etc) are not available. Some extra features not required for original games are also excluded (SD card, SID, MIDI, Spectrum emulation card for EP).
 
 ### Content types supported:
 * Enterprise disk images: `img`, `dsk`
@@ -51,6 +51,7 @@ For most content types, there is a startup sequence that will do the program loa
   * use original or enhanced ROM for Enterprise (faster memory test)
   * zoom and info keys for player 1
   * autofire button and speed for player 1
+* Mouse input is also enabled for those few programs that support it
 
 ### Other features
 * Save/load state, rewind
