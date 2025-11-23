@@ -651,7 +651,7 @@ void retro_get_system_info(struct retro_system_info *info)
 {
   memset(info, 0, sizeof(*info));
   info->library_name     = "ep128emu";
-  info->library_version  = "v1.2.11";
+  info->library_version  = "v1.2.12";
   info->need_fullpath    = true;
 #ifndef EXCLUDE_SOUND_LIBS
   info->valid_extensions = "img|dsk|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|mp3|.";
@@ -1194,7 +1194,9 @@ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, 
 size_t retro_serialize_size(void)
 {
   if(core && core->config) {
-    return (size_t)EP128EMU_SNAPSHOT_SIZE + (size_t)(core->config->memory.ram.size > 128 ? (core->config->memory.ram.size-128)*1024 : 0);
+    return (size_t)EP128EMU_SNAPSHOT_SIZE + 
+           (size_t)(core->config->memory.ram.size > 128 ? (core->config->memory.ram.size-128)*1024 : 0) +
+           (size_t)(enhancedRom ? 2*16*1024 : 0);
   } else
     return EP128EMU_SNAPSHOT_SIZE;
 }
