@@ -118,6 +118,7 @@ ifeq ($(platform),$(filter $(platform),ios9 ios-arm64))
 else
 	MINVERSION = -miphoneos-version-min=5.0
 endif
+	fpic += $(MINVERSION)
 	PLATFORM_DEFINES := $(MINVERSION)
 
 # tvOS
@@ -133,7 +134,9 @@ else ifeq ($(platform), tvos-arm64)
 	CC    = cc -arch arm64 -isysroot $(IOSSDK)
 	CC_AS = perl ./tools/gas-preprocessor.pl $(CC)
 	CXX   = c++ -arch arm64 -isysroot $(IOSSDK)
-
+	MINVERSION = -mappletvos-version-min=11.0
+	fpic += $(MINVERSION)
+	PLATFORM_DEFINES := $(MINVERSION)
 
 # Lightweight PS3 Homebrew SDK
 else ifneq (,$(filter $(platform), ps3 psl1ght))

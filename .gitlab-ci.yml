@@ -51,8 +51,8 @@ include:
     file: '/android-jni.yml'
 
   # iOS
-  #- project: 'libretro-infrastructure/ci-templates'
-  #  file: '/ios-arm64.yml'
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/ios-arm64.yml'
 
   # iOS (armv7)
   #- project: 'libretro-infrastructure/ci-templates'
@@ -84,8 +84,8 @@ include:
   #  file: '/libnx-static.yml'
 
   # tvOS (AppleTV)
-  #- project: 'libretro-infrastructure/ci-templates'
-  #  file: '/tvos-arm64.yml'
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/tvos-arm64.yml'
 
   # OpenDingux
   #- project: 'libretro-infrastructure/ci-templates'
@@ -185,10 +185,10 @@ android-x86:
     - .core-defs
 
 # iOS
-#libretro-build-ios-arm64:
-#  extends:
-#    - .libretro-ios-arm64-make-default
-#    - .core-defs
+libretro-build-ios-arm64:
+  extends:
+    - .libretro-ios-arm64-make-default
+    - .core-defs
 
 # iOS (armv7) [iOS 9 and up]
 #libretro-build-ios9:
@@ -197,10 +197,10 @@ android-x86:
 #    - .core-defs
 
 # tvOS
-#libretro-build-tvos-arm64:
-#  extends:
-#    - .libretro-tvos-arm64-make-default
-#    - .core-defs
+libretro-build-tvos-arm64:
+  extends:
+    - .libretro-tvos-arm64-make-default
+    - .core-defs
 
 ################################### CONSOLES #################################
 # PlayStation Vita
