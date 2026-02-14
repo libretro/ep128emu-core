@@ -177,9 +177,18 @@ namespace CPC464 {
         uint32_t  sectorSize = uint32_t(0x80U << (buf[(j << 3) + 27] & 0x07));
         uint32_t  dataSize =
             uint32_t(buf[(j << 3) + 30]) | (uint32_t(buf[(j << 3) + 31]) << 8);
+
+        sectorTableBuf[sectorTableBufPos].statusRegister1 =
+            buf[(j << 3) + 28] & 0xA5;
+        sectorTableBuf[sectorTableBufPos].statusRegister2 =
+            buf[(j << 3) + 29] & 0x61;
+
+        /* weak sector in image: allow longer data when Data Error status bits are present */
         if (dataSize < 1U ||
             ((dataSize & (sectorSize - 1U)) != 0U &&
-             !(dataSize >= 0x1000U && dataSize < sectorSize))) {
+             !(dataSize >= 0x1000U && dataSize < sectorSize) &&
+             !(sectorTableBuf[sectorTableBufPos].statusRegister1 & 0x20 ||
+               sectorTableBuf[sectorTableBufPos].statusRegister1 & 0x20 ))) {
           throw Ep128Emu::Exception("invalid sector header "
                                     "in CPC disk image file");
         }
@@ -189,10 +198,6 @@ namespace CPC464 {
         sectorTableBuf[sectorTableBufPos].sideNum = buf[(j << 3) + 25];
         sectorTableBuf[sectorTableBufPos].sectorNum = buf[(j << 3) + 26];
         sectorTableBuf[sectorTableBufPos].sectorSizeCode = buf[(j << 3) + 27];
-        sectorTableBuf[sectorTableBufPos].statusRegister1 =
-            buf[(j << 3) + 28] & 0xA5;
-        sectorTableBuf[sectorTableBufPos].statusRegister2 =
-            buf[(j << 3) + 29] & 0x61;
         filePos = filePos + size_t(dataSize);
         if (filePos > nextFilePos) {
           throw Ep128Emu::Exception("unexpected end of track data "
