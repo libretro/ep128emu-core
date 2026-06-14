@@ -52,10 +52,10 @@ else:
 # pkgname : [ pkgconfig, [ package_names ],
 #             linux_flags, mingw_flags, c_header, cxx_header, optional ]
 
-fltkLibsLinux = '-lfltk -lfltk_images -lfltk_jpeg -lfltk_png'
+fltkLibsLinux = '-lfltk -lfltk_images'
 fltkLibsMinGW = fltkLibsLinux + ' -lz -lcomdlg32 -lcomctl32 -lole32'
 fltkLibsMinGW = fltkLibsMinGW + ' -luuid -lws2_32 -lwinmm -lgdi32'
-fltkLibsLinux = fltkLibsLinux + ' -lfltk_z -lXcursor -lXinerama -lXrender'
+fltkLibsLinux = fltkLibsLinux + ' -lXcursor -lXinerama -lXrender'
 fltkLibsLinux = fltkLibsLinux + ' -lXext -lXft -lXfixes -lX11 -lfontconfig -ldl'
 
 packageConfigs = {
@@ -87,7 +87,7 @@ packageConfigs = {
     'cURL' : [
         'pkg-config --silence-errors --cflags --libs',
         ['libcurl', 'curl'],
-        '-lcurl -lssl -lcrypto', '-lcurldll',
+        '-lcurl', '-lcurldll',
         'curl/curl.h', '', 1]
 }
 
