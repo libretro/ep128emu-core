@@ -17,6 +17,9 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+
+// TODO: mem map
+
 #include "ep128emu.hpp"
 #include "tvcmem.hpp"
 
@@ -26,7 +29,7 @@ namespace TVC64 {
   {
     if (n >= 0xFC && isROM)
       throw Ep128Emu::Exception("video memory cannot be ROM");
-    if (n > 0x04 && n < 0xF8)
+    if (n > EP128EMU_MAX_TVC_ROM_SEGMENT && n < 0xF8)
       throw Ep128Emu::Exception("invalid segment number");
     if (segmentTable[n] == (uint8_t *) 0)
       segmentTable[n] = new uint8_t[16384];
@@ -322,7 +325,7 @@ namespace TVC64 {
   void Memory::loadROMSegment(uint8_t segment,
                               const uint8_t *data, size_t dataSize)
   {
-    if (segment > 0x04)
+    if (segment > EP128EMU_MAX_TVC_ROM_SEGMENT)
       throw Ep128Emu::Exception("internal error: invalid ROM segment number");
     if (!data)
       dataSize = 0;
@@ -348,6 +351,7 @@ namespace TVC64 {
     }
     for ( ; i < 0x4000 || (i & 0x3FFF) != 0; i++)
       segmentTable[segment][i & 0x3FFF] = 0xFF;
+    /* Segments 02 and 04 are extension roms, 8k only, and will reside in the upper half */
     if ((segment == 0x02 || segment == 0x04) &&
         dataSize > 0 && dataSize <= 8192) {
       std::memcpy(&(segmentTable[segment][0x2000]),
@@ -437,9 +441,18 @@ namespace TVC64 {
       pageAddressTableW[i + 1] = pageAddressTableW[i];
     }
     if (pageTable[3] == 0x02) {
-      // IOMEM is special case
-      pageAddressTableR[6] = (uint8_t *) 0;
-      pageAddressTableW[6] = (uint8_t *) 0;
+      // Map IOMEM to ROM segments 0x05..0x08, if present + take care of pointer offset
+      uint8_t cardSlot = uint16_t((n & 0xC000) >> 14);
+      if (segmentTable[0x05 + cardSlot] == (uint8_t *) 0)
+      {
+         pageAddressTableR[6] = (uint8_t *) 0;
+         pageAddressTableW[6] = (uint8_t *) 0;
+      }
+      else
+      {
+         pageAddressTableR[6] = segmentTable[0x05 + cardSlot] -(long(6) << 13);
+         pageAddressTableW[6] = segmentTable[0x05 + cardSlot] -(long(6) << 13);
+      }
     }
   }
 
