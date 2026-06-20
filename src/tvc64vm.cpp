@@ -557,7 +557,9 @@ namespace TVC64 {
   {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
-        return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        /*return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));*/
+        // TODO: the IOMEM for non-floppy cards is now emulated as a rom segment
+        return 0xFF;
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
@@ -576,7 +578,9 @@ namespace TVC64 {
   {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
-        return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        /*return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));*/
+        // TODO: the IOMEM for non-floppy cards is now emulated as a rom segment
+        return 0xFF;
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
@@ -768,6 +772,8 @@ namespace TVC64 {
       break;
     case 0x5A:                          // extension card ID byte
     case 0x5E:
+      // bit 0..1: ext 0, bit 2..3: ext 1, bit 4..5: ext 2, bit 6..7: ext 3
+      // 00 - serial card; 01 - unused; 10 - floppy; 11 - empty or unspecified
       // extensions 0 and 1 are floppy drives, the others are unused
       retval = 0xFA | uint8_t(vm.memory.readRaw(0x0000C000U) == 0xFF)
                | (uint8_t(vm.memory.readRaw(0x00010000U) == 0xFF) << 2);
@@ -1476,7 +1482,7 @@ namespace TVC64 {
   void TVC64VM::loadROMSegment(uint8_t n, const char *fileName, size_t offs)
   {
     stopDemo();
-    if (n > 0x04)
+    if (n > EP128EMU_MAX_TVC_ROM_SEGMENT)
       throw Ep128Emu::Exception("internal error: invalid ROM segment number");
     if (fileName == (char *) 0 || fileName[0] == '\0') {
       // empty file name: delete segment
