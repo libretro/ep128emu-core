@@ -116,5 +116,7 @@ namespace Ep128Emu {
 
 #include "fileio.hpp"
 
+#define EP128EMU_MAX_TVC_ROM_SEGMENT 0x08
+
 #endif  // EP128EMU_EP128EMU_HPP
 
