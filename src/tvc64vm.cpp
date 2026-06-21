@@ -59,6 +59,7 @@ static const uint8_t  keyboardConvTable[128] = {
       25,      99,      26,       3,      30,      27,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
+  // Hack for GameCard joys 3/4 - actual values are not too relevant
       99,      99,      99,      99,      99,      99,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
   // JOY1R  JOY1L    JOY1D    JOY1U    JOY1F   JOY1F2   JOY1F3
@@ -745,8 +746,42 @@ namespace TVC64 {
                  | (vm.wd177x.getDataRequestFlag() ? 0x80 : 0x00);
       }
       break;
-    // 0x20-0x2F: extension 1 (unimplemented)
-    // 0x30-0x3F: extension 2 (unimplemented)
+    // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
+    // 0x30-0x3F: extension 2 (reserved currently for GameCard)
+    // Ext 3/4 joystick states
+    // GameCard HW spec (i.e. actual port return value): 
+    //   active-low, bit0: up, bit1: down, bit2: left, bit3: right, bit4: fire, bit5..7: unused
+    // ep128emu spec (to reuse Enterprise codes):
+    //   Order of codes: up - down - left - right - fire - fire2 - fire3
+    //   joystickCodesExt3[7] = { 0x63, 0x62, 0x61, 0x60, 0x64, 0x65, 0x66 };
+    //   joystickCodesExt4[7] = { 0x6b, 0x6a, 0x69, 0x68, 0x6c, 0x6d, 0x6e };
+    // Scan codes are passed through setKeyboardState, so reading it is a bit confusing
+    case 0x32:
+      retval = 0xE0;
+      if (vm.keyboardState[0xC] & 0x08)
+         retval = retval | 0x01;
+      if (vm.keyboardState[0xC] & 0x04)
+         retval = retval | 0x02;
+      if (vm.keyboardState[0xC] & 0x02)
+         retval = retval | 0x04;
+      if (vm.keyboardState[0xC] & 0x01)
+         retval = retval | 0x08;
+      if (vm.keyboardState[0xC] & 0x10)
+         retval = retval | 0x10;
+      break;
+    case 0x33:
+      retval = 0xE0;
+      if (vm.keyboardState[0xD] & 0x08)
+         retval = retval | 0x01;
+      if (vm.keyboardState[0xD] & 0x04)
+         retval = retval | 0x02;
+      if (vm.keyboardState[0xD] & 0x02)
+         retval = retval | 0x04;
+      if (vm.keyboardState[0xD] & 0x01)
+         retval = retval | 0x08;
+      if (vm.keyboardState[0xD] & 0x10)
+         retval = retval | 0x10;
+      break;
     // 0x40-0x4F: extension 3 (unimplemented)
     case 0x50:                          // toggle tape output (repeated 8 times)
     case 0x51:
