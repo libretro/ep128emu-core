@@ -1283,7 +1283,7 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
       Ep128Emu::joystick_type.at("DEFAULT"), Ep128Emu::joystick_type.at("DEFAULT")};
 
     unsigned mappedDev = Ep128Emu::joystick_type.at((*iter_joytype).second);
-    log_cb(RETRO_LOG_DEBUG, "Mapped device %s for user %u \n", (*iter_joytype).second.c_str(), port);
+    /*log_cb(RETRO_LOG_DEBUG, "Mapped device %s for user %u \n", (*iter_joytype).second.c_str(), port);*/
 
     userMap[port] = mappedDev;
     if(core)

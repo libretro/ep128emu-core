@@ -324,6 +324,9 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
       config->memory.rom[0x03].file="tvc_dos12d.rom";
       config->memory.rom[0x03].offset=0;
     }
+
+    /*config->memory.rom[0x05].file="TVC-GameCard-r1229.rom";
+    config->memory.rom[0x05].offset=0;*/
   }
   else if(machineType == MACHINE_CPC)
   {
@@ -815,6 +818,8 @@ void LibretroCore::initialize_joystick_map(std::string zoomKey, std::string info
     update_joystick_map(joystickCodesExt4,4,5);
     // external joystick 5: controller 5 / user 6
     update_joystick_map(joystickCodesExt5,5,5);
+    // Note: Ext6 joystick is not mapped by default to user 7, but it can be activated
+    // simply by selecting it from Quick Menu / Controls.
   }
   inputJoyMap[EPKEY_INFO][0] = RETRO_DEVICE_ID_JOYPAD_L3; // special: info button
   inputJoyMap[EPKEY_ZOOM][0] = RETRO_DEVICE_ID_JOYPAD_R3; // special: fit to content
@@ -1096,6 +1101,10 @@ void LibretroCore::update_input(retro_input_state_t input_state_cb, retro_enviro
       {
         update_keyboard(true,RETROK_F1,0,0);
       }
+      else if((unsigned char)startSequence.at(startSequenceIndex) == 252)
+      {
+        update_keyboard(true,RETROK_ESCAPE,0,0);
+      }
       else
       {
         update_keyboard(true,startSequence.at(startSequenceIndex),0,0);
@@ -1116,6 +1125,10 @@ void LibretroCore::update_input(retro_input_state_t input_state_cb, retro_enviro
       else if((unsigned char)startSequence.at(startSequenceIndex-1) == 253)
       {
         update_keyboard(false,RETROK_F1,0,0);
+      }
+      else if((unsigned char)startSequence.at(startSequenceIndex-1) == 252)
+      {
+        update_keyboard(false,RETROK_ESCAPE,0,0);
       }
       else
       {
