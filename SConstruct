@@ -19,6 +19,8 @@ useLuaJIT = int(ARGUMENTS.get('luajit', 0))
 cmosZ80 = int(ARGUMENTS.get('z80cmos', 0))
 # build with experimental SD card emulation
 enableSDExt = int(ARGUMENTS.get('sdext', 1))
+# build with experimental sprite card emulation
+enableSpriteExt = int(ARGUMENTS.get('spriteext', 1))
 # enable SID card emulation
 enableReSID = int(ARGUMENTS.get('resid', 1))
 # enable MIDI port emulation
@@ -346,6 +348,8 @@ if cmosZ80:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DZ80_ENABLE_CMOS'])
 if enableSDExt:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_SDEXT'])
+if enableSpriteExt:
+    ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_SPRITEEXT'])
 if enableReSID:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_RESID'])
 
@@ -426,6 +430,10 @@ sdextSources = []
 if enableSDExt:
     sdextSources = ['src/sdext.cpp']
 
+spriteextSources = []
+if enableSpriteExt:
+    spriteextSources = ['src/spriteext.cpp']
+
 ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/dave.cpp
     src/ep128vm.cpp
@@ -437,7 +445,7 @@ ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/epmemcfg.cpp
     src/ide.cpp
     src/snapshot.cpp
-''') + sdextSources)
+''') + sdextSources + spriteextSources)
 
 # -----------------------------------------------------------------------------
 
@@ -479,7 +487,7 @@ tvc64Lib = tvc64LibEnvironment.StaticLibrary('tvc64', Split('''
     src/tvcmem.cpp
     src/tvcvideo.cpp
     src/tvc_snap.cpp
-'''))
+''') + sdextSources + spriteextSources)
 
 # -----------------------------------------------------------------------------
 

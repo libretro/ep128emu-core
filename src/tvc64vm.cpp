@@ -33,6 +33,9 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 #include <vector>
 
@@ -782,7 +785,17 @@ namespace TVC64 {
       if (vm.keyboardState[0xD] & 0x10)
          retval = retval | 0x10;
       break;
-    // 0x40-0x4F: extension 3 (unimplemented)
+    // 0x40-0x4F: extension 3, tvc256++ (spriteext)
+    case 0x40:
+    case 0x42:
+    case 0x44:
+    case 0x46:
+      retval = vm.spriteext.io_port_values[addr-0x40];
+      break;
+    case 0x41:
+    case 0x45:
+       retval = vm.spriteext.readNamedPort(addr == 0x45);
+      break;
     case 0x50:                          // toggle tape output (repeated 8 times)
     case 0x51:
     case 0x52:
@@ -947,9 +960,20 @@ namespace TVC64 {
     case 0x1B:
       vm.ioPorts.writeDebug(addr & 0x7C, value);
       break;
-    // 0x20-0x2F: extension 1 (unimplemented)
-    // 0x30-0x3F: extension 2 (unimplemented)
-    // 0x40-0x4F: extension 3 (unimplemented)
+    // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
+    // 0x30-0x3F: extension 2 (reserved currently for GameCard)
+    // 0x40-0x4F: extension 3, tvc256++ (spriteext)
+    case 0x40:
+    case 0x42:
+    case 0x44:
+    case 0x46:
+      vm.spriteext.io_port_values[addr-0x40] = value;
+      break;
+    case 0x41:
+    case 0x45:
+       /*vm.spriteext.writeNamedPort(addr == 0x45,value);*/
+      break;
+
     case 0x50:                          // toggle tape output (repeated 8 times)
       vm.tapeOutputSignal = ~(vm.tapeOutputSignal) & 0x01;
       break;

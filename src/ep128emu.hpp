@@ -118,5 +118,6 @@ namespace Ep128Emu {
 
 #define EP128EMU_MAX_TVC_ROM_SEGMENT 0x06
 
+
 #endif  // EP128EMU_EP128EMU_HPP
 

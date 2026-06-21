@@ -35,6 +35,9 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 namespace Ep128Emu {
   class VideoCapture;
@@ -183,6 +186,9 @@ namespace TVC64 {
     uint8_t   tvcKeyboardState[16];
 #ifdef ENABLE_SDEXT
     Ep128::SDExt  sdext;
+#endif
+#ifdef ENABLE_SPRITEEXT
+    Ep128::SpriteExt  spriteext;
 #endif
     // ----------------
     EP128EMU_INLINE void updateCPUCycles(int cycles);
