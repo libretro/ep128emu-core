@@ -441,17 +441,17 @@ namespace TVC64 {
       pageAddressTableW[i + 1] = pageAddressTableW[i];
     }
     if (pageTable[3] == 0x02) {
-      // Map IOMEM to ROM segments 0x05..0x08, if present + take care of pointer offset
+      // Map IOMEM of slots 1,2,3 to ROM segments 0x04..0x06, if present + take care of pointer offset
       uint8_t cardSlot = uint16_t((n & 0xC000) >> 14);
-      if (segmentTable[0x05 + cardSlot] == (uint8_t *) 0)
+      if (segmentTable[0x03 + cardSlot] == (uint8_t *) 0)
       {
          pageAddressTableR[6] = (uint8_t *) 0;
          pageAddressTableW[6] = (uint8_t *) 0;
       }
       else
       {
-         pageAddressTableR[6] = segmentTable[0x05 + cardSlot] -(long(6) << 13);
-         pageAddressTableW[6] = segmentTable[0x05 + cardSlot] -(long(6) << 13);
+         pageAddressTableR[6] = segmentTable[0x03 + cardSlot] -(long(6) << 13);
+         pageAddressTableW[6] = segmentTable[0x03 + cardSlot] -(long(6) << 13);
       }
     }
   }

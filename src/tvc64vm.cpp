@@ -557,9 +557,8 @@ namespace TVC64 {
   {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
-        /*return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));*/
-        // TODO: the IOMEM for non-floppy cards is now emulated as a rom segment
-        return 0xFF;
+        return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        // IOMEM for slots 1-2-3 mapped to segments 0x04-0x05-0x06
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
@@ -578,9 +577,8 @@ namespace TVC64 {
   {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
-        /*return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));*/
-        // TODO: the IOMEM for non-floppy cards is now emulated as a rom segment
-        return 0xFF;
+        return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        // IOMEM for slots 1-2-3 mapped to segments 0x04-0x05-0x06
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
