@@ -46,11 +46,12 @@ namespace Ep128 {
     io_port_values[SPRITEEXT_SEC_REG_INCREMENT] = 0x01;
 
     for (int i = 0; i < 256; i++)
-      namedPortValues[i] = 0xFF;
+      namedPortValues[i] = 0x00;
     namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
     namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P3_LOW] = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
+    namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
 
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);

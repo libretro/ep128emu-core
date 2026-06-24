@@ -795,7 +795,25 @@ namespace TVC64 {
       break;
     case 0x41:
     case 0x45:
-       retval = vm.spriteext.readNamedPort(addr == 0x45);
+      if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DX)
+      {
+        retval = vm.mouseDeltaX;
+        vm.mouseDeltaX = 0;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DY)
+      {
+        retval = vm.mouseDeltaY;
+        vm.mouseDeltaY = 0;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_BUTTONS)
+      {
+        retval = vm.mouseButtonState;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else
+        retval = vm.spriteext.readNamedPort(addr == 0x45);
       break;
 #endif
     case 0x50:                          // toggle tape output (repeated 8 times)
