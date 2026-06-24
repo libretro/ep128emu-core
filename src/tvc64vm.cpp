@@ -1625,6 +1625,43 @@ namespace TVC64 {
       videoCapture->setClockFrequency(crtcFrequency);
   }
 
+  void TVC64VM::setMouseState(int8_t dX, int8_t dY,
+                              uint8_t buttonState, uint8_t mouseWheelEvents)
+  {
+    if (EP128EMU_UNLIKELY(isRecordingDemo | isPlayingDemo)) {
+      if (isPlayingDemo)
+        return;
+      if (EP128EMU_UNLIKELY(haveTape() && getIsTapeMotorOn() &&
+                            getTapeButtonState() != 0)) {
+        stopDemoRecording(false);
+      }
+      else if (/*mouseEmulationEnabled*/true) {
+        demoBuffer.writeUIntVLen(demoTimeCnt);
+        demoTimeCnt = 0U;
+        demoBuffer.writeByte(0x03);     // event type (mouse)
+        demoBuffer.writeByte(0x04);     // number of data bytes
+        demoBuffer.writeByte(uint8_t(dX));
+        demoBuffer.writeByte(uint8_t(dY));
+        demoBuffer.writeByte(buttonState);
+        demoBuffer.writeByte(mouseWheelEvents);
+      }
+    }
+    int     dX_ = int(dX) + int(mouseDeltaX);
+    int     dY_ = int(dY) + int(mouseDeltaY);
+    mouseDeltaX = int8_t(dX_ > -128 ? (dX_ < 127 ? dX_ : 127) : -128);
+    mouseDeltaY = int8_t(dY_ > -128 ? (dY_ < 127 ? dY_ : 127) : -128);
+    mouseButtonState = buttonState;
+    if (mouseWheelEvents) {
+      if (mouseWheelEvents & 0x01)      // up
+        mouseWheelDelta = (mouseWheelDelta + 1) & 0xFF;
+      if (mouseWheelEvents & 0x02)      // down
+        mouseWheelDelta = (mouseWheelDelta - 1) & 0xFF;
+      if (((mouseWheelDelta + 0x10) & 0xFF) >= 0x20)    // overflow
+        mouseWheelDelta = ((mouseWheelDelta & 0x80) ? 0xF8 : 0x07);
+    }
+  }
+
+
   void TVC64VM::setKeyboardState(int keyCode, bool isPressed)
   {
     if (!isPlayingDemo) {
