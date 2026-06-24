@@ -38,6 +38,7 @@ namespace Ep128 {
     bool      spriteExt_enabled;    // only used in temporaryDisable()
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
+    uint8_t namedPortValues[256];
     // 7K of useful SRAM
     std::vector< uint8_t >  sd_ram_ext;
     // 64K flash ROM
@@ -89,8 +90,29 @@ namespace Ep128 {
 #define SPRITEEXT_SEC_REG_INDEX 0x4
 #define SPRITEEXT_SEC_REG_ACCESS 0x5
 #define SPRITEEXT_SEC_REG_INCREMENT 0x6
+#define REG_MEMORY_P2 0xB0
+// 4
+#define REG_MEMORY_P2_DEFAULT 0x04
+#define REG_MEMORY_P3 0xB1
+// 5
+#define REG_MEMORY_P3_DEFAULT 0x05
+#define REG_MEMORY_MAP_8M_P2_LOW 0xB2
+#define REG_MEMORY_MAP_8M_P2_LOW_DEFAULT 0x0
+#define REG_MEMORY_MAP_8M_P2_HIGH 0xB3
+#define REG_MEMORY_MAP_8M_P3_LOW 0xB4
+#define REG_MEMORY_MAP_8M_P3_LOW_DEFAULT 0x0
+#define REG_MEMORY_MAP_8M_P3_HIGH 0xB5
+#define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
+#define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x08
+#define SPRITEEXT_MEM_PAGE_BASE_SEGMENT 0xE8
+#define SPRITEEXT_MEM_PAGE_MAX 0x0F
+#define SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT 0x68
+#define SPRITEEXT_MEM_PAGE_PSRAM_P2 0x10
+#define SPRITEEXT_MEM_PAGE_PSRAM_P3 0x11
+#define SPRITEEXT_MEM_DISABLE 0xFF
 #define REG_FW_VERSION_MAJOR 0xC3
+#define REG_FW_VERSION_MAJOR_DEFAULT 0x01
 #define REG_FW_VERSION_MINOR 0xC4
-
+#define REG_FW_VERSION_MINOR_DEFAULT 0x02
 #endif  // EP128EMU_spriteext_HPP
 

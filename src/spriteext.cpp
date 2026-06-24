@@ -42,7 +42,16 @@ namespace Ep128 {
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
-    
+    io_port_values[SPRITEEXT_REG_INCREMENT] = 0x01;
+    io_port_values[SPRITEEXT_SEC_REG_INCREMENT] = 0x01;
+
+    for (int i = 0; i < 256; i++)
+      namedPortValues[i] = 0xFF;
+    namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
+    namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
+    namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
+    namedPortValues[REG_MEMORY_MAP_8M_P3_LOW] = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
+
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
     this->reset(1);
@@ -93,19 +102,44 @@ namespace Ep128 {
 
   uint8_t SpriteExt::readNamedPort(bool secondary)
   {
+     uint8_t retval = 0xFF;
      switch (secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX])
      {
        case REG_FW_VERSION_MAJOR:
-         return 0x10;
+         retval = REG_FW_VERSION_MAJOR_DEFAULT;
+         break;
        case REG_FW_VERSION_MINOR:
-         return 0x20;
+         retval = REG_FW_VERSION_MINOR_DEFAULT;
+         break;
+       case REG_MEMORY_PSRAM_SIZE_IN_MB:
+         retval = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
+         break;
        default:
-         return 0xFF;
+         retval = 0xFF;
      }
+  // Increment register index after operation
+  if (secondary)
+    io_port_values[SPRITEEXT_SEC_REG_INDEX] += io_port_values[SPRITEEXT_SEC_REG_INCREMENT];
+  else
+    io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
+
+  return retval;
   }
 
-  void writeNamedPort(bool secondary, uint8_t value)
+  void SpriteExt::writeNamedPort(bool secondary, uint8_t value)
   {
+     switch (secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX])
+     {
+       default:
+         ;
+     }
+
+  // Increment register index after operation
+  if (secondary)
+    io_port_values[SPRITEEXT_SEC_REG_INDEX] += io_port_values[SPRITEEXT_SEC_REG_INCREMENT];
+  else
+    io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
+
   }
 
 
