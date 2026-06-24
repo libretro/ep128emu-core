@@ -107,8 +107,10 @@ namespace TVC64 {
       breakPointPriorityThreshold(0),
       videoMemory((uint8_t *) 0),
       dummyMemory((uint8_t *) 0),
-      p2_reg(REG_MEMORY_P2_DEFAULT),
-      p3_reg(REG_MEMORY_P3_DEFAULT)
+      spriteext_p2_reg(REG_MEMORY_P2_DEFAULT),
+      spriteext_p3_reg(REG_MEMORY_P3_DEFAULT),
+      psram_p2_reg(REG_MEMORY_MAP_8M_P2_LOW_DEFAULT),
+      psram_p3_reg(REG_MEMORY_MAP_8M_P3_LOW_DEFAULT)
   {
     for (int i = 0; i < 4; i++)
       pageTable[i] = 0x00;
@@ -409,8 +411,10 @@ namespace TVC64 {
     case 0x18:
       pageTable[0] = 0xFB;              // U3
 #ifdef ENABLE_SPRITEEXT
-      if (p3_reg < 0x10)
-         pageTable[0] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + p3_reg;
+      if (spriteext_p3_reg < 0x10)
+         pageTable[0] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p3_reg;
+      else if (spriteext_p3_reg == 0x11)
+         pageTable[0] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p3_reg;
 #endif
       break;
     }
@@ -424,8 +428,11 @@ namespace TVC64 {
     {
       pageTable[2] = 0xFA;              // U2
 #ifdef ENABLE_SPRITEEXT
-      if (p2_reg < 0x10)
-         pageTable[2] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + p2_reg;
+      if (spriteext_p2_reg < 0x10)
+         pageTable[2] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p2_reg;
+      else if (spriteext_p2_reg == 0x10)
+         pageTable[2] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p2_reg;
+
 #endif
     }
     switch (n & 0x00C0) {
@@ -438,8 +445,10 @@ namespace TVC64 {
     case 0x80:
       pageTable[3] = 0xFB;              // U3
 #ifdef ENABLE_SPRITEEXT
-      if (p3_reg < 0x10)
-         pageTable[3] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + p3_reg;
+      if (spriteext_p3_reg < 0x10)
+         pageTable[3] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p3_reg;
+      else if (spriteext_p3_reg == 0x11)
+         pageTable[3] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p3_reg;
 #endif
       break;
     case 0xC0:

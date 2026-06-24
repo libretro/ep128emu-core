@@ -974,13 +974,25 @@ namespace TVC64 {
       break;
     case 0x41:
     case 0x45:
-       vm.spriteext.writeNamedPort(addr == 0x45,value);
-       if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P2)
-         vm.memory.p2_reg = value;
-       else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P3)
-         vm.memory.p3_reg = value;
-       
-       vm.memory.setPaging(vm.memory.getPaging());
+      if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P2)
+        vm.memory.spriteext_p2_reg = value;
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P3)
+        vm.memory.spriteext_p3_reg = value;
+      // TODO: delayed paging in case of slow ram
+      // Limitation: only 2MB available for now, so high reg is ignored
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P2_LOW)
+      {
+        vm.memory.psram_p2_reg = value & 0x7F;
+        vm.memory.spriteext_p2_reg = 0x10;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P3_LOW)
+      {
+        vm.memory.psram_p3_reg = value & 0x7F;
+        vm.memory.spriteext_p3_reg = 0x11;
+      }
+      
+      vm.memory.setPaging(vm.memory.getPaging());
+      vm.spriteext.writeNamedPort(addr == 0x45,value);
       break;
 #endif
     case 0x50:                          // toggle tape output (repeated 8 times)
