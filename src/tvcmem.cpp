@@ -17,6 +17,9 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+
+// TODO: mem map
+
 #include "ep128emu.hpp"
 #include "tvcmem.hpp"
 
@@ -26,7 +29,11 @@ namespace TVC64 {
   {
     if (n >= 0xFC && isROM)
       throw Ep128Emu::Exception("video memory cannot be ROM");
-    if (n > 0x04 && n < 0xF8)
+#ifdef ENABLE_SPRITEEXT
+    if (n > EP128EMU_MAX_TVC_ROM_SEGMENT && n < SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT)
+#else
+    if (n > EP128EMU_MAX_TVC_ROM_SEGMENT && n < 0xF8)
+#endif
       throw Ep128Emu::Exception("invalid segment number");
     if (segmentTable[n] == (uint8_t *) 0)
       segmentTable[n] = new uint8_t[16384];
@@ -99,7 +106,11 @@ namespace TVC64 {
       haveBreakPoints(false),
       breakPointPriorityThreshold(0),
       videoMemory((uint8_t *) 0),
-      dummyMemory((uint8_t *) 0)
+      dummyMemory((uint8_t *) 0),
+      spriteext_p2_reg(REG_MEMORY_P2_DEFAULT),
+      spriteext_p3_reg(REG_MEMORY_P3_DEFAULT),
+      psram_p2_reg(REG_MEMORY_MAP_8M_P2_LOW_DEFAULT),
+      psram_p3_reg(REG_MEMORY_MAP_8M_P3_LOW_DEFAULT)
   {
     for (int i = 0; i < 4; i++)
       pageTable[i] = 0x00;
@@ -315,6 +326,15 @@ namespace TVC64 {
       deleteSegment(i);
     for (uint8_t i = 0xF8; i < (0xF8 + (totalRAMSegments - 1)) && i < 0xFC; i++)
       allocateSegment(i, false);
+
+#ifdef ENABLE_SPRITEEXT
+    // Fixed memory configuration for TVC256++ : 
+    //    256 kB fast RAM (0xE8..0xF7)
+    //    2 MB PSRAM      (0x68..0xE7) -- should be 8 MB, maybe later if it is really required
+    for (uint8_t i = 0x68; i < 0xF8; i++)
+      allocateSegment(i, false);
+#endif
+
     if (totalRAMSegments < 8)
       setPaging(currentPaging | 0x3F00);
   }
@@ -322,7 +342,7 @@ namespace TVC64 {
   void Memory::loadROMSegment(uint8_t segment,
                               const uint8_t *data, size_t dataSize)
   {
-    if (segment > 0x04)
+    if (segment > EP128EMU_MAX_TVC_ROM_SEGMENT)
       throw Ep128Emu::Exception("internal error: invalid ROM segment number");
     if (!data)
       dataSize = 0;
@@ -348,6 +368,7 @@ namespace TVC64 {
     }
     for ( ; i < 0x4000 || (i & 0x3FFF) != 0; i++)
       segmentTable[segment][i & 0x3FFF] = 0xFF;
+    /* Segments 02 and 04 are extension roms, 8k only, and will reside in the upper half */
     if ((segment == 0x02 || segment == 0x04) &&
         dataSize > 0 && dataSize <= 8192) {
       std::memcpy(&(segmentTable[segment][0x2000]),
@@ -389,6 +410,12 @@ namespace TVC64 {
       break;
     case 0x18:
       pageTable[0] = 0xFB;              // U3
+#ifdef ENABLE_SPRITEEXT
+      if (spriteext_p3_reg < 0x10)
+         pageTable[0] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p3_reg;
+      else if (spriteext_p3_reg == 0x11)
+         pageTable[0] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p3_reg;
+#endif
       break;
     }
     if (!(n & 0x0004))
@@ -398,7 +425,16 @@ namespace TVC64 {
     if (!(n & 0x0020))
       pageTable[2] = uint8_t(0xFC | ((n & 0x0C00) >> 10));
     else
+    {
       pageTable[2] = 0xFA;              // U2
+#ifdef ENABLE_SPRITEEXT
+      if (spriteext_p2_reg < 0x10)
+         pageTable[2] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p2_reg;
+      else if (spriteext_p2_reg == 0x10)
+         pageTable[2] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p2_reg;
+
+#endif
+    }
     switch (n & 0x00C0) {
     case 0x00:
       pageTable[3] = (segment1IsExtension ? 0x07 : 0x01);       // CART / SDEXT
@@ -408,6 +444,12 @@ namespace TVC64 {
       break;
     case 0x80:
       pageTable[3] = 0xFB;              // U3
+#ifdef ENABLE_SPRITEEXT
+      if (spriteext_p3_reg < 0x10)
+         pageTable[3] = SPRITEEXT_MEM_PAGE_BASE_SEGMENT + spriteext_p3_reg;
+      else if (spriteext_p3_reg == 0x11)
+         pageTable[3] = SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT + psram_p3_reg;
+#endif
       break;
     case 0xC0:
       pageTable[3] = 0x02;              // EXT
@@ -437,9 +479,18 @@ namespace TVC64 {
       pageAddressTableW[i + 1] = pageAddressTableW[i];
     }
     if (pageTable[3] == 0x02) {
-      // IOMEM is special case
-      pageAddressTableR[6] = (uint8_t *) 0;
-      pageAddressTableW[6] = (uint8_t *) 0;
+      // Map IOMEM of slots 1,2,3 to ROM segments 0x04..0x06, if present + take care of pointer offset
+      uint8_t cardSlot = uint16_t((n & 0xC000) >> 14);
+      if (segmentTable[0x03 + cardSlot] == (uint8_t *) 0)
+      {
+         pageAddressTableR[6] = (uint8_t *) 0;
+         pageAddressTableW[6] = (uint8_t *) 0;
+      }
+      else
+      {
+         pageAddressTableR[6] = segmentTable[0x03 + cardSlot] -(long(6) << 13);
+         pageAddressTableW[6] = segmentTable[0x03 + cardSlot] -(long(6) << 13);
+      }
     }
   }
 

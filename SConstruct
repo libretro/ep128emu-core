@@ -22,6 +22,8 @@ useLuaJIT = int(ARGUMENTS.get('luajit', 0))
 cmosZ80 = int(ARGUMENTS.get('z80cmos', 0))
 # build with experimental SD card emulation
 enableSDExt = int(ARGUMENTS.get('sdext', 1))
+# build with experimental sprite card emulation
+enableSpriteExt = int(ARGUMENTS.get('spriteext', 1))
 # enable SID card emulation
 enableReSID = int(ARGUMENTS.get('resid', 1))
 # enable MIDI port emulation
@@ -55,10 +57,10 @@ else:
 # pkgname : [ pkgconfig, [ package_names ],
 #             linux_flags, mingw_flags, c_header, cxx_header, optional ]
 
-fltkLibsLinux = '-lfltk -lfltk_images -lfltk_jpeg -lfltk_png'
+fltkLibsLinux = '-lfltk -lfltk_images'
 fltkLibsMinGW = fltkLibsLinux + ' -lz -lcomdlg32 -lcomctl32 -lole32'
 fltkLibsMinGW = fltkLibsMinGW + ' -luuid -lws2_32 -lwinmm -lgdi32'
-fltkLibsLinux = fltkLibsLinux + ' -lfltk_z -lXcursor -lXinerama -lXrender'
+fltkLibsLinux = fltkLibsLinux + ' -lXcursor -lXinerama -lXrender'
 fltkLibsLinux = fltkLibsLinux + ' -lXext -lXft -lXfixes -lX11 -lfontconfig -ldl'
 
 packageConfigs = {
@@ -90,7 +92,7 @@ packageConfigs = {
     'cURL' : [
         'pkg-config --silence-errors --cflags --libs',
         ['libcurl', 'curl'],
-        '-lcurl -lssl -lcrypto', '-lcurldll',
+        '-lcurl', '-lcurldll',
         'curl/curl.h', '', 1]
 }
 
@@ -352,6 +354,8 @@ if cmosZ80:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DZ80_ENABLE_CMOS'])
 if enableSDExt:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_SDEXT'])
+if enableSpriteExt:
+    ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_SPRITEEXT'])
 if enableReSID:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_RESID'])
 
@@ -432,6 +436,10 @@ sdextSources = []
 if enableSDExt:
     sdextSources = ['src/sdext.cpp']
 
+spriteextSources = []
+if enableSpriteExt:
+    spriteextSources = ['src/spriteext.cpp']
+
 ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/dave.cpp
     src/ep128vm.cpp
@@ -443,7 +451,7 @@ ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/epmemcfg.cpp
     src/ide.cpp
     src/snapshot.cpp
-''') + sdextSources)
+''') + sdextSources + spriteextSources)
 
 # -----------------------------------------------------------------------------
 
@@ -485,7 +493,7 @@ tvc64Lib = tvc64LibEnvironment.StaticLibrary('tvc64', Split('''
     src/tvcmem.cpp
     src/tvcvideo.cpp
     src/tvc_snap.cpp
-'''))
+''') + sdextSources + spriteextSources)
 
 # -----------------------------------------------------------------------------
 

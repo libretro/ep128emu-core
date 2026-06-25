@@ -35,6 +35,9 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 namespace Ep128Emu {
   class VideoCapture;
@@ -181,8 +184,15 @@ namespace TVC64 {
     size_t    crtcFrequency;            // defaults to 1562500 Hz
     uint8_t   keyboardState[16];
     uint8_t   tvcKeyboardState[16];
+    int8_t    mouseDeltaX;
+    int8_t    mouseDeltaY;
+    uint8_t   mouseButtonState;
+    uint8_t   mouseWheelDelta;          // b0..b3: vertical, b4..b7: horizontal
 #ifdef ENABLE_SDEXT
     Ep128::SDExt  sdext;
+#endif
+#ifdef ENABLE_SPRITEEXT
+    Ep128::SpriteExt  spriteext;
 #endif
     // ----------------
     EP128EMU_INLINE void updateCPUCycles(int cycles);
@@ -250,6 +260,25 @@ namespace TVC64 {
      * Set state of key 'keyCode' (0 to 127; see tvc64vm.cpp).
      */
     virtual void setKeyboardState(int keyCode, bool isPressed);
+    /*!
+     * Send mouse event to the emulated machine. 'dX' and 'dY' are the
+     * horizontal and vertical motion of the pointer relative to the position
+     * at the time of the previous call, positive values move to the left and
+     * up, respectively.
+     * Each bit of 'buttonState' corresponds to the current state of a mouse
+     * button (1 = pressed):
+     *   b0 = left button
+     *   b1 = right button
+     *   b2 = middle button
+     *   b3..b7 = buttons 4 to 8
+     * 'mouseWheelEvents' can be the sum of any of the following:
+     *   1: mouse wheel up
+     *   2: mouse wheel down
+     *   4: mouse wheel left
+     *   8: mouse wheel right
+     */
+    virtual void setMouseState(int8_t dX, int8_t dY,
+                               uint8_t buttonState, uint8_t mouseWheelEvents);
     /*!
      * Returns status information about the emulated machine (see also
      * struct VMStatus above, and the comments for functions that return

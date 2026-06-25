@@ -22,6 +22,9 @@
 
 #include "ep128emu.hpp"
 #include "bplist.hpp"
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 namespace TVC64 {
 
@@ -52,6 +55,10 @@ namespace TVC64 {
     void checkReadBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
     void checkWriteBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
    public:
+    uint8_t spriteext_p2_reg;
+    uint8_t spriteext_p3_reg;
+    uint16_t psram_p2_reg;
+    uint16_t psram_p3_reg;
     Memory();
     virtual ~Memory();
     void setBreakPoint(uint8_t segment, uint16_t addr,

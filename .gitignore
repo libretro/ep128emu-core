@@ -6,6 +6,8 @@
 *.a
 *_fl.cpp
 *_fl.hpp
+*.cbp
+*.layout
 /dtf
 /ep128emu
 /epcompress

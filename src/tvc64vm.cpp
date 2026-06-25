@@ -33,6 +33,9 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 #include <vector>
 
@@ -59,6 +62,7 @@ static const uint8_t  keyboardConvTable[128] = {
       25,      99,      26,       3,      30,      27,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
+  // Hack for GameCard joys 3/4 - actual values are not too relevant
       99,      99,      99,      99,      99,      99,      99,      99,
       99,      99,      99,      99,      99,      99,      99,      99,
   // JOY1R  JOY1L    JOY1D    JOY1U    JOY1F   JOY1F2   JOY1F3
@@ -558,6 +562,7 @@ namespace TVC64 {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
         return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        // IOMEM for slots 1-2-3 mapped to segments 0x04-0x05-0x06
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
@@ -577,6 +582,7 @@ namespace TVC64 {
     if (getPage(uint8_t(addr >> 14)) == 0x02) { // EXT
       if (EP128EMU_UNLIKELY(getPaging() & 0xC000))
         return readRaw((0x0000C000U | addr) + (getPaging() & 0xC000));
+        // IOMEM for slots 1-2-3 mapped to segments 0x04-0x05-0x06
       if (addr & 0x1000)
         return extensionRAM[addr & 0x0FFF];
       return readRaw(0x0000C000U | (uint32_t(vm.vtdosROMPage) << 12)
@@ -743,9 +749,73 @@ namespace TVC64 {
                  | (vm.wd177x.getDataRequestFlag() ? 0x80 : 0x00);
       }
       break;
-    // 0x20-0x2F: extension 1 (unimplemented)
-    // 0x30-0x3F: extension 2 (unimplemented)
-    // 0x40-0x4F: extension 3 (unimplemented)
+    // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
+    // 0x30-0x3F: extension 2 (reserved currently for GameCard)
+    // Ext 3/4 joystick states
+    // GameCard HW spec (i.e. actual port return value): 
+    //   active-low, bit0: up, bit1: down, bit2: left, bit3: right, bit4: fire, bit5..7: unused
+    // ep128emu spec (to reuse Enterprise codes):
+    //   Order of codes: up - down - left - right - fire - fire2 - fire3
+    //   joystickCodesExt3[7] = { 0x63, 0x62, 0x61, 0x60, 0x64, 0x65, 0x66 };
+    //   joystickCodesExt4[7] = { 0x6b, 0x6a, 0x69, 0x68, 0x6c, 0x6d, 0x6e };
+    // Scan codes are passed through setKeyboardState, so reading it is a bit confusing
+    case 0x32:
+      retval = 0xE0;
+      if (vm.keyboardState[0xC] & 0x08)
+         retval = retval | 0x01;
+      if (vm.keyboardState[0xC] & 0x04)
+         retval = retval | 0x02;
+      if (vm.keyboardState[0xC] & 0x02)
+         retval = retval | 0x04;
+      if (vm.keyboardState[0xC] & 0x01)
+         retval = retval | 0x08;
+      if (vm.keyboardState[0xC] & 0x10)
+         retval = retval | 0x10;
+      break;
+    case 0x33:
+      retval = 0xE0;
+      if (vm.keyboardState[0xD] & 0x08)
+         retval = retval | 0x01;
+      if (vm.keyboardState[0xD] & 0x04)
+         retval = retval | 0x02;
+      if (vm.keyboardState[0xD] & 0x02)
+         retval = retval | 0x04;
+      if (vm.keyboardState[0xD] & 0x01)
+         retval = retval | 0x08;
+      if (vm.keyboardState[0xD] & 0x10)
+         retval = retval | 0x10;
+      break;
+#ifdef ENABLE_SPRITEEXT
+    // 0x40-0x4F: extension 3, tvc256++ (spriteext)
+    case 0x40:
+    case 0x42:
+    case 0x44:
+    case 0x46:
+      retval = vm.spriteext.io_port_values[addr-0x40];
+      break;
+    case 0x41:
+    case 0x45:
+      if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DX)
+      {
+        retval = vm.mouseDeltaX;
+        vm.mouseDeltaX = 0;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DY)
+      {
+        retval = vm.mouseDeltaY;
+        vm.mouseDeltaY = 0;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_BUTTONS)
+      {
+        retval = vm.mouseButtonState;
+        vm.spriteext.readNamedPort(addr == 0x45);
+      }
+      else
+        retval = vm.spriteext.readNamedPort(addr == 0x45);
+      break;
+#endif
     case 0x50:                          // toggle tape output (repeated 8 times)
     case 0x51:
     case 0x52:
@@ -768,6 +838,8 @@ namespace TVC64 {
       break;
     case 0x5A:                          // extension card ID byte
     case 0x5E:
+      // bit 0..1: ext 0, bit 2..3: ext 1, bit 4..5: ext 2, bit 6..7: ext 3
+      // 00 - serial card; 01 - unused; 10 - floppy; 11 - empty or unspecified
       // extensions 0 and 1 are floppy drives, the others are unused
       retval = 0xFA | uint8_t(vm.memory.readRaw(0x0000C000U) == 0xFF)
                | (uint8_t(vm.memory.readRaw(0x00010000U) == 0xFF) << 2);
@@ -908,9 +980,39 @@ namespace TVC64 {
     case 0x1B:
       vm.ioPorts.writeDebug(addr & 0x7C, value);
       break;
-    // 0x20-0x2F: extension 1 (unimplemented)
-    // 0x30-0x3F: extension 2 (unimplemented)
-    // 0x40-0x4F: extension 3 (unimplemented)
+    // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
+    // 0x30-0x3F: extension 2 (reserved currently for GameCard)
+#ifdef ENABLE_SPRITEEXT
+    // 0x40-0x4F: extension 3, tvc256++ (spriteext)
+    case 0x40:
+    case 0x42:
+    case 0x44:
+    case 0x46:
+      vm.spriteext.io_port_values[addr-0x40] = value;
+      break;
+    case 0x41:
+    case 0x45:
+      if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P2)
+        vm.memory.spriteext_p2_reg = value;
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P3)
+        vm.memory.spriteext_p3_reg = value;
+      // TODO: delayed paging in case of slow ram
+      // Limitation: only 2MB available for now, so high reg is ignored
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P2_LOW)
+      {
+        vm.memory.psram_p2_reg = value & 0x7F;
+        vm.memory.spriteext_p2_reg = 0x10;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P3_LOW)
+      {
+        vm.memory.psram_p3_reg = value & 0x7F;
+        vm.memory.spriteext_p3_reg = 0x11;
+      }
+      
+      vm.memory.setPaging(vm.memory.getPaging());
+      vm.spriteext.writeNamedPort(addr == 0x45,value);
+      break;
+#endif
     case 0x50:                          // toggle tape output (repeated 8 times)
       vm.tapeOutputSignal = ~(vm.tapeOutputSignal) & 0x01;
       break;
@@ -1476,7 +1578,7 @@ namespace TVC64 {
   void TVC64VM::loadROMSegment(uint8_t n, const char *fileName, size_t offs)
   {
     stopDemo();
-    if (n > 0x04)
+    if (n > EP128EMU_MAX_TVC_ROM_SEGMENT)
       throw Ep128Emu::Exception("internal error: invalid ROM segment number");
     if (fileName == (char *) 0 || fileName[0] == '\0') {
       // empty file name: delete segment
@@ -1552,6 +1654,43 @@ namespace TVC64 {
     if (videoCapture)
       videoCapture->setClockFrequency(crtcFrequency);
   }
+
+  void TVC64VM::setMouseState(int8_t dX, int8_t dY,
+                              uint8_t buttonState, uint8_t mouseWheelEvents)
+  {
+    if (EP128EMU_UNLIKELY(isRecordingDemo | isPlayingDemo)) {
+      if (isPlayingDemo)
+        return;
+      if (EP128EMU_UNLIKELY(haveTape() && getIsTapeMotorOn() &&
+                            getTapeButtonState() != 0)) {
+        stopDemoRecording(false);
+      }
+      else if (/*mouseEmulationEnabled*/true) {
+        demoBuffer.writeUIntVLen(demoTimeCnt);
+        demoTimeCnt = 0U;
+        demoBuffer.writeByte(0x03);     // event type (mouse)
+        demoBuffer.writeByte(0x04);     // number of data bytes
+        demoBuffer.writeByte(uint8_t(dX));
+        demoBuffer.writeByte(uint8_t(dY));
+        demoBuffer.writeByte(buttonState);
+        demoBuffer.writeByte(mouseWheelEvents);
+      }
+    }
+    int     dX_ = int(dX) + int(mouseDeltaX);
+    int     dY_ = int(dY) + int(mouseDeltaY);
+    mouseDeltaX = int8_t(dX_ > -128 ? (dX_ < 127 ? dX_ : 127) : -128);
+    mouseDeltaY = int8_t(dY_ > -128 ? (dY_ < 127 ? dY_ : 127) : -128);
+    mouseButtonState = buttonState;
+    if (mouseWheelEvents) {
+      if (mouseWheelEvents & 0x01)      // up
+        mouseWheelDelta = (mouseWheelDelta + 1) & 0xFF;
+      if (mouseWheelEvents & 0x02)      // down
+        mouseWheelDelta = (mouseWheelDelta - 1) & 0xFF;
+      if (((mouseWheelDelta + 0x10) & 0xFF) >= 0x20)    // overflow
+        mouseWheelDelta = ((mouseWheelDelta & 0x80) ? 0xF8 : 0x07);
+    }
+  }
+
 
   void TVC64VM::setKeyboardState(int keyCode, bool isPressed)
   {

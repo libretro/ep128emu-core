@@ -1,5 +1,5 @@
 // Integration with TVCDeveloperTool
-// Currently based on the existing interface between Devtool and WinTVC.
+// Based on the existing interface between Devtool and WinTVC.
 
 #ifndef EP128EMU_DEVTOOL_HPP
 #define EP128EMU_DEVTOOL_HPP
