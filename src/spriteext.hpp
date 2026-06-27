@@ -49,8 +49,10 @@ namespace Ep128 {
     uint8_t flashRead(uint32_t addr);
     void flashWrite(uint32_t addr, uint8_t data);
     uint8_t flashReadDebug(uint32_t addr) const;
+    void updateMouseSpeed(uint8_t binValue);
    public:
     uint8_t io_port_values[16];
+    float mouse_speed;
     SpriteExt();
     virtual ~SpriteExt();
     void setEnabled(bool isEnabled);
@@ -101,7 +103,8 @@ namespace Ep128 {
 #define REG_MEMORY_MAP_8M_P3_LOW_DEFAULT 0x0
 #define REG_MEMORY_MAP_8M_P3_HIGH 0xB5
 #define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
-#define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x08
+// Hardware default: 8 MB / 0x08, emulated: 2 MB / 0x02
+#define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
 #define SPRITEEXT_MEM_PAGE_BASE_SEGMENT 0xE8
 #define SPRITEEXT_MEM_PAGE_MAX 0x0F
 #define SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT 0x68
