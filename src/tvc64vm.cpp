@@ -797,13 +797,15 @@ namespace TVC64 {
     case 0x45:
       if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DX)
       {
-        retval = vm.mouseDeltaX;
+        vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
+        retval = static_cast < uint8_t > (vm.mouseDeltaX);
         vm.mouseDeltaX = 0;
         vm.spriteext.readNamedPort(addr == 0x45);
       }
       else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DY)
       {
-        retval = vm.mouseDeltaY;
+        vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext.mouse_speed * -1.0f);
+        retval = static_cast < uint8_t > (vm.mouseDeltaY);
         vm.mouseDeltaY = 0;
         vm.spriteext.readNamedPort(addr == 0x45);
       }

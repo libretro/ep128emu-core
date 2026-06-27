@@ -52,7 +52,7 @@ namespace Ep128 {
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P3_LOW] = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
     namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
-
+    updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
     this->reset(1);
@@ -115,6 +115,12 @@ namespace Ep128 {
        case REG_MEMORY_PSRAM_SIZE_IN_MB:
          retval = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
          break;
+       case REG_USB_INIT:
+         retval = REG_USB_INIT_DEFAULT;
+         break;
+       case REG_USB_MOUSE_SPEED:
+         retval = namedPortValues[REG_USB_MOUSE_SPEED];
+       break;
        default:
          retval = 0xFF;
      }
@@ -131,6 +137,10 @@ namespace Ep128 {
   {
      switch (secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX])
      {
+       case REG_USB_MOUSE_SPEED:
+         namedPortValues[REG_USB_MOUSE_SPEED] = value;
+         updateMouseSpeed(value);
+       break;
        default:
          ;
      }
@@ -143,6 +153,10 @@ namespace Ep128 {
 
   }
 
+  void SpriteExt::updateMouseSpeed(uint8_t binValue)
+  {
+     mouse_speed = ((binValue & 0xC) >> 6) + (float)(binValue & 0x1F) * 1/32;
+  }
 
   static int safe_read(int fd, uint8_t *buffer, int size)
   {
