@@ -106,11 +106,14 @@ namespace TVC64 {
       haveBreakPoints(false),
       breakPointPriorityThreshold(0),
       videoMemory((uint8_t *) 0),
-      dummyMemory((uint8_t *) 0),
+      dummyMemory((uint8_t *) 0)
+#ifdef ENABLE_SPRITEEXT
+      ,
       spriteext_p2_reg(REG_MEMORY_P2_DEFAULT),
       spriteext_p3_reg(REG_MEMORY_P3_DEFAULT),
       psram_p2_reg(REG_MEMORY_MAP_8M_P2_LOW_DEFAULT),
       psram_p3_reg(REG_MEMORY_MAP_8M_P3_LOW_DEFAULT)
+#endif // ENABLE_SPRITEEXT
   {
     for (int i = 0; i < 4; i++)
       pageTable[i] = 0x00;
