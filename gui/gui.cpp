@@ -926,7 +926,44 @@ int Ep128EmuGUI::handleFLTKEvent(void *userData, int event)
   case FL_KEYDOWN:
     {
       int   keyCode = Fl::event_key();
+      const char *keyText = Fl::event_text();
       bool  isKeyPress = (event == FL_KEYDOWN);
+      // Workaround for a really weird bug on Linux desktop (FLTK? Wayland?):
+      // international keys have a scancode of 0 in the downstroke direction, but still return reasonable (accented) text,
+      // so it is used for converting. Upstroke is normal (???)
+      if (keyCode == 0 && keyText[0] && keyText[1]) {
+         switch((uint8_t)keyText[1]) {
+         case 0xb6:
+            keyCode = 246;
+            break;
+         case 0xbc:
+            keyCode = 252;
+            break;
+         case 0xb3:
+            keyCode = 243;
+            break;
+         case 0x91:
+            keyCode = 501;
+            break;
+         case 0xba:
+            keyCode = 250;
+            break;
+         case 0xa9:
+            keyCode = 233;
+            break;
+         case 0xa1:
+            keyCode = 225;
+            break;
+         case 0xb1:
+            keyCode = 507;
+            break;
+         case 0xad:
+            keyCode = 237;
+            break;
+         default:
+            ;
+         }
+      }
       if (!(keyCode >= (FL_F + 9) && keyCode <= (FL_F + 12))) {
         int   n = gui_.config.convertKeyCode(keyCode);
         if (n >= 0 && (gui_.functionKeyState == 0U || !isKeyPress)) {
