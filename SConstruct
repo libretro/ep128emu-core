@@ -3,6 +3,9 @@
 from __future__ import print_function
 import sys, os
 
+#import pdb
+#pdb.set_trace()
+
 win64CrossCompile = int(ARGUMENTS.get('win64', 0))
 mingwCrossCompile = win64CrossCompile or int(ARGUMENTS.get('win32', 0))
 if mingwCrossCompile:
@@ -57,10 +60,10 @@ else:
 # pkgname : [ pkgconfig, [ package_names ],
 #             linux_flags, mingw_flags, c_header, cxx_header, optional ]
 
-fltkLibsLinux = '-lfltk -lfltk_images'
+fltkLibsLinux = '-lfltk -lfltk_images -lfltk_jpeg -lfltk_png'
 fltkLibsMinGW = fltkLibsLinux + ' -lz -lcomdlg32 -lcomctl32 -lole32'
 fltkLibsMinGW = fltkLibsMinGW + ' -luuid -lws2_32 -lwinmm -lgdi32'
-fltkLibsLinux = fltkLibsLinux + ' -lXcursor -lXinerama -lXrender'
+fltkLibsLinux = fltkLibsLinux + ' -lfltk_z -lXcursor -lXinerama -lXrender'
 fltkLibsLinux = fltkLibsLinux + ' -lXext -lXft -lXfixes -lX11 -lfontconfig -ldl'
 
 packageConfigs = {
@@ -92,7 +95,7 @@ packageConfigs = {
     'cURL' : [
         'pkg-config --silence-errors --cflags --libs',
         ['libcurl', 'curl'],
-        '-lcurl', '-lcurldll',
+        '-lcurl -lssl -lcrypto', '-lcurldll',
         'curl/curl.h', '', 1]
 }
 
@@ -211,12 +214,13 @@ if mingwCrossCompile:
         toolNamePrefix = 'x86_64-w64-mingw32-'
     else:
         toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
-    ep128emuLibEnvironment['AR'] = toolNamePrefix + 'ar'
-    ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc'
-    ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp'
-    ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++'
-    ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++'
-    ep128emuLibEnvironment['RANLIB'] = toolNamePrefix + 'ranlib'
+        #toolNamePrefix = 'i686-w64-mingw32-'
+    ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw32/bin/ar.exe'
+    ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
+    ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp.exe'
+    ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++.exe'
+    ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++.exe'
+    ep128emuLibEnvironment['RANLIB'] = 'wine ~/.wine/drive_c/mingw32/bin/ranlib.exe'
     ep128emuLibEnvironment['PROGSUFFIX'] = '.exe'
     packageConfigs['Lua'][3] = '-llua' + ['53', '51'][int(bool(useLuaJIT))]
     ep128emuLibEnvironment.Append(
@@ -310,11 +314,11 @@ if not oldSConsVersion:
                  ep128emuGUIEnvironment, ep128emuGLGUIEnvironment)
 
 configure = ep128emuLibEnvironment.Configure()
-if configure.CheckType('PaStreamCallbackTimeInfo', '#include <portaudio.h>'):
-    havePortAudioV19 = 1
-else:
-    havePortAudioV19 = 0
-    print('WARNING: using old v18 PortAudio interface')
+#if configure.CheckType('PaStreamCallbackTimeInfo', '#include <portaudio.h>'):
+havePortAudioV19 = 1
+#else:
+#    havePortAudioV19 = 0
+#    print('WARNING: using old v18 PortAudio interface')
 fltkVersion13 = 0
 if configure.CheckCXXHeader('FL/Fl_Cairo.H'):
     fltkVersion13 = 1
@@ -543,7 +547,7 @@ if mingwCrossCompile:
 #        toolNamePrefix + 'windres -v --use-temp-file '
 #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
 #        + '-o $TARGET resource/ep128emu.rc')
-        toolNamePrefix + 'windres -v --use-temp-file '
+        'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
         + '-o $TARGET resource/ep128emu.rc')
     ep128emuSources += [ep128emuResourceObject]
 ep128emu = ep128emuEnvironment.Program('ep128emu', ep128emuSources)
@@ -562,7 +566,7 @@ if mingwCrossCompile:
     tapeeditResourceObject = tapeeditEnvironment.Command(
         'resource/te_resrc.o',
         ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
-        toolNamePrefix + 'windres -v --use-temp-file '
+        'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
 #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
         + '-o $TARGET resource/tapeedit.rc')
     tapeeditSources += [tapeeditResourceObject]
