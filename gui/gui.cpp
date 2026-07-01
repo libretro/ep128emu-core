@@ -932,6 +932,7 @@ int Ep128EmuGUI::handleFLTKEvent(void *userData, int event)
       // international keys have a scancode of 0 in the downstroke direction, but still return reasonable (accented) text,
       // so it is used for converting. Upstroke is normal (???)
       if (keyCode == 0 && keyText[0] && keyText[1]) {
+         // Ugly hack but sufficient here: check only 2nd byte of UTF-8
          switch((uint8_t)keyText[1]) {
          case 0xb6:
             keyCode = 246;

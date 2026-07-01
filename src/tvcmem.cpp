@@ -377,6 +377,16 @@ namespace TVC64 {
       std::memcpy(&(segmentTable[segment][0x2000]),
                   &(segmentTable[segment][0]), dataSize);
     }
+
+#ifdef ENABLE_SPRITEEXT
+    // Initialize fastRAM extension contents (first 64 kB starting from 0xE8)
+    // with "ROM" segments 0x10-0x13
+    if ((segment >= 0x10 || segment <= 0x13) &&
+        dataSize > 0 && dataSize <= 16384) {
+      std::memcpy(&(segmentTable[0xE8+segment-0x10][0]),
+                  &(segmentTable[segment][0]), dataSize);
+    }
+#endif // ENABLE_SPRITEEXT
   }
 
   void Memory::deleteSegment(uint8_t segment)

@@ -21,6 +21,53 @@
 // Copyright TBA
 // URL TBA
 
+/*
+   Backlog (sort of)
+   General:
+   - Document TVC memory map correctly -- what about segment 3? (does floppy work after gamecard changes?)
+   - Align SDExt segment / memory map handling with the common scheme
+   - Update SConstruct - introduce special wine+mingw cross-compile option for Devtool
+   - Update SConstruct - simplify fltk, portaudio etc. version detection
+   - Test devtool with 64-bit exe
+   - Fix standalone version joystick handling
+   - Fake gamecard rom for presenting the ID string
+   - State save/load support
+
+   TVC256++ gfx:
+   - Frame buffer overlay of 256x240
+   - Write to port 0x00 to set sprite border as well
+   - Sprite only gfx
+   - 2-color char screen
+   - 16-color char screen
+   - 16-color bitmap screen
+   - Scroll
+   - Sprite 2-color
+   - Sprite 16-color
+   - Sprite foreground / background
+   - Ext graphics calculation line-by-line
+   - Sprite registers
+   - Sprite interrupt
+   - Screen height setting
+   
+   TVC256++ drives:
+   - USB drive handling
+   - Flash mem drive handling
+   - PSRAM drive handling
+   
+   TVC256++ others:
+   - Initial memory fill
+   - Delay for slow RAM paging
+   - Extend slow RAM to the real 8 MB instead of 2
+   - SID emulation
+   - Reset handling (cold, warm)
+   - Function registers
+   - Function implementation
+   - File I/O disable from rom (use tvcfileio in emulator instead)
+   - Extra file i/o functions (get_pwd .. seek_file)
+   - File i/o functions for card (get_iobase, get_membase)
+
+*/
+
 #include "ep128emu.hpp"
 #include "system.hpp"
 
@@ -156,6 +203,128 @@ namespace Ep128 {
   void SpriteExt::updateMouseSpeed(uint8_t binValue)
   {
      mouse_speed = ((binValue & 0xC) >> 6) + (float)(binValue & 0x1F) * 1/32;
+  }
+
+  
+  const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes)
+  {
+
+    const unsigned char *bufp = buf;
+    const uint8_t *endp = buf + *nBytes;
+    size_t outPos = 0;
+    if (!(*nBytes))
+      return buf;
+
+    do {
+      switch (bufp[0]) {
+      case 0x00:                        // 16 pixel blank coded on 1 byte
+        do {
+            buf_[outPos] = 0x00;
+          bufp = bufp + 1;
+          outPos++;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x00);
+        break;
+      case 0x01:                        // 1x16 pixel, 256 colors coded on 2 bytes
+        do {
+            buf_[outPos] = 0x01;
+            buf_[outPos+1] = bufp[1];
+          bufp = bufp + 2;
+          outPos += 2;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x01);
+        break;
+      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes
+        do {
+            buf_[outPos] = 0x02;
+            buf_[outPos+1] = bufp[1];
+            buf_[outPos+2] = bufp[2];
+
+          bufp = bufp + 3;
+          outPos += 3;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x02);
+        break;
+      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes
+        do {
+          unsigned char c0 = bufp[1];
+          unsigned char c1 = bufp[2];
+          unsigned char b = bufp[3];
+            buf_[outPos] = 0x03;
+            buf_[outPos+1] = bufp[1];
+            buf_[outPos+2] = bufp[2];
+            buf_[outPos+3] = bufp[3];
+
+          bufp = bufp + 4;
+          outPos += 4;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x03);
+        break;
+      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC yes
+        do {
+            buf_[outPos] = 0x04;
+            buf_[outPos+1] = bufp[1];
+            buf_[outPos+2] = bufp[2];
+            buf_[outPos+3] = bufp[3];
+            buf_[outPos+4] = bufp[4];
+          bufp = bufp + 5;
+          outPos += 5;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x04);
+        break;
+      case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC yes
+        do {
+          unsigned char c0 = bufp[1];
+          unsigned char c1 = bufp[2];
+          unsigned char b = bufp[3];
+            buf_[outPos] = 0x06;
+            buf_[outPos+1] = bufp[1];
+            buf_[outPos+2] = bufp[2];
+            buf_[outPos+3] = bufp[3];
+            buf_[outPos+4] = bufp[4];
+            buf_[outPos+5] = bufp[5];
+            buf_[outPos+6] = bufp[6];
+
+          c0 = bufp[4];
+          c1 = bufp[5];
+          bufp = bufp + 7;
+          outPos += 7;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x06);
+        break;
+      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC yes
+        do {
+            buf_[outPos] = 0x08;
+            buf_[outPos+1] = bufp[1];
+            buf_[outPos+2] = bufp[2];
+            buf_[outPos+3] = bufp[3];
+            buf_[outPos+4] = bufp[4];
+            buf_[outPos+5] = bufp[5];
+            buf_[outPos+6] = bufp[6];
+            buf_[outPos+7] = bufp[7];
+            buf_[outPos+8] = bufp[8];
+
+          bufp = bufp + 9;
+          outPos += 9;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x08);
+        break;
+      default:                          // invalid flag byte
+        do {
+          buf_[outPos++] = 0x00;
+        } while (outPos < 108);
+        break;
+      }
+    } while (bufp < endp && outPos < *nBytes);
+//    printf("Line converted, from %d to %d bytes, compare %d\n",*nBytes, outPos, std::memcmp(&buf_[0],buf, *nBytes));
+    return &buf_[0];
   }
 
   static int safe_read(int fd, uint8_t *buffer, int size)

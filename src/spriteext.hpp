@@ -39,6 +39,11 @@ namespace Ep128 {
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
+     unsigned int  nBytes_;
+     // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
+     // ( = 108 * 4) bytes in compressed format
+     uint8_t  buf_[108*4];
+
     // 7K of useful SRAM
     std::vector< uint8_t >  sd_ram_ext;
     // 64K flash ROM
@@ -50,6 +55,7 @@ namespace Ep128 {
     void flashWrite(uint32_t addr, uint8_t data);
     uint8_t flashReadDebug(uint32_t addr) const;
     void updateMouseSpeed(uint8_t binValue);
+
    public:
     uint8_t io_port_values[16];
     float mouse_speed;
@@ -67,6 +73,7 @@ namespace Ep128 {
     void openROMFile(const char *fileName);
     uint8_t readNamedPort(bool secondary);
     void writeNamedPort(bool secondary, uint8_t value);
+    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
     uint8_t readCartP3Debug(uint32_t addr) const;
