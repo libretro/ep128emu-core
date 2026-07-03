@@ -649,7 +649,7 @@ namespace TVC64 {
   {
 #ifdef ENABLE_SPRITEEXT
     size_t newnBytes = nBytes;
-    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes);
+    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, reinterpret_cast<Ep128::Memory*>(&vm.memory));
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(newBuf, newnBytes);
     if (vm.videoCapture)

@@ -77,13 +77,15 @@
 #include <cerrno>
 
 #include "spriteext.hpp"
+#include "tvcmem.hpp"
 #include "ide.hpp"
 
 namespace Ep128 {
 
 
   SpriteExt::SpriteExt()
-    : spriteExt_enabled(false),
+    : curLine(0),
+      spriteExt_enabled(false),
       spriteExtSegment(0xFFFFFFFFU),
       spriteExtAddress(0xFFFFFFFFU)
   {
@@ -94,6 +96,7 @@ namespace Ep128 {
 
     for (int i = 0; i < 256; i++)
       namedPortValues[i] = 0x00;
+    namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR] = REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT;
     namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
     namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
@@ -114,6 +117,19 @@ namespace Ep128 {
     catch (...) {
       // FIXME: errors are ignored here
     }
+  }
+
+  uint8_t SpriteExt::i4ToTVCRGB(uint8_t val, uint8_t transparent_val)
+  {
+    // igrb with double bits - see TVCVideo::convertPixelToRGB
+    // todo: replace with fixed palette conversion array
+    if (val == SPRITEEXT_TRANSPARENT_COLOR)
+      return transparent_val;
+    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
+    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
+    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
+    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
+    return (i |r | g | b);
   }
 
   void SpriteExt::setEnabled(bool isEnabled)
@@ -151,7 +167,8 @@ namespace Ep128 {
   uint8_t SpriteExt::readNamedPort(bool secondary)
   {
      uint8_t retval = 0xFF;
-     switch (secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX])
+     uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
+     switch (portAddr)
      {
        case REG_FW_VERSION_MAJOR:
          retval = REG_FW_VERSION_MAJOR_DEFAULT;
@@ -169,7 +186,12 @@ namespace Ep128 {
          retval = namedPortValues[REG_USB_MOUSE_SPEED];
        break;
        default:
-         retval = 0xFF;
+         // Video related ports are read instantly (lot of TODO here)
+         if (portAddr <= REG_SCREEN_MAXY)
+            retval = namedPortValues[portAddr];
+         else
+            retval = 0xFF;
+         break;
      }
   // Increment register index after operation
   if (secondary)
@@ -182,14 +204,17 @@ namespace Ep128 {
 
   void SpriteExt::writeNamedPort(bool secondary, uint8_t value)
   {
-     switch (secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX])
+     uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
+     switch (portAddr)
      {
        case REG_USB_MOUSE_SPEED:
          namedPortValues[REG_USB_MOUSE_SPEED] = value;
          updateMouseSpeed(value);
        break;
        default:
-         ;
+         // Video related ports are written instantly (lot of TODO here)
+         if (portAddr <= REG_SCREEN_MAXY)
+            namedPortValues[portAddr] = value;
      }
 
   // Increment register index after operation
@@ -206,15 +231,24 @@ namespace Ep128 {
   }
 
   
-  const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes)
+  const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)
   {
 
     const unsigned char *bufp = buf;
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
-    if (!(*nBytes))
+    size_t currSlot = 0;
+    if (vsyncCnt>0)
+      curLine = 0;
+    else 
+      curLine++;
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE)
       return buf;
-
+   // todo: screen height limit
+   // todo: border color, content location
+      
+   //printf("combineLine, vsync: %03d %03d\n",vsyncCnt,curLine);
+   // Note: line pixels are according to PAL (768). One TVC pixel is always at least 2 PAL pixels.
     do {
       switch (bufp[0]) {
       case 0x00:                        // 16 pixel blank coded on 1 byte
@@ -226,7 +260,7 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x00);
         break;
-      case 0x01:                        // 1x16 pixel, 256 colors coded on 2 bytes
+      case 0x01:                        // 1x16 pixel, 256 colors coded on 2 bytes -- border
         do {
             buf_[outPos] = 0x01;
             buf_[outPos+1] = bufp[1];
@@ -236,7 +270,7 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x01);
         break;
-      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes
+      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes -- not used for TVC
         do {
             buf_[outPos] = 0x02;
             buf_[outPos+1] = bufp[1];
@@ -248,7 +282,7 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x02);
         break;
-      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes
+      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
         do {
           unsigned char c0 = bufp[1];
           unsigned char c1 = bufp[2];
@@ -264,24 +298,31 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x03);
         break;
-      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC yes
+      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
         do {
+            currSlot++;
+          if (false)
+          {
+          }
+          else {
             buf_[outPos] = 0x04;
             buf_[outPos+1] = bufp[1];
             buf_[outPos+2] = bufp[2];
             buf_[outPos+3] = bufp[3];
             buf_[outPos+4] = bufp[4];
-          bufp = bufp + 5;
-          outPos += 5;
+            bufp = bufp + 5;
+            outPos += 5;
+          }
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x04);
         break;
-      case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC yes
+      case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
         do {
           unsigned char c0 = bufp[1];
           unsigned char c1 = bufp[2];
           unsigned char b = bufp[3];
+            currSlot++;
             buf_[outPos] = 0x06;
             buf_[outPos+1] = bufp[1];
             buf_[outPos+2] = bufp[2];
@@ -289,17 +330,33 @@ namespace Ep128 {
             buf_[outPos+4] = bufp[4];
             buf_[outPos+5] = bufp[5];
             buf_[outPos+6] = bufp[6];
-
-          c0 = bufp[4];
-          c1 = bufp[5];
           bufp = bufp + 7;
           outPos += 7;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x06);
         break;
-      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC yes
+      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC 4 color mode
         do {
+            currSlot++;
+          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
+          {
+            buf_[outPos] = 0x08;
+            uint32_t baseAddr = 
+              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
+              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), bufp[1]);
+            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), bufp[2]);
+            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), bufp[3]);
+            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), bufp[4]);
+            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), bufp[5]);
+            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), bufp[6]);
+            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), bufp[7]);
+            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), bufp[8]);
+            bufp = bufp + 9;
+            outPos += 9;
+          } else {
+
             buf_[outPos] = 0x08;
             buf_[outPos+1] = bufp[1];
             buf_[outPos+2] = bufp[2];
@@ -312,6 +369,7 @@ namespace Ep128 {
 
           bufp = bufp + 9;
           outPos += 9;
+          }
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x08);
@@ -319,7 +377,7 @@ namespace Ep128 {
       default:                          // invalid flag byte
         do {
           buf_[outPos++] = 0x00;
-        } while (outPos < 108);
+        } while (outPos < sizeof(buf_));
         break;
       }
     } while (bufp < endp && outPos < *nBytes);

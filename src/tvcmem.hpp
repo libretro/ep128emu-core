@@ -236,5 +236,8 @@ namespace TVC64 {
 
 }       // namespace TVC64
 
+#define TVC256_FASTRAM_START_SEGMENT 0xE8
+#define TVC256_SLOWRAM_START_SEGMENT 0x68
+
 #endif  // EP128EMU_TVCMEM_HPP
 
