@@ -334,7 +334,7 @@ namespace TVC64 {
     // Fixed memory configuration for TVC256++ : 
     //    256 kB fast RAM (0xE8..0xF7)
     //    2 MB PSRAM      (0x68..0xE7) -- should be 8 MB, maybe later if it is really required
-    for (uint8_t i = 0x68; i < 0xF8; i++)
+    for (uint8_t i = TVC256_SLOWRAM_START_SEGMENT; i < 0xF8; i++)
       allocateSegment(i, false);
 #endif
 
@@ -377,6 +377,16 @@ namespace TVC64 {
       std::memcpy(&(segmentTable[segment][0x2000]),
                   &(segmentTable[segment][0]), dataSize);
     }
+
+#ifdef ENABLE_SPRITEEXT
+    // Initialize fastRAM extension contents (first 64 kB starting from 0xE8)
+    // with "ROM" segments 0x10-0x13
+    if ((segment >= 0x10 || segment <= 0x13) &&
+        dataSize > 0 && dataSize <= 16384) {
+      std::memcpy(&(segmentTable[TVC256_FASTRAM_START_SEGMENT+segment-0x10][0]),
+                  &(segmentTable[segment][0]), dataSize);
+    }
+#endif // ENABLE_SPRITEEXT
   }
 
   void Memory::deleteSegment(uint8_t segment)

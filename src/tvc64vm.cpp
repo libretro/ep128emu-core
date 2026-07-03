@@ -647,10 +647,19 @@ namespace TVC64 {
 
   void TVC64VM::TVCVideo_::drawLine(const uint8_t *buf, size_t nBytes)
   {
+#ifdef ENABLE_SPRITEEXT
+    size_t newnBytes = nBytes;
+    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, reinterpret_cast<Ep128::Memory*>(&vm.memory));
+    if (vm.getIsDisplayEnabled())
+      vm.display.drawLine(newBuf, newnBytes);
+    if (vm.videoCapture)
+      vm.videoCapture->horizontalSync(newBuf, newnBytes);
+#else
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(buf, nBytes);
     if (vm.videoCapture)
       vm.videoCapture->horizontalSync(buf, nBytes);
+#endif // ENABLE_SPRITEEXT
   }
 
   void TVC64VM::TVCVideo_::vsyncStateChange(bool newState,

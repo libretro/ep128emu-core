@@ -29,6 +29,7 @@
 #define EP128EMU_SPRITEEXT_HPP
 
 #include "ep128emu.hpp"
+#include "memory.hpp"
 #include <vector>
 
 namespace Ep128 {
@@ -39,6 +40,11 @@ namespace Ep128 {
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
+     unsigned int  nBytes_;
+     // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
+     // ( = 108 * 4) bytes in compressed format
+     uint8_t  buf_[108*4];
+
     // 7K of useful SRAM
     std::vector< uint8_t >  sd_ram_ext;
     // 64K flash ROM
@@ -50,6 +56,9 @@ namespace Ep128 {
     void flashWrite(uint32_t addr, uint8_t data);
     uint8_t flashReadDebug(uint32_t addr) const;
     void updateMouseSpeed(uint8_t binValue);
+    size_t curLine;
+    uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
+
    public:
     uint8_t io_port_values[16];
     float mouse_speed;
@@ -67,6 +76,7 @@ namespace Ep128 {
     void openROMFile(const char *fileName);
     uint8_t readNamedPort(bool secondary);
     void writeNamedPort(bool secondary, uint8_t value);
+    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
     uint8_t readCartP3Debug(uint32_t addr) const;
@@ -92,6 +102,10 @@ namespace Ep128 {
 #define SPRITEEXT_SEC_REG_INDEX 0x4
 #define SPRITEEXT_SEC_REG_ACCESS 0x5
 #define SPRITEEXT_SEC_REG_INCREMENT 0x6
+#define REG_SCREEN_MAXY 0xA9
+#define SPRITEEXT_FIRST_LINE 27
+#define SPRITEEXT_LAST_LINE 266
+#define SPRITEEXT_TRANSPARENT_COLOR 0x08
 #define REG_MEMORY_P2 0xB0
 #define REG_MEMORY_P2_DEFAULT 0x04
 #define REG_MEMORY_P3 0xB1
@@ -104,6 +118,13 @@ namespace Ep128 {
 #define REG_MEMORY_MAP_8M_P3_HIGH 0xB5
 #define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
 // Hardware default: 8 MB / 0x08, emulated: 2 MB / 0x02
+#define REG_SCREEN_BITMAP_BASE_ADDR 0xA4
+#define REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT 0x01
+#define REG_SCREEN_VIDEOMODE 0xA0
+#define REG_SCREEN_VIDEOMODE_NONE 0x0
+#define REG_SCREEN_VIDEOMODE_CHAR2 0x1
+#define REG_SCREEN_VIDEOMODE_CHAR16 0x2
+#define REG_SCREEN_VIDEOMODE_BITMAP 0x3
 #define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
 #define SPRITEEXT_MEM_PAGE_BASE_SEGMENT 0xE8
 #define SPRITEEXT_MEM_PAGE_MAX 0x0F
