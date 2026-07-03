@@ -29,25 +29,25 @@
    - Update SConstruct - introduce special wine+mingw cross-compile option for Devtool
    - Update SConstruct - simplify fltk, portaudio etc. version detection
    - Test devtool with 64-bit exe
-   - Fix standalone version joystick handling
+   - Fix standalone version joystick handling in Linux
    - Fake gamecard rom for presenting the ID string
    - State save/load support
 
    TVC256++ gfx:
-   - Frame buffer overlay of 256x240
    - Write to port 0x00 to set sprite border as well
    - Sprite only gfx
    - 2-color char screen
    - 16-color char screen
-   - 16-color bitmap screen
+   - 16-color bitmap screen -- fix resolution when on top of 2-color
    - Scroll
    - Sprite 2-color
    - Sprite 16-color
    - Sprite foreground / background
-   - Ext graphics calculation line-by-line
+   - Ext graphics calculation delay from prev line
    - Sprite registers
    - Sprite interrupt
    - Screen height setting
+   - Test bitmap with lot of transparency
    
    TVC256++ drives:
    - USB drive handling
@@ -55,7 +55,6 @@
    - PSRAM drive handling
    
    TVC256++ others:
-   - Initial memory fill
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
    - SID emulation
@@ -301,8 +300,23 @@ namespace Ep128 {
       case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
         do {
             currSlot++;
-          if (false)
+          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
           {
+            buf_[outPos] = 0x08;
+            uint32_t baseAddr = 
+              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
+              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), bufp[1]);
+            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), bufp[1]);
+            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), bufp[2]);
+            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), bufp[2]);
+            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), bufp[3]);
+            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), bufp[3]);
+            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), bufp[4]);
+            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), bufp[4]);
+            bufp = bufp + 5;
+            outPos += 9;
+            *nBytes += 4;
           }
           else {
             buf_[outPos] = 0x04;
@@ -319,10 +333,33 @@ namespace Ep128 {
         break;
       case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
         do {
-          unsigned char c0 = bufp[1];
-          unsigned char c1 = bufp[2];
-          unsigned char b = bufp[3];
             currSlot++;
+          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
+          {
+            unsigned char c0 = bufp[1];
+            unsigned char c1 = bufp[2];
+            unsigned char b = bufp[3];
+            buf_[outPos] = 0x08;
+            uint32_t baseAddr = 
+              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
+              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+            // Approximation, as output format has lower resolution
+            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), (b & 0xC0) ? c1 : c0);
+            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
+            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
+            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
+            c0 = bufp[4];
+            c1 = bufp[5];
+            b = bufp[6];
+            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), (b & 0xC0) ? c1 : c0);
+            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
+            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
+            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
+            bufp = bufp + 7;
+            outPos += 9;
+            *nBytes += 2;
+          }
+          else {
             buf_[outPos] = 0x06;
             buf_[outPos+1] = bufp[1];
             buf_[outPos+2] = bufp[2];
@@ -332,6 +369,7 @@ namespace Ep128 {
             buf_[outPos+6] = bufp[6];
           bufp = bufp + 7;
           outPos += 7;
+          }
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x06);
