@@ -36,9 +36,7 @@
    TVC256++ gfx:
    - Write to port 0x00 to set sprite border as well
    - Sprite only gfx
-   - 2-color char screen
-   - 16-color char screen
-   - 16-color bitmap screen -- fix resolution when on top of 2-color
+   - fix resolution when overlay on top of graphics 2
    - Scroll
    - Sprite 2-color
    - Sprite 16-color
@@ -74,12 +72,25 @@
 #include <limits.h>
 #include <unistd.h>
 #include <cerrno>
+#include <stdlib.h>
 
 #include "spriteext.hpp"
 #include "tvcmem.hpp"
 #include "ide.hpp"
 
 namespace Ep128 {
+
+  // Port masks for the upper 128 named ports - lower half needs no mask
+  static const uint8_t namedPortMasks[128] = {
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
+   0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87, 0x0f,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0
+};
 
 
   SpriteExt::SpriteExt()
@@ -96,6 +107,9 @@ namespace Ep128 {
     for (int i = 0; i < 256; i++)
       namedPortValues[i] = 0x00;
     namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR] = REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR] = REG_SCREEN_SCREEN_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR] = REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_FONT_BASE_ADDR] = REG_SCREEN_FONT_BASE_ADDR_DEFAULT;
     namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
     namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
@@ -211,6 +225,8 @@ namespace Ep128 {
          updateMouseSpeed(value);
        break;
        default:
+         if (portAddr > 127)
+           value = value & namedPortMasks[portAddr-128];
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
             namedPortValues[portAddr] = value;
@@ -318,6 +334,66 @@ namespace Ep128 {
             outPos += 9;
             *nBytes += 4;
           }
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t colorAddr = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t colorVal   = mem->readRaw(colorAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 + charLine.rem;
+            uint8_t fontVal = mem->readRaw(fontAddr);
+            buf_[outPos] = 0x08;
+            buf_[outPos+1] = fontVal & 128 ? i4ToTVCRGB(colorVal,bufp[1]) : bufp[1];
+            buf_[outPos+2] = fontVal &  64 ? i4ToTVCRGB(colorVal,bufp[1]) : bufp[1];
+            buf_[outPos+3] = fontVal &  32 ? i4ToTVCRGB(colorVal,bufp[2]) : bufp[2];
+            buf_[outPos+4] = fontVal &  16 ? i4ToTVCRGB(colorVal,bufp[2]) : bufp[2];
+            buf_[outPos+5] = fontVal &   8 ? i4ToTVCRGB(colorVal,bufp[3]) : bufp[3];
+            buf_[outPos+6] = fontVal &   4 ? i4ToTVCRGB(colorVal,bufp[3]) : bufp[3];
+            buf_[outPos+7] = fontVal &   2 ? i4ToTVCRGB(colorVal,bufp[4]) : bufp[4];
+            buf_[outPos+8] = fontVal &   1 ? i4ToTVCRGB(colorVal,bufp[4]) : bufp[4];
+            bufp = bufp + 5;
+            outPos += 9;
+            *nBytes += 4;
+          }
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 * 4 + charLine.rem * 4;
+            uint8_t fontVal;
+            buf_[outPos] = 0x08;
+            fontVal = ((mem->readRaw(fontAddr  ) & 0xF0)>>4);
+            buf_[outPos+1] = i4ToTVCRGB(fontVal,bufp[1]);
+            fontVal = ((mem->readRaw(fontAddr  ) & 0x0F));
+            buf_[outPos+2] = i4ToTVCRGB(fontVal,bufp[1]);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0xF0)>>4);
+            buf_[outPos+3] = i4ToTVCRGB(fontVal,bufp[2]);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0x0F));
+            buf_[outPos+4] = i4ToTVCRGB(fontVal,bufp[2]);
+            fontVal = ((mem->readRaw(fontAddr+2) & 0xF0)>>4);
+            buf_[outPos+5] = i4ToTVCRGB(fontVal,bufp[3]);
+            fontVal = ((mem->readRaw(fontAddr+2) & 0x0F));
+            buf_[outPos+6] = i4ToTVCRGB(fontVal,bufp[3]);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0xF0)>>4);
+            buf_[outPos+7] = i4ToTVCRGB(fontVal,bufp[4]);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0x0F));
+            buf_[outPos+8] = i4ToTVCRGB(fontVal,bufp[4]);
+            bufp = bufp + 5;
+            outPos += 9;
+            *nBytes += 4;
+          }
           else {
             buf_[outPos] = 0x04;
             buf_[outPos+1] = bufp[1];
@@ -359,6 +435,78 @@ namespace Ep128 {
             outPos += 9;
             *nBytes += 2;
           }
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t colorAddr = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t colorVal   = mem->readRaw(colorAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 + charLine.rem;
+            uint8_t fontVal = mem->readRaw(fontAddr);
+            unsigned char c0 = bufp[1];
+            unsigned char c1 = bufp[2];
+            unsigned char b  = bufp[3];
+            buf_[outPos] = 0x08;
+            buf_[outPos+1] = fontVal & 128 ? i4ToTVCRGB(colorVal,(b & 0xC0) ? c1 : c0) : (b & 0xC0) ? c1 : c0;
+            buf_[outPos+2] = fontVal &  64 ? i4ToTVCRGB(colorVal,(b & 0x30) ? c1 : c0) : (b & 0x30) ? c1 : c0;
+            buf_[outPos+3] = fontVal &  32 ? i4ToTVCRGB(colorVal,(b & 0x0C) ? c1 : c0) : (b & 0x0C) ? c1 : c0;
+            buf_[outPos+4] = fontVal &  16 ? i4ToTVCRGB(colorVal,(b & 0x03) ? c1 : c0) : (b & 0x03) ? c1 : c0;
+            c0 = bufp[4];
+            c1 = bufp[5];
+            b = bufp[6];
+            buf_[outPos+5] = fontVal &   8 ? i4ToTVCRGB(colorVal,(b & 0xC0) ? c1 : c0) : (b & 0xC0) ? c1 : c0;
+            buf_[outPos+6] = fontVal &   4 ? i4ToTVCRGB(colorVal,(b & 0x30) ? c1 : c0) : (b & 0x30) ? c1 : c0;
+            buf_[outPos+7] = fontVal &   2 ? i4ToTVCRGB(colorVal,(b & 0x0C) ? c1 : c0) : (b & 0x0C) ? c1 : c0;
+            buf_[outPos+8] = fontVal &   1 ? i4ToTVCRGB(colorVal,(b & 0x03) ? c1 : c0) : (b & 0x03) ? c1 : c0;
+            bufp = bufp + 7;
+            outPos += 9;
+            *nBytes += 2;
+          }
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 * 4 + charLine.rem * 4;
+            uint8_t fontVal;
+            unsigned char c0 = bufp[1];
+            unsigned char c1 = bufp[2];
+            unsigned char b  = bufp[3];
+            buf_[outPos] = 0x08;
+            fontVal = ((mem->readRaw(fontAddr  ) & 0xF0)>>4);
+            buf_[outPos+1] = i4ToTVCRGB(fontVal,(b & 0xC0) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr  ) & 0x0F));
+            buf_[outPos+2] = i4ToTVCRGB(fontVal,(b & 0x30) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0xF0)>>4);
+            buf_[outPos+3] = i4ToTVCRGB(fontVal,(b & 0x0C) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0x0F));
+            buf_[outPos+4] = i4ToTVCRGB(fontVal,(b & 0x03) ? c1 : c0);
+            c0 = bufp[4];
+            c1 = bufp[5];
+            b = bufp[6];
+            fontVal = ((mem->readRaw(fontAddr+2) & 0xF0)>>4);
+            buf_[outPos+5] = i4ToTVCRGB(fontVal,(b & 0xC0) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr+2) & 0x0F));
+            buf_[outPos+6] = i4ToTVCRGB(fontVal,(b & 0x30) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0xF0)>>4);
+            buf_[outPos+7] = i4ToTVCRGB(fontVal,(b & 0x0C) ? c1 : c0);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0x0F));
+            buf_[outPos+8] = i4ToTVCRGB(fontVal,(b & 0x03) ? c1 : c0);
+            bufp = bufp + 7;
+            outPos += 9;
+            *nBytes += 2;
+          }
           else {
             buf_[outPos] = 0x06;
             buf_[outPos+1] = bufp[1];
@@ -393,8 +541,65 @@ namespace Ep128 {
             buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), bufp[8]);
             bufp = bufp + 9;
             outPos += 9;
+          } 
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t colorAddr = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t colorVal   = mem->readRaw(colorAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 + charLine.rem;
+            uint8_t fontVal = mem->readRaw(fontAddr);
+            buf_[outPos] = 0x08;
+            buf_[outPos+1] = fontVal & 128 ? i4ToTVCRGB(colorVal,bufp[1]) : bufp[1];
+            buf_[outPos+2] = fontVal &  64 ? i4ToTVCRGB(colorVal,bufp[2]) : bufp[2];
+            buf_[outPos+3] = fontVal &  32 ? i4ToTVCRGB(colorVal,bufp[3]) : bufp[3];
+            buf_[outPos+4] = fontVal &  16 ? i4ToTVCRGB(colorVal,bufp[4]) : bufp[4];
+            buf_[outPos+5] = fontVal &   8 ? i4ToTVCRGB(colorVal,bufp[5]) : bufp[5];
+            buf_[outPos+6] = fontVal &   4 ? i4ToTVCRGB(colorVal,bufp[6]) : bufp[6];
+            buf_[outPos+7] = fontVal &   2 ? i4ToTVCRGB(colorVal,bufp[7]) : bufp[7];
+            buf_[outPos+8] = fontVal &   1 ? i4ToTVCRGB(colorVal,bufp[8]) : bufp[8];
+            bufp = bufp + 9;
+            outPos += 9;
+          } 
+          else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
+          {
+            div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+            uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                                  namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                                  charLine.quot * 32 + (currSlot-1);
+            uint8_t charVal    = mem->readRaw(charAddr);
+            uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                                  namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                                  charVal * 8 * 4 + charLine.rem * 4;
+            uint8_t fontVal;
+            buf_[outPos] = 0x08;
+            fontVal = ((mem->readRaw(fontAddr  ) & 0xF0)>>4);
+            buf_[outPos+1] = i4ToTVCRGB(fontVal,bufp[1]);
+            fontVal = ((mem->readRaw(fontAddr  ) & 0x0F));
+            buf_[outPos+2] = i4ToTVCRGB(fontVal,bufp[2]);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0xF0)>>4);
+            buf_[outPos+3] = i4ToTVCRGB(fontVal,bufp[3]);
+            fontVal = ((mem->readRaw(fontAddr+1) & 0x0F));
+            buf_[outPos+4] = i4ToTVCRGB(fontVal,bufp[4]);
+            fontVal = ((mem->readRaw(fontAddr+2) & 0xF0)>>4);
+            buf_[outPos+5] = i4ToTVCRGB(fontVal,bufp[5]);
+            fontVal = ((mem->readRaw(fontAddr+2) & 0x0F));
+            buf_[outPos+6] = i4ToTVCRGB(fontVal,bufp[6]);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0xF0)>>4);
+            buf_[outPos+7] = i4ToTVCRGB(fontVal,bufp[7]);
+            fontVal = ((mem->readRaw(fontAddr+3) & 0x0F));
+            buf_[outPos+8] = i4ToTVCRGB(fontVal,bufp[8]);
+            bufp = bufp + 9;
+            outPos += 9;
           } else {
-
             buf_[outPos] = 0x08;
             buf_[outPos+1] = bufp[1];
             buf_[outPos+2] = bufp[2];
