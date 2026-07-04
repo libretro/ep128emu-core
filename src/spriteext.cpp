@@ -394,6 +394,12 @@ namespace Ep128 {
             outPos += 9;
             *nBytes += 4;
           }
+/*          else if (namedPortValues[REG_SPRITE_ENABLE])
+          {
+             uint16_t spriteX = namedPortValues[REG_SPRITE_X];
+             uint16_t spriteY = namedPortValues[REG_SPRITE_Y];
+             if (curLine < spriteX - REG_SPRITE_OFFSET_X || curLine > spriteX - REG_SPRITE_OFFSET_X + 21)
+          }*/
           else {
             buf_[outPos] = 0x04;
             buf_[outPos+1] = bufp[1];
@@ -415,25 +421,43 @@ namespace Ep128 {
             unsigned char c0 = bufp[1];
             unsigned char c1 = bufp[2];
             unsigned char b = bufp[3];
-            buf_[outPos] = 0x08;
+            buf_[outPos] = 0x09;
             uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
               (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
-            // Approximation, as output format has lower resolution
-            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), (b & 0xC0) ? c1 : c0);
-            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
-            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
-            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
+            // Split pixels
+            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), (b & 0x80) ? c1 : c0);
+            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), (b & 0x40) ? c1 : c0);
+            
+            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), (b & 0x20) ? c1 : c0);
+            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), (b & 0x10) ? c1 : c0);
+
+            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), (b & 0x08) ? c1 : c0);
+            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), (b & 0x04) ? c1 : c0);
+
+            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), (b & 0x02) ? c1 : c0);
+            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), (b & 0x01) ? c1 : c0);
+
             c0 = bufp[4];
             c1 = bufp[5];
             b = bufp[6];
-            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), (b & 0xC0) ? c1 : c0);
-            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
-            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
-            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
+
+            buf_[outPos+ 9] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), (b & 0x80) ? c1 : c0);
+            buf_[outPos+10] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), (b & 0x40) ? c1 : c0);
+            
+            buf_[outPos+11] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), (b & 0x20) ? c1 : c0);
+            buf_[outPos+12] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), (b & 0x10) ? c1 : c0);
+
+            buf_[outPos+13] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), (b & 0x08) ? c1 : c0);
+            buf_[outPos+14] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), (b & 0x04) ? c1 : c0);
+
+            buf_[outPos+15] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), (b & 0x02) ? c1 : c0);
+            buf_[outPos+16] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), (b & 0x01) ? c1 : c0);
+
+
             bufp = bufp + 7;
-            outPos += 9;
-            *nBytes += 2;
+            outPos += 17;
+            *nBytes += 10;
           }
           else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
           {

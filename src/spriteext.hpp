@@ -43,7 +43,7 @@ namespace Ep128 {
      unsigned int  nBytes_;
      // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
      // ( = 108 * 4) bytes in compressed format
-     uint8_t  buf_[108*4];
+     uint8_t  buf_[800*4];
 
     // 7K of useful SRAM
     std::vector< uint8_t >  sd_ram_ext;
@@ -106,6 +106,16 @@ namespace Ep128 {
 #define SPRITEEXT_FIRST_LINE 27
 #define SPRITEEXT_LAST_LINE 266
 #define SPRITEEXT_TRANSPARENT_COLOR 0x08
+
+#define REG_SPRITE_X 0x00
+#define REG_SPRITE_Y 0x20
+#define REG_SPRITE_COLOR 0x40
+#define REG_SPRITE_PHASE 0x50
+#define REG_SPRITE_FOREGROUND 0x60
+#define REG_SPRITE_ENABLE 0x70
+#define REG_SPRITE_COLORMODE 0x80
+#define REG_SPRITE_OFFSET_X 24
+#define REG_SPRITE_OFFSET_Y 21+6
 #define REG_MEMORY_P2 0xB0
 #define REG_MEMORY_P2_DEFAULT 0x04
 #define REG_MEMORY_P3 0xB1
