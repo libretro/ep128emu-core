@@ -37,6 +37,7 @@ namespace Ep128 {
   class SpriteExt {
    protected:
     bool      spriteExt_enabled;    // only used in temporaryDisable()
+    bool      anyGfxEnabled;
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
@@ -56,6 +57,8 @@ namespace Ep128 {
     void flashWrite(uint32_t addr, uint8_t data);
     uint8_t flashReadDebug(uint32_t addr) const;
     void updateMouseSpeed(uint8_t binValue);
+    void updateAnyGfxEnabled();
+    void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
     size_t curLine;
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
@@ -116,10 +119,11 @@ namespace Ep128 {
 #define REG_SPRITE_COLORMODE 0x80
 #define REG_SPRITE_OFFSET_X 24
 #define REG_SPRITE_OFFSET_Y 21+6
+#define REG_SPRITE_BASE_ADDR 0x9E
 #define REG_MEMORY_P2 0xB0
-#define REG_MEMORY_P2_DEFAULT 0x04
+#define REG_MEMORY_P2_DEFAULT 0xFF /* 0x04 */
 #define REG_MEMORY_P3 0xB1
-#define REG_MEMORY_P3_DEFAULT 0x05
+#define REG_MEMORY_P3_DEFAULT 0xFF /* 0x05 */
 #define REG_MEMORY_MAP_8M_P2_LOW 0xB2
 #define REG_MEMORY_MAP_8M_P2_LOW_DEFAULT 0x0
 #define REG_MEMORY_MAP_8M_P2_HIGH 0xB3
