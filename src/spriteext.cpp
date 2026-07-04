@@ -36,9 +36,7 @@
    TVC256++ gfx:
    - Write to port 0x00 to set sprite border as well
    - Sprite only gfx
-   - 2-color char screen
-   - 16-color char screen
-   - 16-color bitmap screen -- fix resolution when on top of 2-color
+   - fix resolution when overlay on top of graphics 2
    - Scroll
    - Sprite 2-color
    - Sprite 16-color
@@ -74,6 +72,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <cerrno>
+#include <stdlib.h>
 
 #include "spriteext.hpp"
 #include "tvcmem.hpp"
@@ -81,12 +80,25 @@
 
 namespace Ep128 {
 
+  // Port masks for the upper 128 named ports - lower half needs no mask
+  static const uint8_t namedPortMasks[128] = {
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
+   0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87, 0x0f,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0
+};
+
 
   SpriteExt::SpriteExt()
-    : curLine(0),
-      spriteExt_enabled(false),
+    : spriteExt_enabled(false),
+      anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
-      spriteExtAddress(0xFFFFFFFFU)
+      spriteExtAddress(0xFFFFFFFFU),
+      curLine(0)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -96,6 +108,9 @@ namespace Ep128 {
     for (int i = 0; i < 256; i++)
       namedPortValues[i] = 0x00;
     namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR] = REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR] = REG_SCREEN_SCREEN_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR] = REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_FONT_BASE_ADDR] = REG_SCREEN_FONT_BASE_ADDR_DEFAULT;
     namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
     namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
@@ -211,6 +226,8 @@ namespace Ep128 {
          updateMouseSpeed(value);
        break;
        default:
+         if (portAddr > 127)
+           value = value & namedPortMasks[portAddr-128];
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
             namedPortValues[portAddr] = value;
@@ -222,6 +239,8 @@ namespace Ep128 {
   else
     io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
 
+  updateAnyGfxEnabled();
+
   }
 
   void SpriteExt::updateMouseSpeed(uint8_t binValue)
@@ -229,7 +248,151 @@ namespace Ep128 {
      mouse_speed = ((binValue & 0xC) >> 6) + (float)(binValue & 0x1F) * 1/32;
   }
 
-  
+  void SpriteExt::updateAnyGfxEnabled()
+  {
+     for (int i=0; i<16; i++)
+     {
+      if (namedPortValues[REG_SPRITE_ENABLE + i])
+      {
+        anyGfxEnabled = true;
+        return;
+      }      
+     }
+     anyGfxEnabled = (bool) namedPortValues[REG_SCREEN_VIDEOMODE];
+  }
+
+  // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
+  void SpriteExt::updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem)
+  {
+     uint8_t * buf = &buf_[outPos];
+
+     for (size_t i=0; i<16; i++)
+     {
+        if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
+        {
+           for (size_t j=0; j<8; j++)
+           {
+              int spritePosX = ((currSlot - 1) * 16 + j*2 - (namedPortValues[REG_SPRITE_X+i*2] - 24)*2)/2;
+              if (spritePosX < 0 || spritePosX > 23)
+               continue;
+              int spritePosY = curLine - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+i*2] - 21);
+              if (spritePosY < 0 || spritePosY > 20)
+               continue;
+      uint32_t spriteBaseAddr  = ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
+                            i*0x400 +
+                            namedPortValues[REG_SPRITE_PHASE+i] * 0x40 +
+                            spritePosY * 3;
+      uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
+      //printf("Sprite: line %d slot %d j %d x %d y %d bits %08x\n", curLine, currSlot, j, spritePosX, spritePosY,spriteBits);
+      if (spriteBits & (uint32_t)(1 << spritePosX))
+         buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+i], buf[j*2]);
+
+           }
+        }
+     }
+
+     // Bitmap mode: one nibble (half byte) -- one pixel
+     if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
+     {
+        uint32_t baseAddr = 
+              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
+              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+        buf[ 0] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0]);
+        buf[ 1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1]);
+        buf[ 2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2]);
+        buf[ 3] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 3]);
+        buf[ 4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 4]);
+        buf[ 5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 5]);
+        buf[ 6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 6]);
+        buf[ 7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 7]);
+        buf[ 8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 8]);
+        buf[ 9] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 9]);
+        buf[10] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[10]);
+        buf[11] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[11]);
+        buf[12] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[12]);
+        buf[13] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[13]);
+        buf[14] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[14]);
+        buf[15] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[15]);
+     }
+     // 2-color char mode: char value points to font definition, if bit is set then use color map
+     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
+     {
+      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                            namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                            charLine.quot * 32 + (currSlot-1);
+      uint8_t charVal    = mem->readRaw(charAddr);
+      uint32_t colorAddr = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                            namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR]*0x400 +
+                            charLine.quot * 32 + (currSlot-1);
+      uint8_t colorVal   = mem->readRaw(colorAddr);
+      uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                            namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                            charVal * 8 + charLine.rem;
+      uint8_t fontVal = mem->readRaw(fontAddr);
+      buf[ 0] = fontVal & 0x80 ? i4ToTVCRGB(colorVal,buf[ 0]) : buf[ 0];
+      buf[ 1] = fontVal & 0x80 ? i4ToTVCRGB(colorVal,buf[ 1]) : buf[ 1];
+      buf[ 2] = fontVal & 0x40 ? i4ToTVCRGB(colorVal,buf[ 2]) : buf[ 2];
+      buf[ 3] = fontVal & 0x40 ? i4ToTVCRGB(colorVal,buf[ 3]) : buf[ 3];
+      buf[ 4] = fontVal & 0x20 ? i4ToTVCRGB(colorVal,buf[ 4]) : buf[ 4];
+      buf[ 5] = fontVal & 0x20 ? i4ToTVCRGB(colorVal,buf[ 5]) : buf[ 5];
+      buf[ 6] = fontVal & 0x10 ? i4ToTVCRGB(colorVal,buf[ 6]) : buf[ 6];
+      buf[ 7] = fontVal & 0x10 ? i4ToTVCRGB(colorVal,buf[ 7]) : buf[ 7];
+      buf[ 8] = fontVal & 0x08 ? i4ToTVCRGB(colorVal,buf[ 8]) : buf[ 8];
+      buf[ 9] = fontVal & 0x08 ? i4ToTVCRGB(colorVal,buf[ 9]) : buf[ 9];
+      buf[10] = fontVal & 0x04 ? i4ToTVCRGB(colorVal,buf[10]) : buf[10];
+      buf[11] = fontVal & 0x04 ? i4ToTVCRGB(colorVal,buf[11]) : buf[11];
+      buf[12] = fontVal & 0x02 ? i4ToTVCRGB(colorVal,buf[12]) : buf[12];
+      buf[13] = fontVal & 0x02 ? i4ToTVCRGB(colorVal,buf[13]) : buf[13];
+      buf[14] = fontVal & 0x01 ? i4ToTVCRGB(colorVal,buf[14]) : buf[14];
+      buf[15] = fontVal & 0x01 ? i4ToTVCRGB(colorVal,buf[15]) : buf[15];
+    }
+    // 16-color char mode: char value points to font definition, one nibble (half byte) of font definition -- one pixel
+    else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
+    {
+      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
+                            namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
+                            charLine.quot * 32 + (currSlot-1);
+      uint8_t charVal    = mem->readRaw(charAddr);
+      uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
+                            namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
+                            charVal * 8 * 4 + charLine.rem * 4;
+      uint8_t fontVal;
+      fontVal = ((mem->readRaw(fontAddr  ) & 0xF0)>>4);
+      buf[ 0] = i4ToTVCRGB(fontVal, buf[ 0]);
+      buf[ 1] = i4ToTVCRGB(fontVal, buf[ 1]);
+
+      fontVal = ((mem->readRaw(fontAddr  ) & 0x0F));
+      buf[ 2] = i4ToTVCRGB(fontVal, buf[ 2]);
+      buf[ 3] = i4ToTVCRGB(fontVal, buf[ 3]);
+
+      fontVal = ((mem->readRaw(fontAddr+1) & 0xF0)>>4);
+      buf[ 4] = i4ToTVCRGB(fontVal, buf[ 4]);
+      buf[ 5] = i4ToTVCRGB(fontVal, buf[ 5]);
+
+      fontVal = ((mem->readRaw(fontAddr+1) & 0x0F));
+      buf[ 6] = i4ToTVCRGB(fontVal, buf[ 6]);
+      buf[ 7] = i4ToTVCRGB(fontVal, buf[ 7]);
+
+      fontVal = ((mem->readRaw(fontAddr+2) & 0xF0)>>4);
+      buf[ 8] = i4ToTVCRGB(fontVal, buf[ 8]);
+      buf[ 9] = i4ToTVCRGB(fontVal, buf[ 9]);
+
+      fontVal = ((mem->readRaw(fontAddr+2) & 0x0F));
+      buf[10] = i4ToTVCRGB(fontVal, buf[10]);
+      buf[11] = i4ToTVCRGB(fontVal, buf[11]);
+
+      fontVal = ((mem->readRaw(fontAddr+3) & 0xF0)>>4);
+      buf[12] = i4ToTVCRGB(fontVal, buf[12]);
+      buf[13] = i4ToTVCRGB(fontVal, buf[13]);
+
+      fontVal = ((mem->readRaw(fontAddr+3) & 0x0F));
+      buf[14] = i4ToTVCRGB(fontVal, buf[14]);
+      buf[15] = i4ToTVCRGB(fontVal, buf[15]);
+    }
+  }
+
   const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)
   {
 
@@ -241,13 +404,11 @@ namespace Ep128 {
       curLine = 0;
     else 
       curLine++;
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE)
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE || !anyGfxEnabled)
       return buf;
    // todo: screen height limit
-   // todo: border color, content location
-      
-   //printf("combineLine, vsync: %03d %03d\n",vsyncCnt,curLine);
-   // Note: line pixels are according to PAL (768). One TVC pixel is always at least 2 PAL pixels.
+   // todo: border color
+   // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
       case 0x00:                        // 16 pixel blank coded on 1 byte
@@ -261,8 +422,7 @@ namespace Ep128 {
         break;
       case 0x01:                        // 1x16 pixel, 256 colors coded on 2 bytes -- border
         do {
-            buf_[outPos] = 0x01;
-            buf_[outPos+1] = bufp[1];
+           std::memcpy(&(buf_[outPos]), bufp, 2);
           bufp = bufp + 2;
           outPos += 2;
           if (bufp >= endp)
@@ -271,10 +431,7 @@ namespace Ep128 {
         break;
       case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes -- not used for TVC
         do {
-            buf_[outPos] = 0x02;
-            buf_[outPos+1] = bufp[1];
-            buf_[outPos+2] = bufp[2];
-
+           std::memcpy(&(buf_[outPos]), bufp, 3);
           bufp = bufp + 3;
           outPos += 3;
           if (bufp >= endp)
@@ -283,13 +440,7 @@ namespace Ep128 {
         break;
       case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
         do {
-          unsigned char c0 = bufp[1];
-          unsigned char c1 = bufp[2];
-          unsigned char b = bufp[3];
-            buf_[outPos] = 0x03;
-            buf_[outPos+1] = bufp[1];
-            buf_[outPos+2] = bufp[2];
-            buf_[outPos+3] = bufp[3];
+           std::memcpy(&(buf_[outPos]), bufp, 4);
 
           bufp = bufp + 4;
           outPos += 4;
@@ -297,36 +448,35 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x03);
         break;
+      // To simplify the overlay logic, convert all content modes to a new mode 0x09 which can cover 
+      // all resolution with 256 colors (16 would be enough for TVC, but let's not complicate it)
+      // This way, overlay pixel calculation logic can be done only once for all modes.
       case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
         do {
             currSlot++;
-          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
-          {
-            buf_[outPos] = 0x08;
-            uint32_t baseAddr = 
-              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
-            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), bufp[1]);
-            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), bufp[1]);
-            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), bufp[2]);
-            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), bufp[2]);
-            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), bufp[3]);
-            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), bufp[3]);
-            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), bufp[4]);
-            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), bufp[4]);
-            bufp = bufp + 5;
-            outPos += 9;
-            *nBytes += 4;
-          }
-          else {
-            buf_[outPos] = 0x04;
-            buf_[outPos+1] = bufp[1];
-            buf_[outPos+2] = bufp[2];
-            buf_[outPos+3] = bufp[3];
-            buf_[outPos+4] = bufp[4];
-            bufp = bufp + 5;
-            outPos += 5;
-          }
+            buf_[outPos] = 0x09;
+            buf_[outPos +  1] = bufp[1];
+            buf_[outPos +  2] = bufp[1];
+            buf_[outPos +  3] = bufp[1];
+            buf_[outPos +  4] = bufp[1];
+            buf_[outPos +  5] = bufp[2];
+            buf_[outPos +  6] = bufp[2];
+            buf_[outPos +  7] = bufp[2];
+            buf_[outPos +  8] = bufp[2];
+            buf_[outPos +  9] = bufp[3];
+            buf_[outPos + 10] = bufp[3];
+            buf_[outPos + 11] = bufp[3];
+            buf_[outPos + 12] = bufp[3];
+            buf_[outPos + 13] = bufp[4];
+            buf_[outPos + 14] = bufp[4];
+            buf_[outPos + 15] = bufp[4];
+            buf_[outPos + 16] = bufp[4];
+            
+            updateLineWithGfx(outPos+1, currSlot, mem);
+            bufp    +=  5;
+            outPos  += 17;
+            *nBytes += 12;
+
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x04);
@@ -334,42 +484,35 @@ namespace Ep128 {
       case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
         do {
             currSlot++;
-          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
-          {
             unsigned char c0 = bufp[1];
             unsigned char c1 = bufp[2];
             unsigned char b = bufp[3];
-            buf_[outPos] = 0x08;
-            uint32_t baseAddr = 
-              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
-            // Approximation, as output format has lower resolution
-            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), (b & 0xC0) ? c1 : c0);
-            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
-            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
-            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
+            buf_[outPos] = 0x09;
+            buf_[outPos+1] = (b & 0x80) ? c1 : c0;
+            buf_[outPos+2] = (b & 0x40) ? c1 : c0;
+            buf_[outPos+3] = (b & 0x20) ? c1 : c0;
+            buf_[outPos+4] = (b & 0x10) ? c1 : c0;
+            buf_[outPos+5] = (b & 0x08) ? c1 : c0;
+            buf_[outPos+6] = (b & 0x04) ? c1 : c0;
+            buf_[outPos+7] = (b & 0x02) ? c1 : c0;
+            buf_[outPos+8] = (b & 0x01) ? c1 : c0;
             c0 = bufp[4];
             c1 = bufp[5];
             b = bufp[6];
-            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), (b & 0xC0) ? c1 : c0);
-            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), (b & 0x30) ? c1 : c0);
-            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), (b & 0x0C) ? c1 : c0);
-            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), (b & 0x03) ? c1 : c0);
-            bufp = bufp + 7;
-            outPos += 9;
-            *nBytes += 2;
-          }
-          else {
-            buf_[outPos] = 0x06;
-            buf_[outPos+1] = bufp[1];
-            buf_[outPos+2] = bufp[2];
-            buf_[outPos+3] = bufp[3];
-            buf_[outPos+4] = bufp[4];
-            buf_[outPos+5] = bufp[5];
-            buf_[outPos+6] = bufp[6];
-          bufp = bufp + 7;
-          outPos += 7;
-          }
+            buf_[outPos+ 9] = (b & 0x80) ? c1 : c0;
+            buf_[outPos+10] = (b & 0x40) ? c1 : c0;
+            buf_[outPos+11] = (b & 0x20) ? c1 : c0;
+            buf_[outPos+12] = (b & 0x10) ? c1 : c0;
+            buf_[outPos+13] = (b & 0x08) ? c1 : c0;
+            buf_[outPos+14] = (b & 0x04) ? c1 : c0;
+            buf_[outPos+15] = (b & 0x02) ? c1 : c0;
+            buf_[outPos+16] = (b & 0x01) ? c1 : c0;
+
+            updateLineWithGfx(outPos+1, currSlot, mem);
+            bufp    +=  7;
+            outPos  += 17;
+            *nBytes += 10;
+
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x06);
@@ -377,37 +520,29 @@ namespace Ep128 {
       case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC 4 color mode
         do {
             currSlot++;
-          if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
-          {
-            buf_[outPos] = 0x08;
-            uint32_t baseAddr = 
-              ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
-            buf_[outPos+1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), bufp[1]);
-            buf_[outPos+2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), bufp[2]);
-            buf_[outPos+3] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), bufp[3]);
-            buf_[outPos+4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), bufp[4]);
-            buf_[outPos+5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), bufp[5]);
-            buf_[outPos+6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), bufp[6]);
-            buf_[outPos+7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), bufp[7]);
-            buf_[outPos+8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), bufp[8]);
-            bufp = bufp + 9;
-            outPos += 9;
-          } else {
+            buf_[outPos] = 0x09;
+            buf_[outPos +  1] = bufp[1];
+            buf_[outPos +  2] = bufp[1];
+            buf_[outPos +  3] = bufp[2];
+            buf_[outPos +  4] = bufp[2];
+            buf_[outPos +  5] = bufp[3];
+            buf_[outPos +  6] = bufp[3];
+            buf_[outPos +  7] = bufp[4];
+            buf_[outPos +  8] = bufp[4];
+            buf_[outPos +  9] = bufp[5];
+            buf_[outPos + 10] = bufp[5];
+            buf_[outPos + 11] = bufp[6];
+            buf_[outPos + 12] = bufp[6];
+            buf_[outPos + 13] = bufp[7];
+            buf_[outPos + 14] = bufp[7];
+            buf_[outPos + 15] = bufp[8];
+            buf_[outPos + 16] = bufp[8];
+            
+            updateLineWithGfx(outPos+1, currSlot, mem);
+            bufp    +=  9;
+            outPos  += 17;
+            *nBytes +=  8;
 
-            buf_[outPos] = 0x08;
-            buf_[outPos+1] = bufp[1];
-            buf_[outPos+2] = bufp[2];
-            buf_[outPos+3] = bufp[3];
-            buf_[outPos+4] = bufp[4];
-            buf_[outPos+5] = bufp[5];
-            buf_[outPos+6] = bufp[6];
-            buf_[outPos+7] = bufp[7];
-            buf_[outPos+8] = bufp[8];
-
-          bufp = bufp + 9;
-          outPos += 9;
-          }
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x08);
@@ -419,7 +554,6 @@ namespace Ep128 {
         break;
       }
     } while (bufp < endp && outPos < *nBytes);
-//    printf("Line converted, from %d to %d bytes, compare %d\n",*nBytes, outPos, std::memcmp(&buf_[0],buf, *nBytes));
     return &buf_[0];
   }
 
