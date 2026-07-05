@@ -38,14 +38,13 @@
    - Sprite only gfx
    - fix resolution when overlay on top of graphics 2
    - Scroll
-   - Sprite 2-color
-   - Sprite 16-color
-   - Sprite foreground / background
+   - Sprite 2-color (tests needed)
+   - Sprite 16-color (tests needed)
+   - Sprite foreground / background (tests needed)
    - Ext graphics calculation delay from prev line
-   - Sprite registers
+   - Sprite collision
    - Sprite interrupt
    - Screen height setting
-   - Test bitmap with lot of transparency
    
    TVC256++ drives:
    - USB drive handling
@@ -62,6 +61,7 @@
    - File I/O disable from rom (use tvcfileio in emulator instead)
    - Extra file i/o functions (get_pwd .. seek_file)
    - File i/o functions for card (get_iobase, get_membase)
+   - Test program (BASIC)
 
 */
 
@@ -326,7 +326,7 @@ namespace Ep128 {
 
   void SpriteExt::updateMouseSpeed(uint8_t binValue)
   {
-     mouse_speed = ((binValue & 0xC) >> 6) + (float)(binValue & 0x1F) * 1/32;
+     mouse_speed = ((binValue & 0xC0) >> 6) + (float)(binValue & 0x1F) * 1/32;
   }
 
   void SpriteExt::updateAnyGfxEnabled()
@@ -369,7 +369,7 @@ namespace Ep128 {
                             spritePosY * 3;
                  uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
                  //printf("Sprite: line %d slot %d j %d x %d y %d bits %08x\n", curLine, currSlot, j, spritePosX, spritePosY,spriteBits);
-                 if (spriteBits & (uint32_t)(1 << spritePosX))
+                 if (spriteBits & (uint32_t)(1 << 23-spritePosX))
                     buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+i], buf[j*2]);
               // 16-color sprite
               } else {
@@ -512,7 +512,7 @@ namespace Ep128 {
                             spritePosY * 3;
                  uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
                  //printf("Sprite: line %d slot %d j %d x %d y %d bits %08x\n", curLine, currSlot, j, spritePosX, spritePosY,spriteBits);
-                 if (spriteBits & (uint32_t)(1 << spritePosX))
+                 if (spriteBits & (uint32_t)(1 << 23-spritePosX))
                     buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+i], buf[j*2]);
               // 16-color sprite
               } else {
