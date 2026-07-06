@@ -892,6 +892,14 @@ namespace TVC64 {
     switch (addr) {
     case 0x00:                          // border color
       vm.videoRenderer.setColor(4, value);
+#ifdef ENABLE_SPRITEEXT
+      // IGRB double-bits -> IRGB 4-bit
+      vm.spriteext.io_port_values[REG_SCREEN_BORDER_COLOR] = 
+        ((value & 0x40)>>3) |
+        ((value & 0x10)>>3) |
+        ((value & 0x04)   ) |
+        ((value & 0x01)   );
+#endif
       break;
     case 0x01:                          // printer data output (unimplemented)
       break;

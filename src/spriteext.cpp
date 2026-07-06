@@ -104,7 +104,11 @@ namespace Ep128 {
       anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
       spriteExtAddress(0xFFFFFFFFU),
-      curLine(0)
+      curLine(0),
+      scrollX(0),
+      scrollY(0),
+      scrollBorderX(false),
+      scrollBorderY(false)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -291,6 +295,16 @@ namespace Ep128 {
             namedPortValues[REG_SPRITE_COLORMODE + 8 + i] = value & (1<<i) ? 1 : 0;
          }
          break;
+       case REG_SCREEN_SCROLL_X:
+         namedPortValues[portAddr] = value;
+         scrollX = value & 0x07;
+         scrollBorderX = value & 0x80;
+         break;
+       case REG_SCREEN_SCROLL_Y:
+         namedPortValues[portAddr] = value;
+         scrollY = value & 0x07;
+         scrollBorderY = value & 0x80;
+         break;
        default:
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
@@ -347,7 +361,7 @@ namespace Ep128 {
         return;
       }      
      }
-     anyGfxEnabled = (bool) namedPortValues[REG_SCREEN_VIDEOMODE];
+     anyGfxEnabled = (bool) namedPortValues[REG_SCREEN_VIDEOMODE] || (bool) scrollX || (bool) scrollY;
   }
   
   // Sprite handling. Note that "slot" consists of 16 pixels, but in the full PAL resolution
@@ -393,6 +407,16 @@ namespace Ep128 {
   {
      uint8_t * buf = &buf_[outPos];
 
+     // Scroll border top/bottom
+     if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8))
+     {
+        for (size_t i=0; i<16; i++)
+        {
+          buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
+        }
+        return;
+     }
+
      for (size_t i=0; i<16; i++)
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
@@ -406,7 +430,7 @@ namespace Ep128 {
      {
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+              (curLine + scrollY - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
         buf[ 0] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0]);
         buf[ 1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1]);
         buf[ 2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2]);
@@ -427,7 +451,7 @@ namespace Ep128 {
      // 2-color char mode: char value points to font definition, if bit is set then use color map
      else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
      {
-      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine + scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
                             charLine.quot * 32 + (currSlot-1);
@@ -460,7 +484,7 @@ namespace Ep128 {
     // 16-color char mode: char value points to font definition, one nibble (half byte) of font definition -- one pixel
     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
     {
-      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine + scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
                             charLine.quot * 32 + (currSlot-1);

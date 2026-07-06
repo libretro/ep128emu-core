@@ -61,6 +61,10 @@ namespace Ep128 {
     void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
     void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum);
     size_t curLine;
+    size_t scrollX;
+    size_t scrollY;
+    bool scrollBorderX;
+    bool scrollBorderY;
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
    public:
@@ -165,6 +169,9 @@ namespace Ep128 {
 #define REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT 0x02
 #define REG_SCREEN_FONT_BASE_ADDR 0xA3
 #define REG_SCREEN_FONT_BASE_ADDR_DEFAULT 0x02
+#define REG_SCREEN_SCROLL_X 0xA5
+#define REG_SCREEN_SCROLL_Y 0xA6
+#define REG_SCREEN_BORDER_COLOR 0xA7
 
 #define REG_FW_VERSION_MAJOR 0xC3
 #define REG_FW_VERSION_MAJOR_DEFAULT 0x01
