@@ -59,6 +59,7 @@ namespace Ep128 {
     void updateMouseSpeed(uint8_t binValue);
     void updateAnyGfxEnabled();
     void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
+    void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum);
     size_t curLine;
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
@@ -102,6 +103,7 @@ namespace Ep128 {
 #define SPRITEEXT_REG_INDEX 0x0
 #define SPRITEEXT_REG_ACCESS 0x1
 #define SPRITEEXT_REG_INCREMENT 0x2
+#define SPRITEEXT_REG_INCREMENT_DEFAULT 0x1
 #define SPRITEEXT_SEC_REG_INDEX 0x4
 #define SPRITEEXT_SEC_REG_ACCESS 0x5
 #define SPRITEEXT_SEC_REG_INCREMENT 0x6
@@ -167,7 +169,7 @@ namespace Ep128 {
 #define REG_FW_VERSION_MAJOR 0xC3
 #define REG_FW_VERSION_MAJOR_DEFAULT 0x01
 #define REG_FW_VERSION_MINOR 0xC4
-#define REG_FW_VERSION_MINOR_DEFAULT 0x02
+#define REG_FW_VERSION_MINOR_DEFAULT 0x03
 #define REG_USB_INIT 0xD0
 #define REG_USB_INIT_DEFAULT 0x01
 #define REG_USB_MOUSE_BUTTONS 0xD1
