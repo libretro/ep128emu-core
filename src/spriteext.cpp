@@ -34,18 +34,13 @@
    - State save/load support
 
    TVC256++ gfx:
-   - Write to port 0x00 to set sprite border as well
-   - Sprite only gfx
-   - fix resolution when overlay on top of graphics 2
+   - Write to port 0x00 to set scroll border as well
    - Scroll
-   - Sprite 2-color
-   - Sprite 16-color
-   - Sprite foreground / background
+   - 2-byte sprite position handling
    - Ext graphics calculation delay from prev line
-   - Sprite registers
+   - Sprite collision
    - Sprite interrupt
    - Screen height setting
-   - Test bitmap with lot of transparency
    
    TVC256++ drives:
    - USB drive handling
@@ -78,13 +73,24 @@
 #include "tvcmem.hpp"
 #include "ide.hpp"
 
+#define SET_BIT(p,n) (p) |=  (1 << (n))
+#define CLR_BIT(p,n) (p) &= ~(1 << (n))
+#define UPD_BIT(p,n,v) if ((v)) (p) |=  (1 << (n)); else (p) &= ~(1 << (n))
 namespace Ep128 {
 
-  // Port masks for the upper 128 named ports - lower half needs no mask
-  static const uint8_t namedPortMasks[128] = {
+  // Port masks to prevent unreasonable values on write
+  static const uint8_t namedPortMasks[256] = {
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+    0xF,  0xF,  0xF,  0xF, 0xF,  0xF,  0xF,  0xF, 0xF,0xF,0xF,0xF, 0xF,0xF,0xF,0xF,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
+      1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
+      1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
-   0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87, 0x0f,   0,  0,  0,  0,   0,  0,  0,  0,
+   0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87,  0xF,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
@@ -102,8 +108,9 @@ namespace Ep128 {
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
-    io_port_values[SPRITEEXT_REG_INCREMENT] = 0x01;
-    io_port_values[SPRITEEXT_SEC_REG_INCREMENT] = 0x01;
+
+    io_port_values[SPRITEEXT_REG_INCREMENT]     = SPRITEEXT_REG_INCREMENT_DEFAULT;
+    io_port_values[SPRITEEXT_SEC_REG_INCREMENT] = SPRITEEXT_REG_INCREMENT_DEFAULT;
 
     for (int i = 0; i < 256; i++)
       namedPortValues[i] = 0x00;
@@ -133,10 +140,12 @@ namespace Ep128 {
     }
   }
 
+  // Convert one 4-bit 16-color value to a 8-bit TVCemu specific format
+  // except when color is transparent - then fall back to provided value
   uint8_t SpriteExt::i4ToTVCRGB(uint8_t val, uint8_t transparent_val)
   {
     // igrb with double bits - see TVCVideo::convertPixelToRGB
-    // todo: replace with fixed palette conversion array
+    // todo: replace with fixed palette conversion array for emulation speed
     if (val == SPRITEEXT_TRANSPARENT_COLOR)
       return transparent_val;
     uint8_t r = (val & 0x04) ? 0x0C : 0x00;
@@ -197,7 +206,13 @@ namespace Ep128 {
          retval = REG_USB_INIT_DEFAULT;
          break;
        case REG_USB_MOUSE_SPEED:
-         retval = namedPortValues[REG_USB_MOUSE_SPEED];
+       case REG_MEMORY_P2:
+       case REG_MEMORY_P3:
+       case REG_MEMORY_MAP_8M_P2_LOW:
+       case REG_MEMORY_MAP_8M_P2_HIGH:
+       case REG_MEMORY_MAP_8M_P3_LOW:
+       case REG_MEMORY_MAP_8M_P3_HIGH:
+         retval = namedPortValues[portAddr];
        break;
        default:
          // Video related ports are read instantly (lot of TODO here)
@@ -219,18 +234,90 @@ namespace Ep128 {
   void SpriteExt::writeNamedPort(bool secondary, uint8_t value)
   {
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
+     
+     // Apply mask to prevent illegal values
+     if (namedPortMasks[portAddr])
+        value = value & namedPortMasks[portAddr];
+
      switch (portAddr)
      {
+       // Note: rest of mouse handling is done in TVC64VM::ioPortReadCallback
+       // to avoid passing emulated mouse data
        case REG_USB_MOUSE_SPEED:
          namedPortValues[REG_USB_MOUSE_SPEED] = value;
          updateMouseSpeed(value);
        break;
+       // Combined enable/disable registers.
+       // Note: these are delayed on real HW
+       case REG_SPRITE_FOREGROUND_LOW:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_FOREGROUND + i] = value & (1<<i) ? 1 : 0;
+         }
+       break;
+       case REG_SPRITE_FOREGROUND_HIGH:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_FOREGROUND + 8 + i] = value & (1<<i) ? 1 : 0;
+         }
+         break;
+       case REG_SPRITE_ENABLE_LOW:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_ENABLE + i] = value & (1<<i) ? 1 : 0;
+         }
+       break;
+       case REG_SPRITE_ENABLE_HIGH:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_ENABLE + 8 + i] = value & (1<<i) ? 1 : 0;
+         }
+         break;
+       case REG_SPRITE_COLORMODE_LOW:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_COLORMODE + i] = value & (1<<i) ? 1 : 0;
+         }
+       break;
+       case REG_SPRITE_COLORMODE_HIGH:
+         namedPortValues[portAddr] = value;
+         for (int i = 0; i< 8; i++)
+         {
+            namedPortValues[REG_SPRITE_COLORMODE + 8 + i] = value & (1<<i) ? 1 : 0;
+         }
+         break;
        default:
-         if (portAddr > 127)
-           value = value & namedPortMasks[portAddr-128];
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
             namedPortValues[portAddr] = value;
+
+         // Update bits of combined registers separately
+         if (portAddr >= REG_SPRITE_FOREGROUND && portAddr < REG_SPRITE_FOREGROUND + SPRITEEXT_SPRITE_MAX)
+         {
+            if (portAddr < REG_SPRITE_FOREGROUND + 0x08)
+               UPD_BIT(namedPortValues[REG_SPRITE_FOREGROUND_LOW ], portAddr - REG_SPRITE_FOREGROUND,        value);
+            else
+               UPD_BIT(namedPortValues[REG_SPRITE_FOREGROUND_HIGH], portAddr - REG_SPRITE_FOREGROUND - 0x08, value);
+         }
+         else if (portAddr >= REG_SPRITE_ENABLE && portAddr < REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX)
+         {
+            if (portAddr < REG_SPRITE_ENABLE     + 0x08)
+               UPD_BIT(namedPortValues[REG_SPRITE_ENABLE_LOW     ], portAddr - REG_SPRITE_ENABLE,            value);
+            else
+               UPD_BIT(namedPortValues[REG_SPRITE_ENABLE_HIGH    ], portAddr - REG_SPRITE_ENABLE     - 0x08, value);
+         }
+         else if (portAddr >= REG_SPRITE_COLORMODE && portAddr < REG_SPRITE_COLORMODE + SPRITEEXT_SPRITE_MAX)
+         {
+            if (portAddr < REG_SPRITE_COLORMODE  + 0x08)
+               UPD_BIT(namedPortValues[REG_SPRITE_COLORMODE_LOW  ], portAddr - REG_SPRITE_COLORMODE,         value);
+            else
+               UPD_BIT(namedPortValues[REG_SPRITE_COLORMODE_HIGH ], portAddr - REG_SPRITE_COLORMODE  - 0x08, value);
+         }
      }
 
   // Increment register index after operation
@@ -245,9 +332,11 @@ namespace Ep128 {
 
   void SpriteExt::updateMouseSpeed(uint8_t binValue)
   {
-     mouse_speed = ((binValue & 0xC) >> 6) + (float)(binValue & 0x1F) * 1/32;
+     // Special format: top 2 bits whole + bottom 5(!) bits fraction
+     mouse_speed = ((binValue & 0xC0) >> 6) + (float)(binValue & 0x1F) * 1/32;
   }
 
+  // Speed shortcut: if there isn't any gfx enhancement enabled, whole updateLine can be skipped
   void SpriteExt::updateAnyGfxEnabled()
   {
      for (int i=0; i<16; i++)
@@ -260,6 +349,44 @@ namespace Ep128 {
      }
      anyGfxEnabled = (bool) namedPortValues[REG_SCREEN_VIDEOMODE];
   }
+  
+  // Sprite handling. Note that "slot" consists of 16 pixels, but in the full PAL resolution
+  // to process transparency correctly also in case of graphics 2,
+  // while sprites only support vertical 256 pixels, so each result pixel is doubled
+  void SpriteExt::updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum)
+  {
+     for (size_t j=0; j<8; j++)
+     {
+        int spritePosX = ((currSlot - 1) * 16 + j*2 - (namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
+        if (spritePosX < 0 || spritePosX > 23)
+         continue;
+        int spritePosY = curLine - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
+        if (spritePosY < 0 || spritePosY > 20)
+         continue;
+        // 2-color sprite: one line of 24 pixels is 3 bytes, bitmapped, color from register
+        if (namedPortValues[REG_SPRITE_COLORMODE + spriteNum] == 0)
+        {
+           uint32_t spriteBaseAddr  = 
+                      ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
+                      spriteNum * 0x400 +
+                      namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x40 +
+                      spritePosY * 3;
+           uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
+           if (spriteBits & (uint32_t)(1 << 23-spritePosX))
+              buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+spriteNum], buf[j*2]);
+        // 16-color sprite: one line of 24 pixels is 12 bytes, one per nibble incl. color w/transparency
+        } else {
+           uint32_t spriteBaseAddr  = 
+                      ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
+                      spriteNum * 0x1000 +
+                      namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x100 +
+                      spritePosY * 12 + (spritePosX >> 1);
+           uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)>>4) & 0x0F : mem->readRaw(spriteBaseAddr) & 0x0F;
+           buf[j*2    ] = i4ToTVCRGB(spriteBits, buf[j*2    ]);
+           buf[j*2 + 1] = i4ToTVCRGB(spriteBits, buf[j*2 + 1]);
+        }
+     }
+  }
 
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
   void SpriteExt::updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem)
@@ -270,24 +397,7 @@ namespace Ep128 {
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
         {
-           for (size_t j=0; j<8; j++)
-           {
-              int spritePosX = ((currSlot - 1) * 16 + j*2 - (namedPortValues[REG_SPRITE_X+i*2] - 24)*2)/2;
-              if (spritePosX < 0 || spritePosX > 23)
-               continue;
-              int spritePosY = curLine - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+i*2] - 21);
-              if (spritePosY < 0 || spritePosY > 20)
-               continue;
-      uint32_t spriteBaseAddr  = ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
-                            i*0x400 +
-                            namedPortValues[REG_SPRITE_PHASE+i] * 0x40 +
-                            spritePosY * 3;
-      uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
-      //printf("Sprite: line %d slot %d j %d x %d y %d bits %08x\n", curLine, currSlot, j, spritePosX, spritePosY,spriteBits);
-      if (spriteBits & (uint32_t)(1 << spritePosX))
-         buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+i], buf[j*2]);
-
-           }
+              updateLineWithSprite(buf, currSlot, mem, i);
         }
      }
 
@@ -391,6 +501,15 @@ namespace Ep128 {
       buf[14] = i4ToTVCRGB(fontVal, buf[14]);
       buf[15] = i4ToTVCRGB(fontVal, buf[15]);
     }
+
+     // Repeat sprite calc for foreground
+     for (size_t i=0; i<16; i++)
+     {
+        if (namedPortValues[REG_SPRITE_ENABLE+i] && namedPortValues[REG_SPRITE_FOREGROUND+i])
+        {
+           updateLineWithSprite(buf, currSlot, mem, i);
+        }
+     }
   }
 
   const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)
@@ -411,6 +530,7 @@ namespace Ep128 {
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
+      // Several modes do not occur in content area (or at all in case of TVC), those can be just copied
       case 0x00:                        // 16 pixel blank coded on 1 byte
         do {
             buf_[outPos] = 0x00;
@@ -481,7 +601,7 @@ namespace Ep128 {
             break;
         } while (bufp[0] == 0x04);
         break;
-      case 0x06:                        // 16 (2*8) pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
+      case 0x06:                        // 2*8*2 pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
         do {
             currSlot++;
             unsigned char c0 = bufp[1];

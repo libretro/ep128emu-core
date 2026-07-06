@@ -59,6 +59,7 @@ namespace Ep128 {
     void updateMouseSpeed(uint8_t binValue);
     void updateAnyGfxEnabled();
     void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
+    void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum);
     size_t curLine;
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
@@ -102,6 +103,7 @@ namespace Ep128 {
 #define SPRITEEXT_REG_INDEX 0x0
 #define SPRITEEXT_REG_ACCESS 0x1
 #define SPRITEEXT_REG_INCREMENT 0x2
+#define SPRITEEXT_REG_INCREMENT_DEFAULT 0x1
 #define SPRITEEXT_SEC_REG_INDEX 0x4
 #define SPRITEEXT_SEC_REG_ACCESS 0x5
 #define SPRITEEXT_SEC_REG_INCREMENT 0x6
@@ -110,6 +112,7 @@ namespace Ep128 {
 #define SPRITEEXT_LAST_LINE 266
 #define SPRITEEXT_TRANSPARENT_COLOR 0x08
 
+#define SPRITEEXT_SPRITE_MAX 0x0F
 #define REG_SPRITE_X 0x00
 #define REG_SPRITE_Y 0x20
 #define REG_SPRITE_COLOR 0x40
@@ -117,13 +120,22 @@ namespace Ep128 {
 #define REG_SPRITE_FOREGROUND 0x60
 #define REG_SPRITE_ENABLE 0x70
 #define REG_SPRITE_COLORMODE 0x80
+#define REG_SPRITE_ENABLE_LOW 0x90
+#define REG_SPRITE_ENABLE_HIGH 0x91
+#define REG_SPRITE_FOREGROUND_LOW 0x92
+#define REG_SPRITE_FOREGROUND_HIGH 0x93
+#define REG_SPRITE_COLORMODE_LOW 0x94
+#define REG_SPRITE_COLORMODE_HIGH 0x95
+
+
 #define REG_SPRITE_OFFSET_X 24
 #define REG_SPRITE_OFFSET_Y 21+6
 #define REG_SPRITE_BASE_ADDR 0x9E
+
 #define REG_MEMORY_P2 0xB0
-#define REG_MEMORY_P2_DEFAULT 0xFF /* 0x04 */
+#define REG_MEMORY_P2_DEFAULT 0xFF /* default would be 0x04, changed for DevTool compatibility */
 #define REG_MEMORY_P3 0xB1
-#define REG_MEMORY_P3_DEFAULT 0xFF /* 0x05 */
+#define REG_MEMORY_P3_DEFAULT 0xFF /* default would be 0x05, changed for DevTool compatibility */
 #define REG_MEMORY_MAP_8M_P2_LOW 0xB2
 #define REG_MEMORY_MAP_8M_P2_LOW_DEFAULT 0x0
 #define REG_MEMORY_MAP_8M_P2_HIGH 0xB3
@@ -132,6 +144,14 @@ namespace Ep128 {
 #define REG_MEMORY_MAP_8M_P3_HIGH 0xB5
 #define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
 // Hardware default: 8 MB / 0x08, emulated: 2 MB / 0x02
+#define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
+// Some constants moved to tvcmem.hpp:
+// #define TVC256_FASTRAM_START_SEGMENT 0xE8
+// #define TVC256_SLOWRAM_START_SEGMENT 0x68
+#define SPRITEEXT_MEM_PAGE_MAX 0x0F
+#define SPRITEEXT_MEM_PAGE_PSRAM_P2 0x10
+#define SPRITEEXT_MEM_PAGE_PSRAM_P3 0x11
+
 #define REG_SCREEN_BITMAP_BASE_ADDR 0xA4
 #define REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT 0x01
 #define REG_SCREEN_VIDEOMODE 0xA0
@@ -145,17 +165,11 @@ namespace Ep128 {
 #define REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT 0x02
 #define REG_SCREEN_FONT_BASE_ADDR 0xA3
 #define REG_SCREEN_FONT_BASE_ADDR_DEFAULT 0x02
-#define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
-#define SPRITEEXT_MEM_PAGE_BASE_SEGMENT 0xE8
-#define SPRITEEXT_MEM_PAGE_MAX 0x0F
-#define SPRITEEXT_MEM_PAGE_PSRAM_BASE_SEGMENT 0x68
-#define SPRITEEXT_MEM_PAGE_PSRAM_P2 0x10
-#define SPRITEEXT_MEM_PAGE_PSRAM_P3 0x11
-#define SPRITEEXT_MEM_DISABLE 0xFF
+
 #define REG_FW_VERSION_MAJOR 0xC3
 #define REG_FW_VERSION_MAJOR_DEFAULT 0x01
 #define REG_FW_VERSION_MINOR 0xC4
-#define REG_FW_VERSION_MINOR_DEFAULT 0x02
+#define REG_FW_VERSION_MINOR_DEFAULT 0x03
 #define REG_USB_INIT 0xD0
 #define REG_USB_INIT_DEFAULT 0x01
 #define REG_USB_MOUSE_BUTTONS 0xD1
