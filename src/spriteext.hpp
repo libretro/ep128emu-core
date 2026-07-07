@@ -83,7 +83,10 @@ namespace Ep128 {
     void openImage(const char *sdimg_path);
     void openROMFile(const char *fileName);
     uint8_t readNamedPort(bool secondary);
-    void writeNamedPort(bool secondary, uint8_t value);
+    void   writeNamedPort(bool secondary, uint8_t value);
+    uint8_t readNamedPortDebug(uint8_t portIndex);
+    void   writeNamedPortDebug(uint8_t portIndex, uint8_t value);
+
     const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
