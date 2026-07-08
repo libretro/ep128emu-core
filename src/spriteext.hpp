@@ -61,6 +61,12 @@ namespace Ep128 {
     void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
     void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum);
     size_t curLine;
+    size_t scrollX;
+    size_t scrollY;
+    bool scrollBorderX;
+    bool scrollBorderY;
+    uint8_t overlayBuffer[16];
+    uint8_t overlayBufferPrev[16];
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
    public:
@@ -79,7 +85,10 @@ namespace Ep128 {
     void openImage(const char *sdimg_path);
     void openROMFile(const char *fileName);
     uint8_t readNamedPort(bool secondary);
-    void writeNamedPort(bool secondary, uint8_t value);
+    void   writeNamedPort(bool secondary, uint8_t value);
+    uint8_t readNamedPortDebug(uint8_t portIndex);
+    void   writeNamedPortDebug(uint8_t portIndex, uint8_t value);
+
     const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
@@ -165,6 +174,9 @@ namespace Ep128 {
 #define REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT 0x02
 #define REG_SCREEN_FONT_BASE_ADDR 0xA3
 #define REG_SCREEN_FONT_BASE_ADDR_DEFAULT 0x02
+#define REG_SCREEN_SCROLL_X 0xA5
+#define REG_SCREEN_SCROLL_Y 0xA6
+#define REG_SCREEN_BORDER_COLOR 0xA7
 
 #define REG_FW_VERSION_MAJOR 0xC3
 #define REG_FW_VERSION_MAJOR_DEFAULT 0x01

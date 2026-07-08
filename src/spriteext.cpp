@@ -34,8 +34,6 @@
    - State save/load support
 
    TVC256++ gfx:
-   - Write to port 0x00 to set scroll border as well
-   - Scroll
    - 2-byte sprite position handling
    - Ext graphics calculation delay from prev line
    - Sprite collision
@@ -104,7 +102,11 @@ namespace Ep128 {
       anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
       spriteExtAddress(0xFFFFFFFFU),
-      curLine(0)
+      curLine(0),
+      scrollX(0),
+      scrollY(0),
+      scrollBorderX(false),
+      scrollBorderY(false)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -291,6 +293,16 @@ namespace Ep128 {
             namedPortValues[REG_SPRITE_COLORMODE + 8 + i] = value & (1<<i) ? 1 : 0;
          }
          break;
+       case REG_SCREEN_SCROLL_X:
+         namedPortValues[portAddr] = value;
+         scrollX = value & 0x07;
+         scrollBorderX = value & 0x80;
+         break;
+       case REG_SCREEN_SCROLL_Y:
+         namedPortValues[portAddr] = value;
+         scrollY = value & 0x07;
+         scrollBorderY = value & 0x80;
+         break;
        default:
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
@@ -330,6 +342,18 @@ namespace Ep128 {
 
   }
 
+  uint8_t SpriteExt::readNamedPortDebug(uint8_t portIndex)
+  {
+     return namedPortValues[portIndex];
+  }
+
+  void SpriteExt::writeNamedPortDebug(uint8_t portIndex, uint8_t value)
+  {
+     if (namedPortMasks[portIndex])
+        value = value & namedPortMasks[portIndex];
+     namedPortValues[portIndex] = value;
+  }
+
   void SpriteExt::updateMouseSpeed(uint8_t binValue)
   {
      // Special format: top 2 bits whole + bottom 5(!) bits fraction
@@ -348,6 +372,7 @@ namespace Ep128 {
       }      
      }
      anyGfxEnabled = (bool) namedPortValues[REG_SCREEN_VIDEOMODE];
+     // Scroll in itself is not changing anything if there is no sprite / overlay
   }
   
   // Sprite handling. Note that "slot" consists of 16 pixels, but in the full PAL resolution
@@ -357,10 +382,10 @@ namespace Ep128 {
   {
      for (size_t j=0; j<8; j++)
      {
-        int spritePosX = ((currSlot - 1) * 16 + j*2 - (namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
+        int spritePosX = (currSlot * 16 + j*2 - (namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
         if (spritePosX < 0 || spritePosX > 23)
          continue;
-        int spritePosY = curLine - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
+        int spritePosY = curLine - scrollY - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
         if (spritePosY < 0 || spritePosY > 20)
          continue;
         // 2-color sprite: one line of 24 pixels is 3 bytes, bitmapped, color from register
@@ -381,7 +406,7 @@ namespace Ep128 {
                       spriteNum * 0x1000 +
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x100 +
                       spritePosY * 12 + (spritePosX >> 1);
-           uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)>>4) & 0x0F : mem->readRaw(spriteBaseAddr) & 0x0F;
+           uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)) & 0x0F : (mem->readRaw(spriteBaseAddr)>>4) & 0x0F;
            buf[j*2    ] = i4ToTVCRGB(spriteBits, buf[j*2    ]);
            buf[j*2 + 1] = i4ToTVCRGB(spriteBits, buf[j*2 + 1]);
         }
@@ -391,7 +416,25 @@ namespace Ep128 {
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
   void SpriteExt::updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem)
   {
-     uint8_t * buf = &buf_[outPos];
+     // can be maybe simplified later as transparency can be handled once
+     uint8_t * buf = &overlayBuffer[0];
+     for (size_t i=0; i<16; i++)
+     {
+        overlayBuffer[i] = SPRITEEXT_TRANSPARENT_COLOR;
+        if (currSlot == 0)
+         overlayBufferPrev[i] = SPRITEEXT_TRANSPARENT_COLOR;
+     }
+
+     // Scroll border top/bottom
+     if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8))
+     {
+        for (size_t i=0; i<16; i++)
+        {
+          buf = &buf_[outPos];
+          buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
+        }
+        return;
+     }
 
      for (size_t i=0; i<16; i++)
      {
@@ -406,7 +449,7 @@ namespace Ep128 {
      {
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine - SPRITEEXT_FIRST_LINE) * 128 + (currSlot-1)*4;
+              (curLine - scrollY - SPRITEEXT_FIRST_LINE) * 128 + currSlot*4;
         buf[ 0] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0]);
         buf[ 1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1]);
         buf[ 2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2]);
@@ -427,14 +470,14 @@ namespace Ep128 {
      // 2-color char mode: char value points to font definition, if bit is set then use color map
      else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
      {
-      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine - scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
-                            charLine.quot * 32 + (currSlot-1);
+                            charLine.quot * 32 + currSlot;
       uint8_t charVal    = mem->readRaw(charAddr);
       uint32_t colorAddr = (TVC256_FASTRAM_START_SEGMENT<<14) +
                             namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR]*0x400 +
-                            charLine.quot * 32 + (currSlot-1);
+                            charLine.quot * 32 + currSlot;
       uint8_t colorVal   = mem->readRaw(colorAddr);
       uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
                             namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
@@ -460,10 +503,10 @@ namespace Ep128 {
     // 16-color char mode: char value points to font definition, one nibble (half byte) of font definition -- one pixel
     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
     {
-      div_t charLine = div(curLine - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine - scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
-                            charLine.quot * 32 + (currSlot-1);
+                            charLine.quot * 32 + currSlot;
       uint8_t charVal    = mem->readRaw(charAddr);
       uint32_t fontAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) +
                             namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
@@ -510,6 +553,28 @@ namespace Ep128 {
            updateLineWithSprite(buf, currSlot, mem, i);
         }
      }
+
+     // Combine the overlay buffer (which may be horizontally shifted) with the 
+     buf = &buf_[outPos];
+     for (size_t i=0; i<16; i++)
+     {
+        if (scrollBorderX && currSlot == 0)
+        {
+           buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
+        }
+        else if (i<scrollX*2)
+        {
+           buf[i] = overlayBufferPrev[16-scrollX*2 + i] == SPRITEEXT_TRANSPARENT_COLOR ? 
+              buf[i]:overlayBufferPrev[16-scrollX*2 + i];
+        }
+        else
+        {
+           buf[i] = overlayBuffer[i - scrollX*2] == SPRITEEXT_TRANSPARENT_COLOR ? 
+              buf[i]:overlayBuffer[i - scrollX*2];
+        }
+      }
+      for (size_t i=0; i<16; i++)
+         overlayBufferPrev[i] = overlayBuffer[i];
   }
 
   const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)
@@ -518,7 +583,7 @@ namespace Ep128 {
     const unsigned char *bufp = buf;
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
-    size_t currSlot = 0;
+    size_t currSlotPlus = 0;
     if (vsyncCnt>0)
       curLine = 0;
     else 
@@ -573,7 +638,7 @@ namespace Ep128 {
       // This way, overlay pixel calculation logic can be done only once for all modes.
       case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
         do {
-            currSlot++;
+            currSlotPlus++;
             buf_[outPos] = 0x09;
             buf_[outPos +  1] = bufp[1];
             buf_[outPos +  2] = bufp[1];
@@ -592,7 +657,7 @@ namespace Ep128 {
             buf_[outPos + 15] = bufp[4];
             buf_[outPos + 16] = bufp[4];
             
-            updateLineWithGfx(outPos+1, currSlot, mem);
+            updateLineWithGfx(outPos+1, currSlotPlus - 1, mem);
             bufp    +=  5;
             outPos  += 17;
             *nBytes += 12;
@@ -603,7 +668,7 @@ namespace Ep128 {
         break;
       case 0x06:                        // 2*8*2 pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
         do {
-            currSlot++;
+            currSlotPlus++;
             unsigned char c0 = bufp[1];
             unsigned char c1 = bufp[2];
             unsigned char b = bufp[3];
@@ -628,7 +693,7 @@ namespace Ep128 {
             buf_[outPos+15] = (b & 0x02) ? c1 : c0;
             buf_[outPos+16] = (b & 0x01) ? c1 : c0;
 
-            updateLineWithGfx(outPos+1, currSlot, mem);
+            updateLineWithGfx(outPos+1, currSlotPlus - 1, mem);
             bufp    +=  7;
             outPos  += 17;
             *nBytes += 10;
@@ -639,7 +704,7 @@ namespace Ep128 {
         break;
       case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC 4 color mode
         do {
-            currSlot++;
+            currSlotPlus++;
             buf_[outPos] = 0x09;
             buf_[outPos +  1] = bufp[1];
             buf_[outPos +  2] = bufp[1];
@@ -658,7 +723,7 @@ namespace Ep128 {
             buf_[outPos + 15] = bufp[8];
             buf_[outPos + 16] = bufp[8];
             
-            updateLineWithGfx(outPos+1, currSlot, mem);
+            updateLineWithGfx(outPos+1, currSlotPlus - 1, mem);
             bufp    +=  9;
             outPos  += 17;
             *nBytes +=  8;
