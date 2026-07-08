@@ -34,8 +34,6 @@
    - State save/load support
 
    TVC256++ gfx:
-   - Write to port 0x00 to set scroll border as well
-   - Scroll
    - 2-byte sprite position handling
    - Ext graphics calculation delay from prev line
    - Sprite collision
@@ -387,7 +385,7 @@ namespace Ep128 {
         int spritePosX = (currSlot * 16 + j*2 - (namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
         if (spritePosX < 0 || spritePosX > 23)
          continue;
-        int spritePosY = curLine - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
+        int spritePosY = curLine - scrollY - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
         if (spritePosY < 0 || spritePosY > 20)
          continue;
         // 2-color sprite: one line of 24 pixels is 3 bytes, bitmapped, color from register
@@ -408,7 +406,7 @@ namespace Ep128 {
                       spriteNum * 0x1000 +
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x100 +
                       spritePosY * 12 + (spritePosX >> 1);
-           uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)>>4) & 0x0F : mem->readRaw(spriteBaseAddr) & 0x0F;
+           uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)) & 0x0F : (mem->readRaw(spriteBaseAddr)>>4) & 0x0F;
            buf[j*2    ] = i4ToTVCRGB(spriteBits, buf[j*2    ]);
            buf[j*2 + 1] = i4ToTVCRGB(spriteBits, buf[j*2 + 1]);
         }
@@ -418,14 +416,21 @@ namespace Ep128 {
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
   void SpriteExt::updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem)
   {
-     uint8_t * buf = &buf_[outPos];
+     // can be maybe simplified later as transparency can be handled once
+     uint8_t * buf = &overlayBuffer[0];
+     for (size_t i=0; i<16; i++)
+     {
+        overlayBuffer[i] = SPRITEEXT_TRANSPARENT_COLOR;
+        if (currSlot == 0)
+         overlayBufferPrev[i] = SPRITEEXT_TRANSPARENT_COLOR;
+     }
 
      // Scroll border top/bottom
-     if ((scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8)) ||
-         (scrollBorderX && (currSlot == 0                      || currSlot == 31)))
+     if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8))
      {
         for (size_t i=0; i<16; i++)
         {
+          buf = &buf_[outPos];
           buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
         }
         return;
@@ -444,7 +449,7 @@ namespace Ep128 {
      {
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
-              (curLine + scrollY - SPRITEEXT_FIRST_LINE) * 128 + currSlot*4;
+              (curLine - scrollY - SPRITEEXT_FIRST_LINE) * 128 + currSlot*4;
         buf[ 0] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0]);
         buf[ 1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1]);
         buf[ 2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2]);
@@ -465,7 +470,7 @@ namespace Ep128 {
      // 2-color char mode: char value points to font definition, if bit is set then use color map
      else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
      {
-      div_t charLine = div(curLine + scrollY - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine - scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
                             charLine.quot * 32 + currSlot;
@@ -498,7 +503,7 @@ namespace Ep128 {
     // 16-color char mode: char value points to font definition, one nibble (half byte) of font definition -- one pixel
     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
     {
-      div_t charLine = div(curLine + scrollY - SPRITEEXT_FIRST_LINE, 8);
+      div_t charLine = div(curLine - scrollY - SPRITEEXT_FIRST_LINE, 8);
       uint32_t charAddr  = (TVC256_FASTRAM_START_SEGMENT<<14) + 
                             namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR]*0x400 +
                             charLine.quot * 32 + currSlot;
@@ -548,6 +553,28 @@ namespace Ep128 {
            updateLineWithSprite(buf, currSlot, mem, i);
         }
      }
+
+     // Combine the overlay buffer (which may be horizontally shifted) with the 
+     buf = &buf_[outPos];
+     for (size_t i=0; i<16; i++)
+     {
+        if (scrollBorderX && currSlot == 0)
+        {
+           buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
+        }
+        else if (i<scrollX*2)
+        {
+           buf[i] = overlayBufferPrev[16-scrollX*2 + i] == SPRITEEXT_TRANSPARENT_COLOR ? 
+              buf[i]:overlayBufferPrev[16-scrollX*2 + i];
+        }
+        else
+        {
+           buf[i] = overlayBuffer[i - scrollX*2] == SPRITEEXT_TRANSPARENT_COLOR ? 
+              buf[i]:overlayBuffer[i - scrollX*2];
+        }
+      }
+      for (size_t i=0; i<16; i++)
+         overlayBufferPrev[i] = overlayBuffer[i];
   }
 
   const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)

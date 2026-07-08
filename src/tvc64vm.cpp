@@ -894,11 +894,11 @@ namespace TVC64 {
       vm.videoRenderer.setColor(4, value);
 #ifdef ENABLE_SPRITEEXT
       // IGRB double-bits -> IRGB 4-bit
-      vm.spriteext.io_port_values[REG_SCREEN_BORDER_COLOR] = 
-        ((value & 0x40)>>3) |
-        ((value & 0x10)>>3) |
-        ((value & 0x04)   ) |
-        ((value & 0x01)   );
+      vm.spriteext.writeNamedPortDebug(REG_SCREEN_BORDER_COLOR,  
+        ((value & 0x80)>>4) |
+        ((value & 0x20)>>4) |
+        ((value & 0x08)>>1) |
+        ((value & 0x02)>>1));
 #endif
       break;
     case 0x01:                          // printer data output (unimplemented)
@@ -1164,6 +1164,10 @@ namespace TVC64 {
       retval = vm.crtc.readRegister(vm.crtcRegisterSelected);
       break;
     }
+#ifdef ENABLE_SPRITEEXT
+    if (addr > 0xFF && addr < 0x200)
+      retval = vm.spriteext.readNamedPortDebug(addr - 0x100);
+#endif // ENABLE_SPRITEEXT
     return retval;
   }
 

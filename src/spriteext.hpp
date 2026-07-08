@@ -65,6 +65,8 @@ namespace Ep128 {
     size_t scrollY;
     bool scrollBorderX;
     bool scrollBorderY;
+    uint8_t overlayBuffer[16];
+    uint8_t overlayBufferPrev[16];
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
 
    public:
