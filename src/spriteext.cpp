@@ -32,11 +32,14 @@
    - Fix standalone version joystick handling in Linux
    - Fake gamecard rom for presenting the ID string
    - State save/load support
+   - Improve performance
+   - Debug ports: show tvcext ports from 256-512
+   - Enable/disable tvc256 on demand
 
    TVC256++ gfx:
    - 2-byte sprite position handling
    - Ext graphics calculation delay from prev line
-   - Sprite collision
+   - Sprite collision -- what about under the border?
    - Sprite interrupt
    - Screen height setting
    
@@ -52,7 +55,7 @@
    - Reset handling (cold, warm)
    - Function registers
    - Function implementation
-   - File I/O disable from rom (use tvcfileio in emulator instead)
+   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio
    - Extra file i/o functions (get_pwd .. seek_file)
    - File i/o functions for card (get_iobase, get_membase)
 
@@ -71,6 +74,7 @@
 #include "tvcmem.hpp"
 #include "ide.hpp"
 
+#define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
 #define CLR_BIT(p,n) (p) &= ~(1 << (n))
 #define UPD_BIT(p,n,v) if ((v)) (p) |=  (1 << (n)); else (p) &= ~(1 << (n))
@@ -157,6 +161,20 @@ namespace Ep128 {
     return (i |r | g | b);
   }
 
+  uint8_t SpriteExt::i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit)
+  {
+    // igrb with double bits - see TVCVideo::convertPixelToRGB
+    // todo: replace with fixed palette conversion array for emulation speed
+    if (val == SPRITEEXT_TRANSPARENT_COLOR)
+      return transparent_val;
+    SET_BIT(*collision_mask,collision_bit);
+    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
+    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
+    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
+    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
+    return (i |r | g | b);
+  }
+  
   void SpriteExt::setEnabled(bool isEnabled)
   {
     spriteExt_enabled = isEnabled;
@@ -195,6 +213,7 @@ namespace Ep128 {
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
      switch (portAddr)
      {
+       // Fixed defaults
        case REG_FW_VERSION_MAJOR:
          retval = REG_FW_VERSION_MAJOR_DEFAULT;
          break;
@@ -207,6 +226,7 @@ namespace Ep128 {
        case REG_USB_INIT:
          retval = REG_USB_INIT_DEFAULT;
          break;
+       // Simple reads above the video port range
        case REG_USB_MOUSE_SPEED:
        case REG_MEMORY_P2:
        case REG_MEMORY_P3:
@@ -215,6 +235,17 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
          retval = namedPortValues[portAddr];
+         break;
+       // Clear on read
+       case REG_SPRITE_SP_COLLISION_LOW:
+         retval = namedPortValues[portAddr];
+         namedPortValues[REG_SPRITE_SP_COLLISION_LOW ] = 0;
+         namedPortValues[REG_SPRITE_SP_COLLISION_HIGH] = 0;
+         break;
+       case REG_SPRITE_BG_COLLISION_LOW:
+         retval = namedPortValues[portAddr];
+         namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
+         namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
        break;
        default:
          // Video related ports are read instantly (lot of TODO here)
@@ -397,8 +428,13 @@ namespace Ep128 {
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x40 +
                       spritePosY * 3;
            uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
-           if (spriteBits & (uint32_t)(1 << 23-spritePosX))
+           // what about transparent sprite color?
+           if (spriteBits & (uint32_t)(1 << 23-spritePosX)) 
+           {
               buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+spriteNum], buf[j*2]);
+              SET_BIT(sprite_active_pixels[spriteNum],j*2  );
+              SET_BIT(sprite_active_pixels[spriteNum],j*2+1);
+           }
         // 16-color sprite: one line of 24 pixels is 12 bytes, one per nibble incl. color w/transparency
         } else {
            uint32_t spriteBaseAddr  = 
@@ -409,6 +445,11 @@ namespace Ep128 {
            uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)) & 0x0F : (mem->readRaw(spriteBaseAddr)>>4) & 0x0F;
            buf[j*2    ] = i4ToTVCRGB(spriteBits, buf[j*2    ]);
            buf[j*2 + 1] = i4ToTVCRGB(spriteBits, buf[j*2 + 1]);
+           if (spriteBits != SPRITEEXT_TRANSPARENT_COLOR)
+           {
+              SET_BIT(sprite_active_pixels[spriteNum],j*2  );
+              SET_BIT(sprite_active_pixels[spriteNum],j*2+1);
+           }
         }
      }
   }
@@ -420,10 +461,12 @@ namespace Ep128 {
      uint8_t * buf = &overlayBuffer[0];
      for (size_t i=0; i<16; i++)
      {
+        sprite_active_pixels[i] = 0;
         overlayBuffer[i] = SPRITEEXT_TRANSPARENT_COLOR;
         if (currSlot == 0)
          overlayBufferPrev[i] = SPRITEEXT_TRANSPARENT_COLOR;
      }
+     backgr_active_pixels = 0;
 
      // Scroll border top/bottom
      if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8))
@@ -440,7 +483,11 @@ namespace Ep128 {
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
         {
-              updateLineWithSprite(buf, currSlot, mem, i);
+           updateLineWithSprite(buf, currSlot, mem, i);
+        }
+        else
+        {
+           sprite_active_pixels[i] = 0;
         }
      }
 
@@ -450,22 +497,22 @@ namespace Ep128 {
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
               (curLine - scrollY - SPRITEEXT_FIRST_LINE) * 128 + currSlot*4;
-        buf[ 0] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0]);
-        buf[ 1] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1]);
-        buf[ 2] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2]);
-        buf[ 3] = i4ToTVCRGB(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 3]);
-        buf[ 4] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 4]);
-        buf[ 5] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 5]);
-        buf[ 6] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 6]);
-        buf[ 7] = i4ToTVCRGB(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 7]);
-        buf[ 8] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 8]);
-        buf[ 9] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 9]);
-        buf[10] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[10]);
-        buf[11] = i4ToTVCRGB(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[11]);
-        buf[12] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[12]);
-        buf[13] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[13]);
-        buf[14] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[14]);
-        buf[15] = i4ToTVCRGB(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[15]);
+        buf[ 0] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0], &backgr_active_pixels,  0);
+        buf[ 1] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1], &backgr_active_pixels,  1);
+        buf[ 2] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2], &backgr_active_pixels,  2);
+        buf[ 3] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 3], &backgr_active_pixels,  3);
+        buf[ 4] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 4], &backgr_active_pixels,  4);
+        buf[ 5] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 5], &backgr_active_pixels,  5);
+        buf[ 6] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 6], &backgr_active_pixels,  6);
+        buf[ 7] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 7], &backgr_active_pixels,  7);
+        buf[ 8] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 8], &backgr_active_pixels,  8);
+        buf[ 9] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 9], &backgr_active_pixels,  9);
+        buf[10] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[10], &backgr_active_pixels, 10);
+        buf[11] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[11], &backgr_active_pixels, 11);
+        buf[12] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[12], &backgr_active_pixels, 12);
+        buf[13] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 3) & 0x0F)     ), buf[13], &backgr_active_pixels, 13);
+        buf[14] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[14], &backgr_active_pixels, 14);
+        buf[15] = i4ToTVCRGB_coll(((mem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[15], &backgr_active_pixels, 15);
      }
      // 2-color char mode: char value points to font definition, if bit is set then use color map
      else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
@@ -483,22 +530,22 @@ namespace Ep128 {
                             namedPortValues[REG_SCREEN_FONT_BASE_ADDR]*0x800 +
                             charVal * 8 + charLine.rem;
       uint8_t fontVal = mem->readRaw(fontAddr);
-      buf[ 0] = fontVal & 0x80 ? i4ToTVCRGB(colorVal,buf[ 0]) : buf[ 0];
-      buf[ 1] = fontVal & 0x80 ? i4ToTVCRGB(colorVal,buf[ 1]) : buf[ 1];
-      buf[ 2] = fontVal & 0x40 ? i4ToTVCRGB(colorVal,buf[ 2]) : buf[ 2];
-      buf[ 3] = fontVal & 0x40 ? i4ToTVCRGB(colorVal,buf[ 3]) : buf[ 3];
-      buf[ 4] = fontVal & 0x20 ? i4ToTVCRGB(colorVal,buf[ 4]) : buf[ 4];
-      buf[ 5] = fontVal & 0x20 ? i4ToTVCRGB(colorVal,buf[ 5]) : buf[ 5];
-      buf[ 6] = fontVal & 0x10 ? i4ToTVCRGB(colorVal,buf[ 6]) : buf[ 6];
-      buf[ 7] = fontVal & 0x10 ? i4ToTVCRGB(colorVal,buf[ 7]) : buf[ 7];
-      buf[ 8] = fontVal & 0x08 ? i4ToTVCRGB(colorVal,buf[ 8]) : buf[ 8];
-      buf[ 9] = fontVal & 0x08 ? i4ToTVCRGB(colorVal,buf[ 9]) : buf[ 9];
-      buf[10] = fontVal & 0x04 ? i4ToTVCRGB(colorVal,buf[10]) : buf[10];
-      buf[11] = fontVal & 0x04 ? i4ToTVCRGB(colorVal,buf[11]) : buf[11];
-      buf[12] = fontVal & 0x02 ? i4ToTVCRGB(colorVal,buf[12]) : buf[12];
-      buf[13] = fontVal & 0x02 ? i4ToTVCRGB(colorVal,buf[13]) : buf[13];
-      buf[14] = fontVal & 0x01 ? i4ToTVCRGB(colorVal,buf[14]) : buf[14];
-      buf[15] = fontVal & 0x01 ? i4ToTVCRGB(colorVal,buf[15]) : buf[15];
+      buf[ 0] = fontVal & 0x80 ? i4ToTVCRGB_coll(colorVal,buf[ 0], &backgr_active_pixels,  0) : buf[ 0];
+      buf[ 1] = fontVal & 0x80 ? i4ToTVCRGB_coll(colorVal,buf[ 1], &backgr_active_pixels,  1) : buf[ 1];
+      buf[ 2] = fontVal & 0x40 ? i4ToTVCRGB_coll(colorVal,buf[ 2], &backgr_active_pixels,  2) : buf[ 2];
+      buf[ 3] = fontVal & 0x40 ? i4ToTVCRGB_coll(colorVal,buf[ 3], &backgr_active_pixels,  3) : buf[ 3];
+      buf[ 4] = fontVal & 0x20 ? i4ToTVCRGB_coll(colorVal,buf[ 4], &backgr_active_pixels,  4) : buf[ 4];
+      buf[ 5] = fontVal & 0x20 ? i4ToTVCRGB_coll(colorVal,buf[ 5], &backgr_active_pixels,  5) : buf[ 5];
+      buf[ 6] = fontVal & 0x10 ? i4ToTVCRGB_coll(colorVal,buf[ 6], &backgr_active_pixels,  6) : buf[ 6];
+      buf[ 7] = fontVal & 0x10 ? i4ToTVCRGB_coll(colorVal,buf[ 7], &backgr_active_pixels,  7) : buf[ 7];
+      buf[ 8] = fontVal & 0x08 ? i4ToTVCRGB_coll(colorVal,buf[ 8], &backgr_active_pixels,  8) : buf[ 8];
+      buf[ 9] = fontVal & 0x08 ? i4ToTVCRGB_coll(colorVal,buf[ 9], &backgr_active_pixels,  9) : buf[ 9];
+      buf[10] = fontVal & 0x04 ? i4ToTVCRGB_coll(colorVal,buf[10], &backgr_active_pixels, 10) : buf[10];
+      buf[11] = fontVal & 0x04 ? i4ToTVCRGB_coll(colorVal,buf[11], &backgr_active_pixels, 11) : buf[11];
+      buf[12] = fontVal & 0x02 ? i4ToTVCRGB_coll(colorVal,buf[12], &backgr_active_pixels, 12) : buf[12];
+      buf[13] = fontVal & 0x02 ? i4ToTVCRGB_coll(colorVal,buf[13], &backgr_active_pixels, 13) : buf[13];
+      buf[14] = fontVal & 0x01 ? i4ToTVCRGB_coll(colorVal,buf[14], &backgr_active_pixels, 14) : buf[14];
+      buf[15] = fontVal & 0x01 ? i4ToTVCRGB_coll(colorVal,buf[15], &backgr_active_pixels, 15) : buf[15];
     }
     // 16-color char mode: char value points to font definition, one nibble (half byte) of font definition -- one pixel
     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR16)
@@ -513,36 +560,36 @@ namespace Ep128 {
                             charVal * 8 * 4 + charLine.rem * 4;
       uint8_t fontVal;
       fontVal = ((mem->readRaw(fontAddr  ) & 0xF0)>>4);
-      buf[ 0] = i4ToTVCRGB(fontVal, buf[ 0]);
-      buf[ 1] = i4ToTVCRGB(fontVal, buf[ 1]);
+      buf[ 0] = i4ToTVCRGB_coll(fontVal, buf[ 0], &backgr_active_pixels,  0);
+      buf[ 1] = i4ToTVCRGB_coll(fontVal, buf[ 1], &backgr_active_pixels,  1);
 
       fontVal = ((mem->readRaw(fontAddr  ) & 0x0F));
-      buf[ 2] = i4ToTVCRGB(fontVal, buf[ 2]);
-      buf[ 3] = i4ToTVCRGB(fontVal, buf[ 3]);
+      buf[ 2] = i4ToTVCRGB_coll(fontVal, buf[ 2], &backgr_active_pixels,  2);
+      buf[ 3] = i4ToTVCRGB_coll(fontVal, buf[ 3], &backgr_active_pixels,  3);
 
       fontVal = ((mem->readRaw(fontAddr+1) & 0xF0)>>4);
-      buf[ 4] = i4ToTVCRGB(fontVal, buf[ 4]);
-      buf[ 5] = i4ToTVCRGB(fontVal, buf[ 5]);
+      buf[ 4] = i4ToTVCRGB_coll(fontVal, buf[ 4], &backgr_active_pixels,  4);
+      buf[ 5] = i4ToTVCRGB_coll(fontVal, buf[ 5], &backgr_active_pixels,  5);
 
       fontVal = ((mem->readRaw(fontAddr+1) & 0x0F));
-      buf[ 6] = i4ToTVCRGB(fontVal, buf[ 6]);
-      buf[ 7] = i4ToTVCRGB(fontVal, buf[ 7]);
+      buf[ 6] = i4ToTVCRGB_coll(fontVal, buf[ 6], &backgr_active_pixels,  6);
+      buf[ 7] = i4ToTVCRGB_coll(fontVal, buf[ 7], &backgr_active_pixels,  7);
 
       fontVal = ((mem->readRaw(fontAddr+2) & 0xF0)>>4);
-      buf[ 8] = i4ToTVCRGB(fontVal, buf[ 8]);
-      buf[ 9] = i4ToTVCRGB(fontVal, buf[ 9]);
+      buf[ 8] = i4ToTVCRGB_coll(fontVal, buf[ 8], &backgr_active_pixels,  8);
+      buf[ 9] = i4ToTVCRGB_coll(fontVal, buf[ 9], &backgr_active_pixels,  9);
 
       fontVal = ((mem->readRaw(fontAddr+2) & 0x0F));
-      buf[10] = i4ToTVCRGB(fontVal, buf[10]);
-      buf[11] = i4ToTVCRGB(fontVal, buf[11]);
+      buf[10] = i4ToTVCRGB_coll(fontVal, buf[10], &backgr_active_pixels, 10);
+      buf[11] = i4ToTVCRGB_coll(fontVal, buf[11], &backgr_active_pixels, 11);
 
       fontVal = ((mem->readRaw(fontAddr+3) & 0xF0)>>4);
-      buf[12] = i4ToTVCRGB(fontVal, buf[12]);
-      buf[13] = i4ToTVCRGB(fontVal, buf[13]);
+      buf[12] = i4ToTVCRGB_coll(fontVal, buf[12], &backgr_active_pixels, 12);
+      buf[13] = i4ToTVCRGB_coll(fontVal, buf[13], &backgr_active_pixels, 13);
 
       fontVal = ((mem->readRaw(fontAddr+3) & 0x0F));
-      buf[14] = i4ToTVCRGB(fontVal, buf[14]);
-      buf[15] = i4ToTVCRGB(fontVal, buf[15]);
+      buf[14] = i4ToTVCRGB_coll(fontVal, buf[14], &backgr_active_pixels, 14);
+      buf[15] = i4ToTVCRGB_coll(fontVal, buf[15], &backgr_active_pixels, 15);
     }
 
      // Repeat sprite calc for foreground
@@ -554,6 +601,46 @@ namespace Ep128 {
         }
      }
 
+     // Update sprite collision registers
+     for (size_t i=0; i<16; i++)
+     {
+        if (!sprite_active_pixels[i])
+           continue;
+        if (sprite_active_pixels[i] & backgr_active_pixels)
+        {
+           if (i<8)
+           {
+             SET_BIT(namedPortValues[REG_SPRITE_BG_COLLISION_LOW], i  );
+           }
+           else
+           {
+             SET_BIT(namedPortValues[REG_SPRITE_BG_COLLISION_HIGH],i-8);
+           }
+        }
+        for (size_t j=i+1; j<16; j++)
+        {
+           if(sprite_active_pixels[i] & sprite_active_pixels[j])
+           {
+              if (i<8)
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], i  );
+              }
+              else
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],i-8);
+              }
+              if (j<8)
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], j  );
+              }
+              else
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],j-8);
+              }
+              //printf("Sprite collision: %d vs. %d\n",i,j);
+           }
+        }
+     }
      // Combine the overlay buffer (which may be horizontally shifted) with the 
      buf = &buf_[outPos];
      for (size_t i=0; i<16; i++)
@@ -575,6 +662,7 @@ namespace Ep128 {
       }
       for (size_t i=0; i<16; i++)
          overlayBufferPrev[i] = overlayBuffer[i];
+
   }
 
   const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)

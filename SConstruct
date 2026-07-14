@@ -44,7 +44,7 @@ if buildRelease:
     if linux32CrossCompile or (mingwCrossCompile and not win64CrossCompile):
         compilerFlags = ' -march=pentium2 '
 if enableDebug and not buildRelease:
-    compilerFlags = ' -Wno-long-long -Wshadow -g -O0 ' + compilerFlags
+    compilerFlags = ' -Wno-long-long -g -O0 ' + compilerFlags
     compilerFlags = ' -Wall -W -pedantic -gstabs ' + compilerFlags
 else:
     compilerFlags = ' -Wall -O3 ' + compilerFlags

@@ -67,7 +67,10 @@ namespace Ep128 {
     bool scrollBorderY;
     uint8_t overlayBuffer[16];
     uint8_t overlayBufferPrev[16];
+    uint16_t backgr_active_pixels;
+    uint16_t sprite_active_pixels[16];
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
+    uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
 
    public:
     uint8_t io_port_values[16];
@@ -135,7 +138,10 @@ namespace Ep128 {
 #define REG_SPRITE_FOREGROUND_HIGH 0x93
 #define REG_SPRITE_COLORMODE_LOW 0x94
 #define REG_SPRITE_COLORMODE_HIGH 0x95
-
+#define REG_SPRITE_SP_COLLISION_LOW 0x96
+#define REG_SPRITE_SP_COLLISION_HIGH 0x97
+#define REG_SPRITE_BG_COLLISION_LOW 0x98
+#define REG_SPRITE_BG_COLLISION_HIGH 0x99
 
 #define REG_SPRITE_OFFSET_X 24
 #define REG_SPRITE_OFFSET_Y 21+6
