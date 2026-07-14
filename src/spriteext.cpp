@@ -32,6 +32,9 @@
    - Fix standalone version joystick handling in Linux
    - Fake gamecard rom for presenting the ID string
    - State save/load support
+   - Improve performance
+   - Debug ports: show tvcext ports from 256-512
+   - Enable/disable tvc256 on demand
 
    TVC256++ gfx:
    - 2-byte sprite position handling
@@ -52,7 +55,7 @@
    - Reset handling (cold, warm)
    - Function registers
    - Function implementation
-   - File I/O disable from rom (use tvcfileio in emulator instead)
+   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio
    - Extra file i/o functions (get_pwd .. seek_file)
    - File i/o functions for card (get_iobase, get_membase)
 
@@ -480,7 +483,11 @@ namespace Ep128 {
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
         {
-              updateLineWithSprite(buf, currSlot, mem, i);
+           updateLineWithSprite(buf, currSlot, mem, i);
+        }
+        else
+        {
+           sprite_active_pixels[i] = 0;
         }
      }
 
@@ -597,25 +604,40 @@ namespace Ep128 {
      // Update sprite collision registers
      for (size_t i=0; i<16; i++)
      {
+        if (!sprite_active_pixels[i])
+           continue;
         if (sprite_active_pixels[i] & backgr_active_pixels)
         {
            if (i<8)
+           {
              SET_BIT(namedPortValues[REG_SPRITE_BG_COLLISION_LOW], i  );
+           }
            else
+           {
              SET_BIT(namedPortValues[REG_SPRITE_BG_COLLISION_HIGH],i-8);
+           }
         }
         for (size_t j=i+1; j<16; j++)
         {
            if(sprite_active_pixels[i] & sprite_active_pixels[j])
            {
               if (i<8)
-               SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], i  );
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], i  );
+              }
               else
-               SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],i-8);
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],i-8);
+              }
               if (j<8)
-               SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], j  );
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_LOW], j  );
+              }
               else
-               SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],j-8);
+              {
+                 SET_BIT(namedPortValues[REG_SPRITE_SP_COLLISION_HIGH],j-8);
+              }
+              //printf("Sprite collision: %d vs. %d\n",i,j);
            }
         }
      }
