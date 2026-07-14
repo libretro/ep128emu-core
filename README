@@ -1,5 +1,5 @@
-ep128emu 2.0.11.2-core2
-=======================
+ep128emu 2.0.12.0
+=================
 
 ep128emu is an open source, portable emulator of the Enterprise 128,
 ZX Spectrum 48/128, Amstrad CPC 464/664/6128 and Videoton TVC computers,
@@ -168,6 +168,8 @@ Videoton TVC emulation
     selectable directory
   * SD card (SDEXT) emulation, this is an experimental feature based on
     code from LGB's Xep128 emulator
+  * TVC GameCard emulation in slot 2 for external joysticks 3 and 4
+  * TVC256++ card (SPRITEEXT) emulation - experimental feature
 
 Installation
 ============
@@ -177,10 +179,10 @@ Linux
 
 On Linux and other POSIX platforms, the emulator is installed from the
 source code, available at the GitHub download page
-  https://github.com/istvan-v/ep128emu/releases/
+  https://github.com/libretro/ep128emu-core
 or the most recent state of the code can be downloaded from Git with the
 following command:
-  git clone https://github.com/istvan-v/ep128emu.git
+  git clone https://github.com/libretro/ep128emu-core.git -b standalone
 In addition to the standard development tools (a recent version of the
 GNU C/C++ compiler, binutils, etc.), you need the following packages:
 
