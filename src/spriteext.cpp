@@ -37,9 +37,8 @@
    - Enable/disable tvc256 on demand
 
    TVC256++ gfx:
-   - 2-byte sprite position handling
    - Ext graphics calculation delay from prev line
-   - Sprite collision -- what about under the border?
+   - Sprite collision under the left/right border, both standard and extra (not under top/bottom)
    - Sprite interrupt
    - Screen height setting
    
@@ -413,10 +412,12 @@ namespace Ep128 {
   {
      for (size_t j=0; j<8; j++)
      {
-        int spritePosX = (currSlot * 16 + j*2 - (namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
+        int spritePosX = (currSlot * 16 + j*2 -
+               (namedPortValues[REG_SPRITE_X+spriteNum*2+1]*256 + namedPortValues[REG_SPRITE_X+spriteNum*2] - 24)*2)/2;
         if (spritePosX < 0 || spritePosX > 23)
          continue;
-        int spritePosY = curLine - scrollY - SPRITEEXT_FIRST_LINE - (namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
+        int spritePosY = curLine - scrollY - SPRITEEXT_FIRST_LINE - 
+                (namedPortValues[REG_SPRITE_Y+spriteNum*2+1]*256 + namedPortValues[REG_SPRITE_Y+spriteNum*2] - 21);
         if (spritePosY < 0 || spritePosY > 20)
          continue;
         // 2-color sprite: one line of 24 pixels is 3 bytes, bitmapped, color from register
@@ -424,7 +425,6 @@ namespace Ep128 {
         {
            uint32_t spriteBaseAddr  = 
                       ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
-                      spriteNum * 0x400 +
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x40 +
                       spritePosY * 3;
            uint32_t spriteBits = mem->readRaw(spriteBaseAddr) << 16 | mem->readRaw(spriteBaseAddr+1) << 8 | mem->readRaw(spriteBaseAddr+2);
@@ -439,7 +439,6 @@ namespace Ep128 {
         } else {
            uint32_t spriteBaseAddr  = 
                       ((TVC256_FASTRAM_START_SEGMENT+namedPortValues[REG_SPRITE_BASE_ADDR])<<14) + 
-                      spriteNum * 0x1000 +
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x100 +
                       spritePosY * 12 + (spritePosX >> 1);
            uint8_t spriteBits = (spritePosX) % 2 ? (mem->readRaw(spriteBaseAddr)) & 0x0F : (mem->readRaw(spriteBaseAddr)>>4) & 0x0F;
@@ -476,6 +475,7 @@ namespace Ep128 {
           buf = &buf_[outPos];
           buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
         }
+        // No collision detection either under top/down scroll border - same as emulated HW
         return;
      }
 
