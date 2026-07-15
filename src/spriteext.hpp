@@ -92,7 +92,7 @@ namespace Ep128 {
     uint8_t readNamedPortDebug(uint8_t portIndex);
     void   writeNamedPortDebug(uint8_t portIndex, uint8_t value);
 
-    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem);
+    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem, uint8_t *irqState);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
     uint8_t readCartP3Debug(uint32_t addr) const;
@@ -142,7 +142,10 @@ namespace Ep128 {
 #define REG_SPRITE_SP_COLLISION_HIGH 0x97
 #define REG_SPRITE_BG_COLLISION_LOW 0x98
 #define REG_SPRITE_BG_COLLISION_HIGH 0x99
-
+#define REG_SPRITE_SP_IRQMASK_LOW 0x9A
+#define REG_SPRITE_SP_IRQMASK_HIGH 0x9B
+#define REG_SPRITE_BG_IRQMASK_LOW 0x9C
+#define REG_SPRITE_BG_IRQMASK_HIGH 0x9D
 #define REG_SPRITE_OFFSET_X 24
 #define REG_SPRITE_OFFSET_Y 21+6
 #define REG_SPRITE_BASE_ADDR 0x9E

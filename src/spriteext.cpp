@@ -39,7 +39,7 @@
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
    - Sprite collision under the left/right border, both standard and extra (not under top/bottom)
-   - Sprite interrupt
+   - Sprite interrupt - to be tested?
    - Screen height setting
    
    TVC256++ drives:
@@ -665,7 +665,7 @@ namespace Ep128 {
 
   }
 
-  const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem)
+  const uint8_t* SpriteExt::combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem, uint8_t *irqState)
   {
 
     const unsigned char *bufp = buf;
@@ -676,10 +676,25 @@ namespace Ep128 {
       curLine = 0;
     else 
       curLine++;
+    if (curLine == namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
+    {
+       if ((namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] & namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ]) ||
+           (namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] & namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH]) ||
+           (namedPortValues[REG_SPRITE_SP_COLLISION_LOW ] & namedPortValues[REG_SPRITE_SP_IRQMASK_LOW ]) ||
+           (namedPortValues[REG_SPRITE_SP_COLLISION_HIGH] & namedPortValues[REG_SPRITE_SP_IRQMASK_HIGH]))
+       {
+          /*printf("interrupt set: bg %02x %02x %02x %02x sp %02x %02x %02x %02x\n",
+           namedPortValues[REG_SPRITE_BG_COLLISION_LOW ], namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ],
+           namedPortValues[REG_SPRITE_BG_COLLISION_HIGH], namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH],
+           namedPortValues[REG_SPRITE_SP_COLLISION_LOW ], namedPortValues[REG_SPRITE_SP_IRQMASK_LOW ],
+           namedPortValues[REG_SPRITE_SP_COLLISION_HIGH], namedPortValues[REG_SPRITE_SP_IRQMASK_HIGH]);*/
+          // IRQ from slot 3
+          *irqState |= 1<<3;
+       }
+    }
     if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE || !anyGfxEnabled)
       return buf;
    // todo: screen height limit
-   // todo: border color
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
