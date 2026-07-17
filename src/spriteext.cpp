@@ -491,8 +491,12 @@ namespace Ep128 {
         }
      }
 
+     if (curLine - scrollY < SPRITEEXT_FIRST_LINE)
+     {
+        // do not draw background on the top if there is scroll down
+     }
      // Bitmap mode: one nibble (half byte) -- one pixel
-     if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
+     else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_BITMAP)
      {
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
@@ -645,7 +649,7 @@ namespace Ep128 {
      buf = &buf_[outPos];
      for (size_t i=0; i<16; i++)
      {
-        if (scrollBorderX && currSlot == 0)
+        if (scrollBorderX && (currSlot == 0 || currSlot == 31))
         {
            buf[i] = i4ToTVCRGB(namedPortValues[REG_SCREEN_BORDER_COLOR],0x00);
         }
