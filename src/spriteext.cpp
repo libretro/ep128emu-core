@@ -50,7 +50,7 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation
+   - SID emulation test and frequency correction
    - Reset handling (cold, warm)
    - Function registers
    - Function implementation
