@@ -516,6 +516,7 @@ if haveLua and oldLuaVersion:
 ep128emuEnvironment.Prepend(LIBS = [ep128emuLib])
 if enableReSID:
     ep128emuEnvironment.Prepend(LIBS = [residLib])
+    tvc64LibEnvironment.Prepend(LIBS = [residLib])
 ep128emuEnvironment.Prepend(LIBS = [ep128Lib, zx128Lib, cpc464Lib, tvc64Lib])
 
 ep128emuSources = ['gui/gui.cpp']

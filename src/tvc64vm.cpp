@@ -170,6 +170,9 @@ namespace TVC64 {
         if (((toneGenCnt2 | 0xF7) + uint8_t(toneGenEnabled)) & 0xFF)
           tmp += uint32_t(audioOutputLevelTable[audioOutputLevel]);
         soundOutputSignal = tmp | (tmp << 16);
+#ifdef ENABLE_RESID
+        soundOutputSignal += externalDACOutput;
+#endif
         sendAudioOutput(soundOutputSignal);
       }
       videoRenderer.runOneCycle();
@@ -1027,7 +1030,22 @@ namespace TVC64 {
         vm.memory.psram_p3_reg = value & 0x7F;
         vm.memory.spriteext_p3_reg = 0x11;
       }
-      
+#ifdef ENABLE_RESID
+      else if (vm.spriteext.io_port_values[addr-0x41] >= REG_SID_BASE &&
+               vm.spriteext.io_port_values[addr-0x41] >= REG_SID_LAST)
+      {
+
+       if (!vm.sidModel)
+         return;
+       else {
+         if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
+           vm.setCallback(&TVC64VM::sidCallback, &vm, true);
+           vm.sidEnabled = true;
+         }
+         vm.sid->write(vm.spriteext.io_port_values[addr-0x41] - REG_SID_BASE, value);
+       }
+      }
+#endif
       vm.memory.setPaging(vm.memory.getPaging());
       vm.spriteext.writeNamedPort(addr == 0x45,value);
       break;
@@ -1466,6 +1484,15 @@ namespace TVC64 {
       tapeSamplesPerCRTCCycle(0L),
       tapeSamplesRemaining(-1L),
       crtcFrequency(1562500)
+#ifdef ENABLE_RESID
+      , sid((Ep128::SID *) 0),
+      sidEnabled(false),
+      sidModel(0),
+      sidAddressRegister(0x00),
+      sidOutputAccumulator(0),
+      sidVolumeL(1039),
+      sidVolumeR(1039)
+#endif
   {
     for (size_t i = 0;
          i < (sizeof(callbacks) / sizeof(TVC64VMCallback));
@@ -1580,6 +1607,17 @@ namespace TVC64 {
     }
 #ifdef ENABLE_SDEXT
     sdext.reset(int(isColdReset));
+#endif
+#ifdef ENABLE_RESID
+    if (isColdReset)
+      sidAddressRegister = 0x00;
+    if (sid) {
+      if (sidEnabled) {
+        setCallback(&sidCallback, this, false);
+        sidEnabled = false;
+      }
+      sid->reset();
+    }
 #endif
   }
 
@@ -1873,6 +1911,60 @@ namespace TVC64 {
   {
     Ep128Emu::VirtualMachine::tapeSeek(t);
   }
+
+#ifdef ENABLE_RESID
+
+  void TVC64VM::setSIDConfiguration(int n, int model,
+                                    double volumeL, double volumeR)
+  {
+    if (n != 3)
+      return;
+    if (model <= 0 || model > 2) {
+      if (sidEnabled) {
+        setCallback(&sidCallback, this, false);
+        sidEnabled = false;
+      }
+      model = 0;
+    }
+    else if (!sid) {
+      sid = new Ep128::SID(sidOutputAccumulator);
+    }
+    if (bool(model) != bool(sidModel) && sid)
+      sid->reset();
+    sidModel = uint8_t(model);
+    if (model)
+      sid->set_chip_model(model == 1 ? Ep128::MOS6581 : Ep128::MOS8580);
+    sidVolumeL = int32_t(volumeL * 1039.75);
+    sidVolumeR = int32_t(volumeR * 1039.75);
+  }
+
+  void TVC64VM::sidCallback(void *userData)
+  {
+    TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
+    // TODO: scale the cycles with crctFrequency
+    int64_t   tmp = (vm.crtcCyclesRemainingH << 32) + vm.crtcCyclesRemainingL;
+    if (tmp >= 0L) {
+      do {
+        tmp -= (int64_t(1) << 32);
+        vm.sidOutputAccumulator = 0;
+        Ep128::SID::clockCallback(vm.sid);
+        Ep128::SID::clockCallback(vm.sid);
+        // FIXME: this is the maximum safe range with all 4 DAVE channels
+        // active, but it can overflow with tape feedback (unlikely in
+        // practice)
+        const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
+        const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
+        int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
+        int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
+        outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
+        outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
+        vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
+      } while (EP128EMU_UNLIKELY(tmp >= 0L));
+    }
+  }
+
+
+#endif
 
   void TVC64VM::setBreakPoint(const Ep128Emu::BreakPoint& bp, bool isEnabled)
   {

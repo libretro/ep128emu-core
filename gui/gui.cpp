@@ -519,13 +519,15 @@ void Ep128EmuGUI::createMenus()
     diskConfigWindow->sdCardImageGroup->hide();
 #endif
   }
-  if (iconNum != 0) {                   // not Enterprise
+  if (iconNum != 0) {             // not Enterprise
     machineConfigWindow->vmCPUFrequencyValuator->deactivate();
     machineConfigWindow->vmSoundClockFrequencyValuator->deactivate();
     machineConfigWindow->enableMemoryTimingValuator->hide();
-#ifndef ENABLE_RESID
   }
+#ifndef ENABLE_RESID
   {
+#else
+  if (iconNum != 0 && iconNum != 3) {
 #endif
     machineConfigWindow->sidConfigurationGroup->deactivate();
     machineConfigWindow->sidConfigurationGroup->hide();
