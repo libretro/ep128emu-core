@@ -456,6 +456,13 @@ namespace Ep128Emu {
       sid.volumeL = 1.0;
       sid.volumeR = 1.0;
 #endif
+#ifdef ENABLE_SPRITEEXT
+      defineConfigurationVariable(*this, "spriteExt.4.model",
+                                  spriteExt.model, int(0),
+                                  spriteExtConfigurationChanged, 0.0, 2.0);
+#else
+      spriteExt.model = 0;
+#endif // ENABLE_SPRITEEXT
     // set machine specific defaults
     if (typeid(vm_) != typeid(Ep128::Ep128VM)) {
       int     cpuMult = 4;
@@ -815,6 +822,13 @@ namespace Ep128Emu {
       vm_.setSIDConfiguration(3, sid.model, sid.volumeL, sid.volumeR);
     }
 #endif
+#ifdef ENABLE_SPRITEEXT
+    if (spriteExtConfigurationChanged) {
+      spriteExtConfigurationChanged = false;
+      //vm_.setSIDConfiguration(3, sid.model, sid.volumeL, sid.volumeR);
+    }
+#endif
+
   }
 
   int EmulatorConfiguration::convertKeyCode(int keyCode)

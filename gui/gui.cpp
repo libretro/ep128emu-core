@@ -534,6 +534,12 @@ void Ep128EmuGUI::createMenus()
     machineConfigWindow->vmConfigurationTabs->remove(
         *(machineConfigWindow->sidConfigurationGroup));
   }
+  if (iconNum != 0 && iconNum != 3) {
+    machineConfigWindow->spriteExtConfigurationGroup->deactivate();
+    machineConfigWindow->spriteExtConfigurationGroup->hide();
+    machineConfigWindow->vmConfigurationTabs->remove(
+        *(machineConfigWindow->spriteExtConfigurationGroup));
+  }
   mainMenuBar->add("File/Configuration/Load from ASCII file (Alt+Q)",
                    (char *) 0, &menuCallback_File_LoadConfig, (void *) this);
   mainMenuBar->add("File/Configuration/Load from binary file (Alt+L)",
