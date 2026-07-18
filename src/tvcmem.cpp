@@ -497,8 +497,9 @@ namespace TVC64 {
       // Map IOMEM of slots 1,2,3 to ROM segments 0x04..0x06, if present + take care of pointer offset
       // Note: IOMEM of slot 0 is not handled here
       uint8_t cardSlot = uint16_t((n & 0xC000) >> 14);
-      if (segmentTable[0x03 + cardSlot] == (uint8_t *) 0)
+      if (cardSlot == 0 || segmentTable[0x03 + cardSlot] == (uint8_t *) 0)
       {
+         // This allows fallback to readExtension which is where vtdos rom sub-paging is handled
          pageAddressTableR[6] = (uint8_t *) 0;
          pageAddressTableW[6] = (uint8_t *) 0;
       }
