@@ -1032,7 +1032,7 @@ namespace TVC64 {
       }
 #ifdef ENABLE_RESID
       else if (vm.spriteext.io_port_values[addr-0x41] >= REG_SID_BASE &&
-               vm.spriteext.io_port_values[addr-0x41] >= REG_SID_LAST)
+               vm.spriteext.io_port_values[addr-0x41] <= REG_SID_LAST)
       {
 
        if (!vm.sidModel)

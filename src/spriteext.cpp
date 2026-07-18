@@ -24,7 +24,6 @@
 /*
    Backlog (sort of)
    General:
-   - Document TVC memory map correctly -- what about segment 3? (does floppy work after gamecard changes?)
    - Align SDExt segment / memory map handling with the common scheme
    - Update SConstruct - introduce special wine+mingw cross-compile option for Devtool
    - Update SConstruct - simplify fltk, portaudio etc. version detection
