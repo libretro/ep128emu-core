@@ -50,15 +50,21 @@ namespace TVC64 {
     uint8_t   *dummyMemory; // 2*16K dummy memory for invalid reads and writes
     uint8_t   *pageAddressTableR[8];
     uint8_t   *pageAddressTableW[8];
+#ifdef ENABLE_SPRITEEXT
+    uint8_t   spriteExtModel;
+    bool      spriteExtEnabled;
+#endif
     void allocateSegment(uint8_t n, bool isROM);
     void checkExecuteBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
     void checkReadBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
     void checkWriteBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
    public:
+#ifdef ENABLE_SPRITEEXT
     uint8_t spriteext_p2_reg;
     uint8_t spriteext_p3_reg;
     uint16_t psram_p2_reg;
     uint16_t psram_p3_reg;
+#endif
     Memory();
     virtual ~Memory();
     void setBreakPoint(uint8_t segment, uint16_t addr,

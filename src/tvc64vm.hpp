@@ -197,6 +197,8 @@ namespace TVC64 {
 #endif
 #ifdef ENABLE_SPRITEEXT
     Ep128::SpriteExt  spriteext;
+    bool      spriteExtEnabled;
+    uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
 #endif
 #ifdef ENABLE_RESID
     Ep128::SID       *sid;
@@ -275,6 +277,9 @@ namespace TVC64 {
      */
     virtual void setSIDConfiguration(int n, int model,
                                      double volumeL, double volumeR);
+#endif
+#ifdef ENABLE_SPRITEEXT
+    virtual void setSpriteExtConfiguration(int model);
 #endif
     /*!
      * Set the number of video 'slots' per second (defaults to 1000000 Hz).

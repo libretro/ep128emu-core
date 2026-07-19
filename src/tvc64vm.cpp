@@ -803,31 +803,34 @@ namespace TVC64 {
     case 0x42:
     case 0x44:
     case 0x46:
-      retval = vm.spriteext.io_port_values[addr-0x40];
+      if (vm.spriteExtEnabled)
+         retval = vm.spriteext.io_port_values[addr-0x40];
       break;
     case 0x41:
     case 0x45:
-      if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DX)
-      {
-        vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
-        retval = static_cast < uint8_t > (vm.mouseDeltaX);
-        vm.mouseDeltaX = 0;
-        vm.spriteext.readNamedPort(addr == 0x45);
+      if (vm.spriteExtEnabled) {
+         if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DX)
+         {
+           vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
+           retval = static_cast < uint8_t > (vm.mouseDeltaX);
+           vm.mouseDeltaX = 0;
+           vm.spriteext.readNamedPort(addr == 0x45);
+         }
+         else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DY)
+         {
+           vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext.mouse_speed * -1.0f);
+           retval = static_cast < uint8_t > (vm.mouseDeltaY);
+           vm.mouseDeltaY = 0;
+           vm.spriteext.readNamedPort(addr == 0x45);
+         }
+         else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_BUTTONS)
+         {
+           retval = vm.mouseButtonState;
+           vm.spriteext.readNamedPort(addr == 0x45);
+         }
+         else
+           retval = vm.spriteext.readNamedPort(addr == 0x45);
       }
-      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_DY)
-      {
-        vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext.mouse_speed * -1.0f);
-        retval = static_cast < uint8_t > (vm.mouseDeltaY);
-        vm.mouseDeltaY = 0;
-        vm.spriteext.readNamedPort(addr == 0x45);
-      }
-      else if (vm.spriteext.io_port_values[addr-0x41] == REG_USB_MOUSE_BUTTONS)
-      {
-        retval = vm.mouseButtonState;
-        vm.spriteext.readNamedPort(addr == 0x45);
-      }
-      else
-        retval = vm.spriteext.readNamedPort(addr == 0x45);
       break;
 #endif
     case 0x50:                          // toggle tape output (repeated 8 times)
@@ -1010,44 +1013,48 @@ namespace TVC64 {
     case 0x42:
     case 0x44:
     case 0x46:
-      vm.spriteext.io_port_values[addr-0x40] = value;
+      if (vm.spriteExtEnabled)
+        vm.spriteext.io_port_values[addr-0x40] = value;
       break;
     case 0x41:
     case 0x45:
-      if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P2)
-        vm.memory.spriteext_p2_reg = value;
-      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P3)
-        vm.memory.spriteext_p3_reg = value;
-      // TODO: delayed paging in case of slow ram
-      // Limitation: only 2MB available for now, so high reg is ignored
-      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P2_LOW)
-      {
-        vm.memory.psram_p2_reg = value & 0x7F;
-        vm.memory.spriteext_p2_reg = 0x10;
-      }
-      else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P3_LOW)
-      {
-        vm.memory.psram_p3_reg = value & 0x7F;
-        vm.memory.spriteext_p3_reg = 0x11;
-      }
-#ifdef ENABLE_RESID
-      else if (vm.spriteext.io_port_values[addr-0x41] >= REG_SID_BASE &&
-               vm.spriteext.io_port_values[addr-0x41] <= REG_SID_LAST)
-      {
-
-       if (!vm.sidModel)
-         return;
-       else {
-         if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
-           vm.setCallback(&TVC64VM::sidCallback, &vm, true);
-           vm.sidEnabled = true;
+      if (vm.spriteExtEnabled) {
+         if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P2)
+           vm.memory.spriteext_p2_reg = value;
+         else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_P3)
+           vm.memory.spriteext_p3_reg = value;
+         // TODO: delayed paging in case of slow ram
+         // Limitation: only 2MB available for now, so high reg is ignored
+         else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P2_LOW)
+         {
+           vm.memory.psram_p2_reg = value & 0x7F;
+           vm.memory.spriteext_p2_reg = 0x10;
          }
-         vm.sid->write(vm.spriteext.io_port_values[addr-0x41] - REG_SID_BASE, value);
-       }
-      }
+         else if (vm.spriteext.io_port_values[addr-0x41] == REG_MEMORY_MAP_8M_P3_LOW)
+         {
+           vm.memory.psram_p3_reg = value & 0x7F;
+           vm.memory.spriteext_p3_reg = 0x11;
+         }
+
+#ifdef ENABLE_RESID
+         else if (vm.spriteext.io_port_values[addr-0x41] >= REG_SID_BASE &&
+                  vm.spriteext.io_port_values[addr-0x41] <= REG_SID_LAST)
+         {
+
+          if (!vm.sidModel)
+            return;
+          else {
+            if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
+              vm.setCallback(&TVC64VM::sidCallback, &vm, true);
+              vm.sidEnabled = true;
+            }
+            vm.sid->write(vm.spriteext.io_port_values[addr-0x41] - REG_SID_BASE, value);
+          }
+         }
 #endif
-      vm.memory.setPaging(vm.memory.getPaging());
-      vm.spriteext.writeNamedPort(addr == 0x45,value);
+         vm.memory.setPaging(vm.memory.getPaging());
+         vm.spriteext.writeNamedPort(addr == 0x45,value);
+      }
       break;
 #endif
     case 0x50:                          // toggle tape output (repeated 8 times)
@@ -1183,8 +1190,11 @@ namespace TVC64 {
       break;
     }
 #ifdef ENABLE_SPRITEEXT
-    if (addr > 0xFF && addr < 0x200)
-      retval = vm.spriteext.readNamedPortDebug(addr - 0x100);
+// extra debug view - does not work yet
+    if (vm.spriteExtEnabled) {
+       if (addr > 0xFF && addr < 0x200)
+         retval = vm.spriteext.readNamedPortDebug(addr - 0x100);
+    }
 #endif // ENABLE_SPRITEEXT
     return retval;
   }
@@ -1963,7 +1973,20 @@ namespace TVC64 {
     }
   }
 
+#endif
 
+#ifdef ENABLE_SPRITEEXT
+  void TVC64VM::setSpriteExtConfiguration(int model)
+  {
+    if (model <= 0 || model > 2) {
+        spriteExtEnabled = false;
+        spriteExtModel = 0;
+    } else {
+        spriteExtEnabled = true;
+        spriteExtModel = (uint8_t) model;
+        //spriteext->reset();
+    }
+  }
 #endif
 
   void TVC64VM::setBreakPoint(const Ep128Emu::BreakPoint& bp, bool isEnabled)
