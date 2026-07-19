@@ -457,7 +457,7 @@ namespace Ep128Emu {
       sid.volumeR = 1.0;
 #endif
 #ifdef ENABLE_SPRITEEXT
-      defineConfigurationVariable(*this, "spriteExt.4.model",
+      defineConfigurationVariable(*this, "spriteExt.model",
                                   spriteExt.model, int(0),
                                   spriteExtConfigurationChanged, 0.0, 2.0);
 #else
@@ -825,7 +825,7 @@ namespace Ep128Emu {
 #ifdef ENABLE_SPRITEEXT
     if (spriteExtConfigurationChanged) {
       spriteExtConfigurationChanged = false;
-      //vm_.setSIDConfiguration(3, sid.model, sid.volumeL, sid.volumeR);
+      vm_.setSpriteExtConfiguration(spriteExt.model);
     }
 #endif
 

@@ -534,7 +534,11 @@ void Ep128EmuGUI::createMenus()
     machineConfigWindow->vmConfigurationTabs->remove(
         *(machineConfigWindow->sidConfigurationGroup));
   }
+#ifndef ENABLE_SPRITEEXT
+  {
+#else
   if (iconNum != 0 && iconNum != 3) {
+#endif
     machineConfigWindow->spriteExtConfigurationGroup->deactivate();
     machineConfigWindow->spriteExtConfigurationGroup->hide();
     machineConfigWindow->vmConfigurationTabs->remove(
