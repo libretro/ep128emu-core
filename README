@@ -7,6 +7,7 @@ written in C++, and supporting Windows and POSIX platforms (32 and 64
 bit Windows and Linux, and MacOS X have been tested).
 It implements accurate, high quality hardware emulation, however, the
 system requirements are higher than that of most other emulators.
+Versions named "-core" have improvements from the libretro core version.
 
 Features
 ========
@@ -42,9 +43,9 @@ General
     locations (useful for tapes with multiple files); uses custom file
     format which is PCM audio data with 1 to 8 bits of sample resolution
     and variable sample rate, and header including the table of markers;
-    there is also limited (read only) support for EPTE format tape
-    files, as well as read-write (although without markers) support for
-    sound files like WAV, AIFF, etc.
+    there is also limited (read only) support for EPTE, TAPir format tape
+    files and special "1-bit" TVC WAV files, as well as read-write 
+    (although without markers) support for sound files like WAV, AIFF, etc.
   * GUI tape editor utility for copying Enterprise files from/to
     ep128emu tape images
   * GUI debugger with support for breakpoints/watchpoints, viewing the
@@ -167,6 +168,8 @@ Videoton TVC emulation
     selectable directory
   * SD card (SDEXT) emulation, this is an experimental feature based on
     code from LGB's Xep128 emulator
+  * TVC GameCard emulation in slot 2 for external joysticks 3 and 4
+  * TVC256++ card (SPRITEEXT) emulation - experimental feature
 
 Installation
 ============
@@ -176,10 +179,10 @@ Linux
 
 On Linux and other POSIX platforms, the emulator is installed from the
 source code, available at the GitHub download page
-  https://github.com/istvan-v/ep128emu/releases/
+  https://github.com/libretro/ep128emu-core
 or the most recent state of the code can be downloaded from Git with the
 following command:
-  git clone https://github.com/istvan-v/ep128emu.git
+  git clone https://github.com/libretro/ep128emu-core.git -b standalone
 In addition to the standard development tools (a recent version of the
 GNU C/C++ compiler, binutils, etc.), you need the following packages:
 

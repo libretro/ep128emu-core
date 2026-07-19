@@ -35,6 +35,12 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
+#ifdef ENABLE_RESID
+#  include "resid/sid.hpp"
+#endif
 
 namespace Ep128Emu {
   class VideoCapture;
@@ -139,6 +145,7 @@ namespace TVC64 {
     bool      toneGenEnabled;
     uint8_t   audioOutputLevel;
     uint32_t  soundOutputSignal;
+    uint32_t  externalDACOutput;
     Ep128Emu::File  *demoFile;
     // contains demo data, which is the emulator version number as a 32-bit
     // integer ((MAJOR << 16) + (MINOR << 8) + PATCHLEVEL), followed by a
@@ -181,8 +188,26 @@ namespace TVC64 {
     size_t    crtcFrequency;            // defaults to 1562500 Hz
     uint8_t   keyboardState[16];
     uint8_t   tvcKeyboardState[16];
+    int8_t    mouseDeltaX;
+    int8_t    mouseDeltaY;
+    uint8_t   mouseButtonState;
+    uint8_t   mouseWheelDelta;          // b0..b3: vertical, b4..b7: horizontal
 #ifdef ENABLE_SDEXT
     Ep128::SDExt  sdext;
+#endif
+#ifdef ENABLE_SPRITEEXT
+    Ep128::SpriteExt  spriteext;
+    bool      spriteExtEnabled;
+    uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
+#endif
+#ifdef ENABLE_RESID
+    Ep128::SID       *sid;
+    bool      sidEnabled;
+    uint8_t   sidModel;                 // 0: disabled, 1: 6581, 2: 8580
+    uint8_t   sidAddressRegister;
+    int32_t   sidOutputAccumulator;
+    int32_t   sidVolumeL;
+    int32_t   sidVolumeR;
 #endif
     // ----------------
     EP128EMU_INLINE void updateCPUCycles(int cycles);
@@ -204,6 +229,9 @@ namespace TVC64 {
     static void demoPlayCallback(void *userData);
     static void demoRecordCallback(void *userData);
     static void videoCaptureCallback(void *userData);
+#ifdef ENABLE_RESID
+    static void sidCallback(void *userData);
+#endif
     void stopDemoPlayback();
     void stopDemoRecording(bool writeFile_);
     uint8_t checkSingleStepModeBreak();
@@ -242,6 +270,17 @@ namespace TVC64 {
     virtual void configureSDCard(bool isEnabled,
                                  const std::string& romFileName);
 #endif
+#ifdef ENABLE_RESID
+    /*!
+     * Configure SID 'n' (0 to 3, currently only 3 is supported),
+     * 'model' can be 0 to disable the emulation, 1 for MOS 6581 or 2 for 8580.
+     */
+    virtual void setSIDConfiguration(int n, int model,
+                                     double volumeL, double volumeR);
+#endif
+#ifdef ENABLE_SPRITEEXT
+    virtual void setSpriteExtConfiguration(int model);
+#endif
     /*!
      * Set the number of video 'slots' per second (defaults to 1000000 Hz).
      */
@@ -250,6 +289,25 @@ namespace TVC64 {
      * Set state of key 'keyCode' (0 to 127; see tvc64vm.cpp).
      */
     virtual void setKeyboardState(int keyCode, bool isPressed);
+    /*!
+     * Send mouse event to the emulated machine. 'dX' and 'dY' are the
+     * horizontal and vertical motion of the pointer relative to the position
+     * at the time of the previous call, positive values move to the left and
+     * up, respectively.
+     * Each bit of 'buttonState' corresponds to the current state of a mouse
+     * button (1 = pressed):
+     *   b0 = left button
+     *   b1 = right button
+     *   b2 = middle button
+     *   b3..b7 = buttons 4 to 8
+     * 'mouseWheelEvents' can be the sum of any of the following:
+     *   1: mouse wheel up
+     *   2: mouse wheel down
+     *   4: mouse wheel left
+     *   8: mouse wheel right
+     */
+    virtual void setMouseState(int8_t dX, int8_t dY,
+                               uint8_t buttonState, uint8_t mouseWheelEvents);
     /*!
      * Returns status information about the emulated machine (see also
      * struct VMStatus above, and the comments for functions that return

@@ -63,7 +63,12 @@ namespace Ep128Emu {
      private:
       // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
       // ( = 108 * 4) bytes in compressed format
+      // update: due to spriteext, it needs to be enlarged
+#ifdef ENABLE_SPRITEEXT
+      uint32_t  buf_[800];
+#else
       uint32_t  buf_[108];
+#endif
      public:
       Message_LineData()
         : Message(MsgType_LineData)
