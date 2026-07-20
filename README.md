@@ -13,6 +13,7 @@ For the emulation features, see the [original README](README). Since GUI is repl
 
 ### Content types supported:
 * Enterprise disk images: `img`, `dsk`
+* Enterprise hard disk images: `img`, `vhd`
 * Enterprise tape images: `tap` (either ep128emu, tapir, or epte format)
 * Enterprise compressed files: `dtf` (via "ZozoTools" ROM)
 * Enterprise direct files: `com`, `trn`, `128`, `bas` or `.` (no extension)
@@ -81,7 +82,7 @@ led2_map = "2"
 ### Requirements
 
 * A system with retroarch installed. Linux 32/64-bit, ARM 32-bit, MacOS, and Windows 32 and 64 bit versions of the core are currently available.
-* From version 1.1.0, default ROM versions are built in, no need to download separately.
+* From version 1.1.0, default ROM versions are built in, no need to download separately. Special configurations can use ROM files from `system/ep128emu/roms` directory.
 
 ### Running the core
 On the supported platforms, the core appears in the online updater, can be downloaded and started as usual. Running it directly:

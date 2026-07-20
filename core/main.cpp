@@ -6,7 +6,6 @@ save state for speaker and mono states
 emscripten - initial memory problem
 input descriptors
 other builds
-database
 cpc defender of the crown disk image load
 
 hw and joystick support detection from tzx / cdt
@@ -35,12 +34,13 @@ ep128cfg support player 2 mapping
 info msg for other players
 tzx format 0x18 compressed square wave (1 x cpc tosec, 3x zx tosec), 0x19 (~40 x zx tosec)
 tzx trainer support: ~20 out of all zx tosec, and 1 from cpc tosec
-EP IDE support
 demo record/play
 support for content in zip
 achievement support
 test mp3 support with sndfile 1.1
 led driver for tape loading - see comments inside
+enable SID emulation for ep and tvc256
+enable SDEXT emulation for ep and tvc
 */
 
 
@@ -121,6 +121,7 @@ bool diskEjected = false;
 
 bool tapeContent = false;
 bool diskContent = false;
+bool hddContent  = false;
 bool fileContent = false;
 
 Ep128Emu::VMThread              *vmThread    = (Ep128Emu::VMThread *) 0;
@@ -651,12 +652,12 @@ void retro_get_system_info(struct retro_system_info *info)
 {
   memset(info, 0, sizeof(*info));
   info->library_name     = "ep128emu";
-  info->library_version  = "v1.2.12";
+  info->library_version  = "v1.2.13";
   info->need_fullpath    = true;
 #ifndef EXCLUDE_SOUND_LIBS
-  info->valid_extensions = "img|dsk|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|mp3|.";
+  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|mp3|.";
 #else
-  info->valid_extensions = "img|dsk|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|.";
+  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|.";
 #endif // EXCLUDE_SOUND_LIBS
 }
 
@@ -908,6 +909,7 @@ bool retro_load_game(const struct retro_game_info *info)
 
     std::string diskExt = "img";
     std::string tapeExt = "tap";
+    std::string hddExt  = "vhd";
     std::string tapeExtEp = "ept";
     std::string fileExtDtf = "dtf";
     std::string fileExtTvc = "cas";
@@ -954,6 +956,7 @@ bool retro_load_game(const struct retro_game_info *info)
     static const char *tvcDskFileHeader = "\xeb\xfe\x90";
     static const char *epDskFileHeader1 = "\xeb\x3c\x90";
     static const char *epDskFileHeader2 = "\xeb\x4c\x90";
+    static const char *epHddFileHeader = "\xf8"; // "Fixed disk" value of FAT12
     static const char *epComFileHeader = "\x00\x05";
     static const char *epComFileHeader2 = "\x00\x06";
     static const char *epBasFileHeader = "\x00\x04";
@@ -967,6 +970,7 @@ bool retro_load_game(const struct retro_game_info *info)
     const char* startupSequence = "";
     tapeContent = false;
     diskContent = false;
+    hddContent  = false;
     fileContent = false;
     int detectedMachineDetailedType = Ep128Emu::VM_config.at("VM_CONFIG_UNKNOWN");
 
@@ -1029,7 +1033,7 @@ bool retro_load_game(const struct retro_game_info *info)
       fileContent=true;
       startupSequence =" \xffload\r";
     }
-    // EP and TVC disks may have similar extensions
+    // EP and TVC disks have similar extensions
     else if (contentExt == diskExt || contentExt == diskExtTvc)
     {
       if (header_match(tvcDskFileHeader,tmpBuf,3))
@@ -1041,7 +1045,18 @@ bool retro_load_game(const struct retro_game_info *info)
       }
       else if (header_match(epDskFileHeader1,tmpBuf,3) || header_match(epDskFileHeader2,tmpBuf,3))
       {
-        detectedMachineDetailedType = Ep128Emu::VM_config.at("EP128_DISK");
+        if (header_match(epHddFileHeader, tmpBuf+0x15, 1))
+        {
+           detectedMachineDetailedType = Ep128Emu::VM_config.at("EP128_HDD");
+           log_cb(RETRO_LOG_DEBUG, "HDD content detected\n");
+           hddContent = true;
+           startupSequence = " \xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"":dir f:\r";
+        }
+        else
+        {
+           log_cb(RETRO_LOG_DEBUG, "FDD content detected\n");
+           detectedMachineDetailedType = Ep128Emu::VM_config.at("EP128_DISK");
+        }
         diskContent=true;
       }
       else {
@@ -1053,6 +1068,12 @@ bool retro_load_game(const struct retro_game_info *info)
       detectedMachineDetailedType = Ep128Emu::VM_config.at("EP128_FILE_DTF");
       fileContent=true;
       startupSequence =" \xff\xff\xff\xff\xff:dl ";
+    }
+    else if (contentExt == hddExt) {
+      detectedMachineDetailedType = Ep128Emu::VM_config.at("EP128_HDD");
+      hddContent  = true;
+      diskContent = true;
+      startupSequence = " \xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"":dir f:\r";
     }
     // last resort: EP file, first 2 bytes
     else if (header_match(epComFileHeader,tmpBuf,2) || header_match(epComFileHeader2,tmpBuf,2) || header_match(epBasFileHeader,tmpBuf,2))
@@ -1084,8 +1105,16 @@ bool retro_load_game(const struct retro_game_info *info)
       }
       if (diskContent)
       {
-        config->floppy.a.imageFile = info->path;
-        config->floppyAChanged = true;
+        if (hddContent)
+        {
+           config->ide.imageFile0 = info->path;
+           config->ideDisk0Changed = true;
+        }
+        else
+        {
+         config->floppy.a.imageFile = info->path;
+         config->floppyAChanged = true;
+        }
       }
       if (tapeContent)
       {

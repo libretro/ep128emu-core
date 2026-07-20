@@ -200,6 +200,7 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
     bool use_file = (machineDetailedType == VM_config.at("EP128_FILE") || machineDetailedType == VM_config.at("EP64_FILE")) ? true : false;
     bool use_disk = (machineDetailedType == VM_config.at("EP128_DISK") || machineDetailedType == VM_config.at("EP64_DISK") ||
                      machineDetailedType == VM_config.at("EP128_DISK_ISDOS") || machineDetailedType == VM_config.at("EP64_DISK_ISDOS")) ? true : false;
+    bool use_hdd =  machineDetailedType  == VM_config.at("EP128_HDD") ? true : false;
     bool use_dtf = (machineDetailedType  == VM_config.at("EP128_FILE_DTF") || machineDetailedType == VM_config.at("EP64_FILE_DTF")) ? true : false;
     bool use_cartridge = (machineDetailedType  == VM_config.at("EP128_TAPE_NOCART") || machineDetailedType  == VM_config.at("EP64_TAPE_NOCART")) ? false : true;
     bool use_isdos = (machineDetailedType == VM_config.at("EP128_DISK_ISDOS") || machineDetailedType  == VM_config.at("EP64_DISK_ISDOS")) ? true : false;
@@ -298,12 +299,26 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
       config->memory.rom[0x21].offset=16384;
       startSequence += " \xff\xff\xff\xff\xff\xff\xff\xff\xff\xff""\x27""isdos\r""\xff\xff\xff\xff\xff\xff\xff""dir\r";
     }
-    else if(use_file || use_disk)
+    else if(use_file || use_disk || use_hdd)
     {
       config->memory.rom[0x20].file="exdos13.rom";
       config->memory.rom[0x20].offset=0;
       config->memory.rom[0x21].file="exdos13.rom";
       config->memory.rom[0x21].offset=16384;
+    }
+    if(use_hdd)
+    {
+      config->memory.ram.size=640;
+      config->memory.rom[0x00].file="exos232uk.rom";
+      config->memory.rom[0x00].offset=0;
+      config->memory.rom[0x01].file="exos232uk.rom";
+      config->memory.rom[0x01].offset=16384;
+      config->memory.rom[0x02].file="exos232uk.rom";
+      config->memory.rom[0x02].offset=32768;
+      config->memory.rom[0x03].file="exos232uk.rom";
+      config->memory.rom[0x03].offset=49152;
+      config->memory.rom[0x42].file="ide12.rom";
+      config->memory.rom[0x42].offset=0;
     }
   }
   else if(machineType == MACHINE_TVC)

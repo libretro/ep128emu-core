@@ -49,6 +49,7 @@ const std::map<std::string, int> VM_config {
  { "EP64_FILE_DTF"    , 113},
  { "EP64_TAPE_NOCART" , 114},
  { "EP64_DISK_ISDOS"  , 115},
+ { "EP128_HDD"        , 120},
  { "TVC64_FILE"       , 200},
  { "TVC64_DISK"       , 201},
  { "TVC64_TAPE"       , 202},
