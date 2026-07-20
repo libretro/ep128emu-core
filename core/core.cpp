@@ -309,13 +309,13 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
     if(use_hdd)
     {
       config->memory.ram.size=640;
-      config->memory.rom[0x00].file="exos232uk.rom";
+      config->memory.rom[0x00].file="exos24uk.rom";
       config->memory.rom[0x00].offset=0;
-      config->memory.rom[0x01].file="exos232uk.rom";
+      config->memory.rom[0x01].file="exos24uk.rom";
       config->memory.rom[0x01].offset=16384;
-      config->memory.rom[0x02].file="exos232uk.rom";
+      config->memory.rom[0x02].file="exos24uk.rom";
       config->memory.rom[0x02].offset=32768;
-      config->memory.rom[0x03].file="exos232uk.rom";
+      config->memory.rom[0x03].file="exos24uk.rom";
       config->memory.rom[0x03].offset=49152;
       config->memory.rom[0x42].file="ide12.rom";
       config->memory.rom[0x42].offset=0;
