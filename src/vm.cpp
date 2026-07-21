@@ -253,6 +253,13 @@ namespace Ep128Emu {
   }
 #endif
 
+#ifdef ENABLE_SPRITEEXT
+  void VirtualMachine::setSpriteExtConfiguration(int model)
+  {
+    (void) model;
+  }
+#endif
+
   void VirtualMachine::setAudioOutputHighQuality(bool useHighQualityResample)
   {
     if (useHighQualityResample != audioOutputHighQuality) {

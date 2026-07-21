@@ -33,7 +33,6 @@
    - State save/load support
    - Improve performance
    - Debug ports: show tvcext ports from 256-512
-   - Enable/disable tvc256 on demand
 
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
@@ -49,11 +48,10 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation test and frequency correction
-   - Reset handling (cold, warm)
+   - SID emulation sound test against HW and frequency correction
    - Function registers
    - Function implementation
-   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio
+   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio -- poke 2821,129 is enough
    - Extra file i/o functions (get_pwd .. seek_file)
    - File i/o functions for card (get_iobase, get_membase)
 
@@ -113,19 +111,20 @@ namespace Ep128 {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
 
-    io_port_values[SPRITEEXT_REG_INCREMENT]     = SPRITEEXT_REG_INCREMENT_DEFAULT;
-    io_port_values[SPRITEEXT_SEC_REG_INCREMENT] = SPRITEEXT_REG_INCREMENT_DEFAULT;
+    io_port_values[SPRITEEXT_REG_INCREMENT]      = SPRITEEXT_REG_INCREMENT_DEFAULT;
+    io_port_values[SPRITEEXT_SEC_REG_INCREMENT]  = SPRITEEXT_REG_INCREMENT_DEFAULT;
 
     for (int i = 0; i < 256; i++)
       namedPortValues[i] = 0x00;
     namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR] = REG_SCREEN_BITMAP_BASE_ADDR_DEFAULT;
     namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR] = REG_SCREEN_SCREEN_BASE_ADDR_DEFAULT;
     namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR] = REG_SCREEN_SCREEN_COLOR_BASE_ADDR_DEFAULT;
-    namedPortValues[REG_SCREEN_FONT_BASE_ADDR] = REG_SCREEN_FONT_BASE_ADDR_DEFAULT;
-    namedPortValues[REG_MEMORY_P2] = REG_MEMORY_P2_DEFAULT;
-    namedPortValues[REG_MEMORY_P3] = REG_MEMORY_P3_DEFAULT;
-    namedPortValues[REG_MEMORY_MAP_8M_P2_LOW] = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
-    namedPortValues[REG_MEMORY_MAP_8M_P3_LOW] = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
+    namedPortValues[REG_SCREEN_FONT_BASE_ADDR]   = REG_SCREEN_FONT_BASE_ADDR_DEFAULT;
+    namedPortValues[REG_SCREEN_MAXY]             = REG_SCREEN_MAXY_DEFAULT;
+    namedPortValues[REG_MEMORY_P2]               = REG_MEMORY_P2_DEFAULT;
+    namedPortValues[REG_MEMORY_P3]               = REG_MEMORY_P3_DEFAULT;
+    namedPortValues[REG_MEMORY_MAP_8M_P2_LOW]    = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
+    namedPortValues[REG_MEMORY_MAP_8M_P3_LOW]    = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
     namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
     updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
     sd_ram_ext.resize(0x00001C00, 0xFF);
@@ -195,6 +194,14 @@ namespace Ep128 {
   {
     if (reset_level >= 2)
       std::memset(&(sd_ram_ext.front()), 0xFF, sd_ram_ext.size());
+    // Reset actions from developer guide
+    namedPortValues[REG_SCREEN_MAXY] = REG_SCREEN_MAXY_DEFAULT;
+    namedPortValues[REG_SCREEN_VIDEOMODE] = 0;
+    namedPortValues[REG_SCREEN_SCROLL_X]  = 0;
+    namedPortValues[REG_SCREEN_SCROLL_Y]  = 0;
+    namedPortValues[REG_SID_BASE + 24]    = 0;
+    for (int i = REG_SPRITE_ENABLE; i <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX; i++)
+      namedPortValues[i] = 0x00;
   }
 
   void SpriteExt::openImage(const char *sdimg_path)

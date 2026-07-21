@@ -160,6 +160,13 @@ namespace Ep128Emu {
     virtual void setSIDConfiguration(int n, int model,
                                      double volumeL, double volumeR);
 #endif
+#ifdef ENABLE_SPRITEEXT
+    /*!
+     * Configure sprite extension card,
+     * 'model' can be 0 to disable the emulation, 1 for TVC256++ or 2 for 2DFX.
+     */
+    virtual void setSpriteExtConfiguration(int model);
+#endif
     /*!
      * Set audio output quality.
      */
