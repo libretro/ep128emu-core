@@ -1629,6 +1629,9 @@ namespace TVC64 {
       sid->reset();
     }
 #endif
+#ifdef ENABLE_SPRITEEXT
+     spriteext.reset(int(isColdReset));
+#endif
   }
 
   void TVC64VM::resetMemoryConfiguration(size_t memSize)
@@ -1984,7 +1987,7 @@ namespace TVC64 {
     } else {
         spriteExtEnabled = true;
         spriteExtModel = (uint8_t) model;
-        //spriteext->reset();
+        spriteext.reset(2);
     }
   }
 #endif

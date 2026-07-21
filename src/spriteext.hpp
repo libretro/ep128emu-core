@@ -120,6 +120,7 @@ namespace Ep128 {
 #define SPRITEEXT_SEC_REG_ACCESS 0x5
 #define SPRITEEXT_SEC_REG_INCREMENT 0x6
 #define REG_SCREEN_MAXY 0xA9
+#define REG_SCREEN_MAXY_DEFAULT 240
 #define SPRITEEXT_FIRST_LINE 27
 #define SPRITEEXT_LAST_LINE 266
 #define SPRITEEXT_TRANSPARENT_COLOR 0x08
@@ -151,9 +152,15 @@ namespace Ep128 {
 #define REG_SPRITE_BASE_ADDR 0x9E
 
 #define REG_MEMORY_P2 0xB0
-#define REG_MEMORY_P2_DEFAULT 0xFF /* default would be 0x04, changed for DevTool compatibility */
 #define REG_MEMORY_P3 0xB1
-#define REG_MEMORY_P3_DEFAULT 0xFF /* default would be 0x05, changed for DevTool compatibility */
+#ifdef ENABLE_DEVTOOL
+#define REG_MEMORY_P2_DEFAULT 0xFF /* changed for DevTool compatibility (program move to TVC RAM) */
+#define REG_MEMORY_P3_DEFAULT 0xFF /* changed for DevTool compatibility (program move to TVC RAM) */
+#else
+#define REG_MEMORY_P2_DEFAULT 0x04
+#define REG_MEMORY_P3_DEFAULT 0x05
+#endif // ENABLE_DEVTOOL
+
 #define REG_MEMORY_MAP_8M_P2_LOW 0xB2
 #define REG_MEMORY_MAP_8M_P2_LOW_DEFAULT 0x0
 #define REG_MEMORY_MAP_8M_P2_HIGH 0xB3

@@ -23,7 +23,7 @@
 #include "ep128emu.hpp"
 #include "bplist.hpp"
 #ifdef ENABLE_SPRITEEXT
-#  include "spriteext.hpp"
+#include "spriteext.hpp"
 #endif
 
 namespace TVC64 {
