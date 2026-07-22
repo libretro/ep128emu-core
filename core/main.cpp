@@ -122,6 +122,7 @@ bool diskEjected = false;
 bool tapeContent = false;
 bool diskContent = false;
 bool hddContent  = false;
+bool cartContent = false;
 bool fileContent = false;
 
 Ep128Emu::VMThread              *vmThread    = (Ep128Emu::VMThread *) 0;
@@ -655,9 +656,9 @@ void retro_get_system_info(struct retro_system_info *info)
   info->library_version  = "v1.2.13";
   info->need_fullpath    = true;
 #ifndef EXCLUDE_SOUND_LIBS
-  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|mp3|.";
+  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|crt|cdt|tzx|wav|tvcwav|mp3|.";
 #else
-  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|cdt|tzx|wav|tvcwav|.";
+  info->valid_extensions = "img|dsk|vhd|tap|dtf|com|trn|128|bas|cas|crt|cdt|tzx|wav|tvcwav|.";
 #endif // EXCLUDE_SOUND_LIBS
 }
 
@@ -914,6 +915,7 @@ bool retro_load_game(const struct retro_game_info *info)
     std::string fileExtDtf = "dtf";
     std::string fileExtTvc = "cas";
     std::string diskExtTvc = "dsk";
+    std::string cartExtTvc = "crt";
     //std::string tapeExtSnd = "notwav";
     //std::string tapeExtZx = "tzx";
     std::string fileExtZx = "tap";
@@ -953,6 +955,7 @@ bool retro_load_game(const struct retro_game_info *info)
     static const char *TAPirFileMagic = "\x00\x6A\xFF";
     static const char *waveFileMagic = "RIFF";
     static const char *tzxFileMagic = "ZXTape!\032\001";
+    static const char *tvcCartridgeMagic = "MOPS";
     static const char *tvcDskFileHeader = "\xeb\xfe\x90";
     static const char *epDskFileHeader1 = "\xeb\x3c\x90";
     static const char *epDskFileHeader2 = "\xeb\x4c\x90";
@@ -972,6 +975,7 @@ bool retro_load_game(const struct retro_game_info *info)
     diskContent = false;
     hddContent  = false;
     fileContent = false;
+    cartContent = false;
     int detectedMachineDetailedType = Ep128Emu::VM_config.at("VM_CONFIG_UNKNOWN");
 
     // start with longer magic strings - less chance of mis-detection
@@ -1010,6 +1014,11 @@ bool retro_load_game(const struct retro_game_info *info)
       detectedMachineDetailedType = Ep128Emu::VM_config.at("TVC64_TAPE");
       tapeContent=true;
       startupSequence =" \xffload\r";
+    }
+    else if(contentExt == cartExtTvc && header_match(tvcCartridgeMagic,tmpBuf,4))
+    {
+      detectedMachineDetailedType = Ep128Emu::VM_config.at("TVC64_TAPE");
+      cartContent=true;
     }
     else if (contentExt == fileExtZx && zx_header_match(tmpBuf))
     {
@@ -1123,6 +1132,11 @@ bool retro_load_game(const struct retro_game_info *info)
         // Todo: add tzx based advanced detection here
         /*    tape = openTapeFile(fileName.c_str(), 0,
                         defaultTapeSampleRate, bitsPerSample);*/
+      }
+      if (cartContent)
+      {
+        config->memory.rom[0x01].file=info->path;
+        config->memoryConfigurationChanged = true;
       }
       if (diskContent || tapeContent) {
         scan_multidisk_files(info->path);

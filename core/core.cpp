@@ -553,7 +553,7 @@ LibretroCore::LibretroCore(retro_log_printf_t log_cb_, int machineDetailedType_,
       }
     }
   }
-  config->memoryConfigurationChanged = true;  
+  config->memoryConfigurationChanged = true;
   
   initialize_keyboard_map();
   initialize_joystick_map(std::string(""),std::string(""),std::string(""),-1,
