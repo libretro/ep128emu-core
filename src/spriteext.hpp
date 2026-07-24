@@ -41,6 +41,7 @@ namespace Ep128 {
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
+    uint8_t lastFunctionResult;
      unsigned int  nBytes_;
      // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
      // ( = 108 * 4) bytes in compressed format
@@ -180,7 +181,10 @@ namespace Ep128 {
 #define REG_FUNCTION_EXECUTE 0xC0
 #define REG_FUNCTION_PARAM_START 0xC1
 #define REG_FUNCTION_RESULT 0xC2
+#define REG_FUNCTION_MULTI_EXECUTE 0xC6
+#define REG_FUNCTION_BITMAP_BASE 0xC7
 #define SPRITEEXT_FUNCTION_RESULT_PENDING 0xFF
+
 #define REG_SID_BASE 0xE0
 #define REG_SID_LAST 0xF9
 #define REG_SCREEN_BITMAP_BASE_ADDR 0xA4

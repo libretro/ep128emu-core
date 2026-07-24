@@ -69,6 +69,7 @@
 #include "spriteext.hpp"
 #include "tvcmem.hpp"
 #include "ide.hpp"
+#include "tvc-routines.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -77,6 +78,7 @@
 namespace Ep128 {
 
   // Port masks to prevent unreasonable values on write
+  // 0: no mask, 0xFF: readonly register
   static const uint8_t namedPortMasks[256] = {
       0,    1,    0,    1,   0,    1,    0,    1,   0,  1,  0,  1,   0,  1,  0,  1,
       0,    1,    0,    1,   0,    1,    0,    1,   0,  1,  0,  1,   0,  1,  0,  1,
@@ -90,8 +92,8 @@ namespace Ep128 {
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
    0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87,  0xF,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+   0xff, 0xff, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0
 };
@@ -127,8 +129,10 @@ namespace Ep128 {
     namedPortValues[REG_MEMORY_MAP_8M_P3_LOW]    = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
     namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
     updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
+    // TODO: these are probably not needed
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
+    TVC256::init_routines();
     this->reset(1);
   }
 
@@ -252,6 +256,10 @@ namespace Ep128 {
          namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
          namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
        break;
+       case REG_FUNCTION_EXECUTE:
+         return 0xFF; // TODO - delayed execution
+       case REG_FUNCTION_RESULT:
+         return lastFunctionResult;
        default:
          // Video related ports are read instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
@@ -273,6 +281,9 @@ namespace Ep128 {
   {
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
      
+     // Read-only register: no-op
+     if (namedPortMasks[portAddr] == 0xff)
+        return;
      // Apply mask to prevent illegal values
      if (namedPortMasks[portAddr])
         value = value & namedPortMasks[portAddr];
@@ -285,6 +296,11 @@ namespace Ep128 {
          namedPortValues[REG_USB_MOUSE_SPEED] = value;
          updateMouseSpeed(value);
        break;
+       case REG_FUNCTION_EXECUTE:
+         namedPortValues[REG_FUNCTION_EXECUTE] = value;
+         lastFunctionResult = 0xff;
+         // TODO
+         break;
        // Combined enable/disable registers.
        // Note: these are delayed on real HW
        case REG_SPRITE_FOREGROUND_LOW:
