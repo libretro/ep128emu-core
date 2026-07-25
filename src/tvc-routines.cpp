@@ -1,3 +1,6 @@
+/* This file is originated from tvc256++ firmware. The structure
+   is kept to enable merge of later changes easier than re-implementing
+   all the functions. */
 #include <stdint.h>
 #include <string.h>
 //#include "hardware/sync.h"
@@ -61,13 +64,14 @@ uint8_t clear_text_screen(__unused uint8_t* bufferStart) {
 }
 
 // Fills the bitmap screen area with the transparent pattern
-uint32_t functionBitmapBaseAddr = 0; 
+uint32_t functionBitmapBaseAddr = 0;
 uint8_t clear_bitmap_screen(__unused uint8_t* bufferStart) {
     (void) bufferStart;
-/*    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
+    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
             (uint32_t)(registerBitmapBaseAddr & 0x03) * 0x8000 : 
             (uint32_t)(registerFunctionBitmapBase & 0x1f) * 0x8000;
-    memset(&TVC_RAM[functionBitmapBaseAddr], 0x88, 128 * screenMaxY);*/
+    //memset(&TVC_RAM[functionBitmapBaseAddr], 0x88, 128 * screenMaxY);
+    emuMem->memsetRaw(RAMBASE + functionBitmapBaseAddr, 128*screenMaxY, 0x88);
     return 0;
 }
 

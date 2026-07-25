@@ -1,3 +1,6 @@
+/* This file is originated from tvc256++ firmware. The structure
+   is kept to enable merge of later changes easier than re-implementing
+   all the functions. */
 #ifndef EP128EMU_TVCROUTINES_H
 #define EP128EMU_TVCROUTINES_H
 
@@ -16,6 +19,7 @@ namespace TVC256 {
 extern uint8_t registerScreenBaseAddr;
 extern uint8_t registerBitmapBaseAddr;
 extern uint8_t registerScreenColorBaseAddr;
+extern uint8_t registerFunctionBitmapBase;
 extern Ep128::Memory *emuMem;
 extern uint16_t screenMaxY;
 extern tvc_function_struct_t tvc256k_funct_struct_array[256];

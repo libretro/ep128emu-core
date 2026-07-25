@@ -127,6 +127,7 @@ namespace Ep128 {
     namedPortValues[REG_MEMORY_P3]               = REG_MEMORY_P3_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW]    = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P3_LOW]    = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
+    namedPortValues[REG_FUNCTION_BITMAP_BASE]    = REG_FUNCTION_BITMAP_BASE_DEFAULT;
     namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
     updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
     // TODO: these are probably not needed
@@ -221,6 +222,7 @@ namespace Ep128 {
      TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
      TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
+     TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
      
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
