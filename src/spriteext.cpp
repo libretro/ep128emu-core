@@ -216,6 +216,19 @@ namespace Ep128 {
   {
   }
 
+  void SpriteExt::executeFunction(uint8_t funcCode)
+  {
+     TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
+     TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
+     TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
+     TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
+     
+     if (TVC256::tvc256k_funct_struct_array[funcCode].func)
+     {
+        // TODO
+        TVC256::tvc256k_funct_struct_array[funcCode].func(NULL);
+     }
+  }
   uint8_t SpriteExt::readNamedPort(bool secondary)
   {
      uint8_t retval = 0xFF;
@@ -299,7 +312,7 @@ namespace Ep128 {
        case REG_FUNCTION_EXECUTE:
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
          lastFunctionResult = 0xff;
-         // TODO
+         executeFunction(value);
          break;
        // Combined enable/disable registers.
        // Note: these are delayed on real HW
@@ -698,6 +711,9 @@ namespace Ep128 {
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
     size_t currSlotPlus = 0;
+    // todo: this is ugly
+    if (!TVC256::emuMem)
+      TVC256::emuMem = mem;
     if (vsyncCnt>0)
       curLine = 0;
     else 

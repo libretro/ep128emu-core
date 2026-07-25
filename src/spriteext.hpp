@@ -72,6 +72,7 @@ namespace Ep128 {
     uint16_t sprite_active_pixels[16];
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
+    void executeFunction(uint8_t funcCode);
 
    public:
     uint8_t io_port_values[16];

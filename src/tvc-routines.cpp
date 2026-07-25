@@ -20,11 +20,14 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define abs(x) ((x) < 0 ? (x) : (-(x)))
 #define __unused
+// TVC256_FASTRAM_START_SEGMENT 0xE8
+#define RAMBASE ((0xE8)<<14)
 namespace TVC256 {
 
 uint8_t registerScreenBaseAddr;
 uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
+Ep128::Memory *emuMem = NULL;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -48,6 +51,8 @@ uint8_t bitmap_byte_masks[256];
 // Fills the text screen area with spaces and the set to current text color
 uint8_t clear_text_screen(__unused uint8_t* bufferStart) {
     (void) bufferStart;
+    emuMem->memsetRaw(RAMBASE + registerScreenBaseAddr      * 0x0400, 32*screenMaxY/8, 0x20);
+    emuMem->memsetRaw(RAMBASE + registerScreenColorBaseAddr * 0x0400, 32*screenMaxY/8, screenTextColor);
 /*    memset(&TVC_RAM[registerScreenBaseAddr * 0x0400], 0x20, 32*screenMaxY/8);
     memset(&TVC_RAM[registerScreenColorBaseAddr * 0x0400], screenTextColor, 32*screenMaxY/8);*/
     screenTextPosX = 0;
