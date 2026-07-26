@@ -74,6 +74,7 @@ namespace Ep128 {
     inline void writeRaw(uint32_t addr, uint8_t value);
     inline void writeROM(uint32_t addr, uint8_t value);
     inline void memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value);
+    inline uint8_t* memGet(uint16_t addr);
     void setPage(uint8_t page, uint8_t segment);
     inline uint8_t getPage(uint8_t page) const;
     inline const uint8_t * getVideoMemory() const;
@@ -197,6 +198,18 @@ namespace Ep128 {
       uint16_t memsetEndAddr   = currSegment == endSegment   ? (startAddr+len-1) & 0x3FFF : 0x3FFF;
       std::memset(segmentTable[currSegment]+memsetStartAddr, value, memsetEndAddr - memsetStartAddr + 1);
     }
+  }
+
+inline uint8_t* Memory::memGet(uint16_t addr)
+  {
+    uint8_t page = uint8_t(addr >> 14);
+#ifdef ENABLE_SDEXT    
+    // memGet is not expected to be used for sdext
+    if (EP128EMU_UNLIKELY(sdext->isSDExtAddress(addr))) {
+      return nullptr;
+    }
+#endif
+    return &(pageAddressTableW[page][addr]);
   }
 
   inline void Memory::writeROM(uint32_t addr, uint8_t value)

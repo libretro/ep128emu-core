@@ -228,22 +228,19 @@ namespace Ep128 {
 
   void SpriteExt::executeFunction(uint8_t funcCode)
   {
-     // Convert buffer position to absolute segment table
-     /*uint8_t bufferSegment = namedPortValues[REG_FUNCTION_PARAM_START] > 127 ?
-                             mem
-     uint8_t bufferStart = */
+     // Maybe memGet could be skipped, and getSegmentPtr + paging info + pointer arithmetic used, but..
+     uint8_t *bufferStart = hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
      TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
      TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
      TVC256::emuMem = hostMem;
-     
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
         // TODO
-        TVC256::tvc256k_funct_struct_array[funcCode].func(NULL);
+        TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)

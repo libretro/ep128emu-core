@@ -41,7 +41,7 @@ uint8_t videoMode;
 uint8_t registerInitializedUSBDevices;
 uint8_t registerFunctionBitmapBase;
 bool psram_drive_initialized;
-
+uint32_t free_psram_start;
 
 uint8_t screenTextPosX = 0;
 uint8_t screenTextPosY = 0;
@@ -64,7 +64,7 @@ uint8_t clear_text_screen(__unused uint8_t* bufferStart) {
 }
 
 // Fills the bitmap screen area with the transparent pattern
-uint32_t functionBitmapBaseAddr = 0;
+uint32_t functionBitmapBaseAddr = 0; 
 uint8_t clear_bitmap_screen(__unused uint8_t* bufferStart) {
     (void) bufferStart;
     functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
@@ -87,11 +87,13 @@ uint8_t scrollScreenUp() {
 }
 
 void print_char_scr_code(uint8_t ch) {
-/*    uint32_t screenBaseAddr = (registerScreenBaseAddr & 0x3F) * 0x0400;
+    uint32_t screenBaseAddr = (registerScreenBaseAddr & 0x3F) * 0x0400;
     uint32_t sColorBaseAddr = (registerScreenColorBaseAddr & 0x3F) * 0x0400;
     uint16_t pos = screenBaseAddr + screenTextPosY*32 + screenTextPosX;
-    TVC_RAM[pos] = ch;
-    TVC_RAM[sColorBaseAddr + screenTextPosY*32 + screenTextPosX] = screenTextColor;
+    //TVC_RAM[pos] = ch;
+    emuMem->memsetRaw(RAMBASE + pos, 1, ch);
+    //TVC_RAM[sColorBaseAddr + screenTextPosY*32 + screenTextPosX] = screenTextColor;
+    emuMem->memsetRaw(RAMBASE + sColorBaseAddr + screenTextPosY*32 + screenTextPosX, 1, screenTextColor);
     screenTextPosX++;
     if(screenTextPosX >= 32) {
         screenTextPosX = 0;
@@ -100,14 +102,14 @@ void print_char_scr_code(uint8_t ch) {
             scrollScreenUp();
             screenTextPosY--;
         }
-    }*/
+    }
 }
 
 // Prints a character as a screen code at the current text position and advances the cursor
 uint8_t print_character_screen_code(uint8_t* bufferStart) {
     print_char_scr_code(*bufferStart);
     return 0;
-}
+};
 
 void print_hex_digit(uint8_t digit) {
     uint8_t d;
@@ -1493,6 +1495,32 @@ uint8_t copy_image_block_fast(uint8_t *bufStart) {
     return 0;   
 }
 
+
+
+uint8_t create_psram_drive(uint8_t *bufStart) {
+    uint16_t num_of_blocks = *(uint16_t *)&bufStart;
+    int res = 0 /*psram_drive_init(num_of_blocks)*/;
+    return res >= 0 ? 0 : res;
+}
+
+uint8_t get_first_usable_psram_pos(uint8_t *bufStart) {
+    uint32_t value = (*(uint32_t *)&bufStart & 0xff000000) | (free_psram_start & 0x00ffffff);
+    *(uint32_t *)&bufStart = value;
+    return 0;
+}
+
+uint8_t delete_psram_drive(__unused uint8_t *bufStart) {
+    if(psram_drive_initialized) {
+        int len = 0/*psram_size() * 1024 * 1024 - free_psram_start*/;
+        memset(psram_array, 0xff, len);
+        psram_drive_initialized = false;
+        free_psram_start = 0;
+    }
+    
+    return 0;
+}
+
+
 /**
  * Copies a sub-image from a larger image to the selected screen.
  * INPUT:
@@ -1655,6 +1683,12 @@ uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
     return (uint8_t)res;
 }
 
+/**
+ * Reaf file into INPUT buffer
+ * fileHandle(4): the open file handle
+ * lengh(2): the length of data to be readf
+ */
+/*
 uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
     *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint16_t *)&bufferStart[4];
@@ -1693,7 +1727,8 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
 
 uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
     *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
-    *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;    // size
+    *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
+        // size
     *(uint32_t *)&TVC_ROM[0x1907] = (*(uint32_t *)&bufferStart[7]) & 0x00ffffff;    // fast ram destination (0-256k)
     
     // usb_printf("tvcfunc_read_file_dest: size: %d, dest: %06x\n", (*(uint32_t *)&TVC_ROM[0x1904]) & 0x00ffffff, (*(uint32_t *)&TVC_ROM[0x1907]) & 0x00ffffff);main_loop_task();sleep_ms(50);
@@ -1714,7 +1749,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
 
     if(res == FR_OK) {
         // On success, store the number of bytes read back to bufferStart, 4 bytes!
-        *(uint32_t *)&bufferStart[4] = (*(uint32_t *)&TVC_ROM[0x1a00]) & 0x00ffffff;
+        memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
     return (uint8_t)res;
 }
@@ -2102,7 +2137,7 @@ void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
 }
 
 
-void init_routines(void) {
+void init_routines() {
     setStructArrayElement( 0, clear_text_screen,             0);
     setStructArrayElement( 1, clear_bitmap_screen,           0);
     setStructArrayElement( 2, print_character_screen_code,   1);
@@ -2137,6 +2172,10 @@ void init_routines(void) {
     setStructArrayElement(31, fill_ellipse,                  6);
     setStructArrayElement(32, copy_image_block_fast,         9);
     setStructArrayElement(33, copy_sub_image,                18);
+    setStructArrayElement(34, create_psram_drive,            2);
+    setStructArrayElement(35, get_first_usable_psram_pos,    0);
+    setStructArrayElement(36, delete_psram_drive,            0);
+
 /*
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);
@@ -2145,8 +2184,8 @@ void init_routines(void) {
     setStructArrayElement(128+MSC_FOPENDIR,     tvcfunc_open_dir,        0x81);
     setStructArrayElement(128+MSC_FCLOSEDIR,    tvcfunc_close_dir,       4);
     setStructArrayElement(128+MSC_FREADDIR,     tvcfunc_read_dir,        4);
-    setStructArrayElement(128+MSC_FREAD_DEST,   tvcfunc_read_file_dest,  10);
     setStructArrayElement(128+MSC_FWRITE_SRC,   tvcfunc_write_file_source, 10);
+    setStructArrayElement(128+MSC_FREAD_DEST,   tvcfunc_read_file_dest,  10);
     setStructArrayElement(128+MSC_FSEEK,        tvcfunc_file_seek,       8);
     setStructArrayElement(128+MSC_FGETCWD,      tvcfunc_getcwd,          0);
     setStructArrayElement(128+MSC_FCHDIR,       tvcfunc_chdir,           0x81);
