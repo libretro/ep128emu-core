@@ -36,6 +36,7 @@ namespace Ep128 {
 
   class SpriteExt {
    protected:
+    Ep128::Memory *hostMem;
     bool      spriteExt_enabled;    // only used in temporaryDisable()
     bool      anyGfxEnabled;
     uint32_t  spriteExtSegment;
@@ -59,8 +60,8 @@ namespace Ep128 {
     uint8_t flashReadDebug(uint32_t addr) const;
     void updateMouseSpeed(uint8_t binValue);
     void updateAnyGfxEnabled();
-    void updateLineWithGfx(size_t outPos, uint8_t currSlot, Ep128::Memory *mem);
-    void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, Ep128::Memory *mem, size_t spriteNum);
+    void updateLineWithGfx(size_t outPos, uint8_t currSlot);
+    void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum);
     size_t curLine;
     size_t scrollX;
     size_t scrollY;
@@ -93,8 +94,8 @@ namespace Ep128 {
     void   writeNamedPort(bool secondary, uint8_t value);
     uint8_t readNamedPortDebug(uint8_t portIndex);
     void   writeNamedPortDebug(uint8_t portIndex, uint8_t value);
-
-    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, Ep128::Memory *mem, uint8_t *irqState);
+    void setMemRef(Ep128::Memory *m);
+    const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
     uint8_t readCartP3(uint32_t addr);
     void writeCartP3(uint32_t addr, uint8_t data);
     uint8_t readCartP3Debug(uint32_t addr) const;

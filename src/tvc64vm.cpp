@@ -652,7 +652,8 @@ namespace TVC64 {
   {
 #ifdef ENABLE_SPRITEEXT
     size_t newnBytes = nBytes;
-    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, reinterpret_cast<Ep128::Memory*>(&vm.memory), &vm.irqState);
+    // writing irqState directly is ugly
+    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(newBuf, newnBytes);
     if (vm.videoCapture)
@@ -1631,6 +1632,7 @@ namespace TVC64 {
 #endif
 #ifdef ENABLE_SPRITEEXT
      spriteext.reset(int(isColdReset));
+     spriteext.setMemRef(reinterpret_cast<Ep128::Memory*>(&memory));
 #endif
   }
 
