@@ -73,8 +73,6 @@ namespace Ep128 {
     inline void write(uint16_t addr, uint8_t value);
     inline void writeRaw(uint32_t addr, uint8_t value);
     inline void writeROM(uint32_t addr, uint8_t value);
-    inline void memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value);
-    inline uint8_t* memGet(uint16_t addr);
     void setPage(uint8_t page, uint8_t segment);
     inline uint8_t getPage(uint8_t page) const;
     inline const uint8_t * getVideoMemory() const;
@@ -175,41 +173,6 @@ namespace Ep128 {
     uint8_t segment = uint8_t(addr >> 14);
     if (!segmentROMTable[segment])
       segmentTable[segment][addr & 0x3FFF] = value;
-  }
-
-  inline void Memory::memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value)
-  {
-    if (len > 0xFFFFFFFF - startAddr)
-      len = 0xFFFFFFFF - startAddr;
-#ifdef ENABLE_SDEXT
-    // memset is not expected to be used for sdext, fall back to one-by-one writes
-    if (EP128EMU_UNLIKELY(sdext->isSDExtAddress(startAddr))) {
-      for (uint32_t i = startAddr; i <= startAddr + len - 1; i++)
-         sdext->writeCartP3(i, value);
-      return;
-    }
-#endif
-    uint8_t startSegment = uint8_t(startAddr >> 14);
-    uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
-    for (uint8_t currSegment = startSegment; currSegment <= endSegment; currSegment++)
-    {
-      if (segmentROMTable[currSegment]) continue;
-      uint16_t memsetStartAddr = currSegment == startSegment ? startAddr & 0x3FFF : 0;
-      uint16_t memsetEndAddr   = currSegment == endSegment   ? (startAddr+len-1) & 0x3FFF : 0x3FFF;
-      std::memset(segmentTable[currSegment]+memsetStartAddr, value, memsetEndAddr - memsetStartAddr + 1);
-    }
-  }
-
-inline uint8_t* Memory::memGet(uint16_t addr)
-  {
-    uint8_t page = uint8_t(addr >> 14);
-#ifdef ENABLE_SDEXT    
-    // memGet is not expected to be used for sdext
-    if (EP128EMU_UNLIKELY(sdext->isSDExtAddress(addr))) {
-      return nullptr;
-    }
-#endif
-    return &(pageAddressTableW[page][addr]);
   }
 
   inline void Memory::writeROM(uint32_t addr, uint8_t value)

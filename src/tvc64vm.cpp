@@ -1632,7 +1632,7 @@ namespace TVC64 {
 #endif
 #ifdef ENABLE_SPRITEEXT
      spriteext.reset(int(isColdReset));
-     spriteext.setMemRef(reinterpret_cast<Ep128::Memory*>(&memory));
+     spriteext.setMemRef(&memory);
 #endif
   }
 

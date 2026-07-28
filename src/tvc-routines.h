@@ -5,7 +5,7 @@
 #define EP128EMU_TVCROUTINES_H
 
 #include <stdint.h>
-#include "memory.hpp"
+#include "tvcmem.hpp"
 
 typedef uint8_t (*tvc_function_t)(uint8_t* bufferStart);
 
@@ -20,7 +20,7 @@ extern uint8_t registerScreenBaseAddr;
 extern uint8_t registerBitmapBaseAddr;
 extern uint8_t registerScreenColorBaseAddr;
 extern uint8_t registerFunctionBitmapBase;
-extern Ep128::Memory *emuMem;
+extern TVC64::Memory *emuMem;
 extern uint16_t screenMaxY;
 extern tvc_function_struct_t tvc256k_funct_struct_array[256];
 

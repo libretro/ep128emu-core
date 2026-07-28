@@ -30,7 +30,7 @@ namespace TVC256 {
 uint8_t registerScreenBaseAddr;
 uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
-Ep128::Memory *emuMem = NULL;
+TVC64::Memory *emuMem = NULL;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];

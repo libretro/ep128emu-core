@@ -210,7 +210,7 @@ namespace Ep128 {
       namedPortValues[i] = 0x00;
   }
 
-  void SpriteExt::setMemRef(Ep128::Memory *m)
+  void SpriteExt::setMemRef(TVC64::Memory *m)
   {
     if (m)
       hostMem = m;
@@ -228,8 +228,6 @@ namespace Ep128 {
 
   void SpriteExt::executeFunction(uint8_t funcCode)
   {
-     // Maybe memGet could be skipped, and getSegmentPtr + paging info + pointer arithmetic used, but..
-     uint8_t *bufferStart = hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
      TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
      TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
@@ -239,7 +237,10 @@ namespace Ep128 {
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        // TODO
+        uint8_t* bufferStart = hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
+        printf("Func call: %d params at %04x, val %02x %02x\n",
+               funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
+               bufferStart[0],bufferStart[1]);
         TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
      }
   }
