@@ -1008,11 +1008,12 @@ namespace TVC64 {
       break;
     // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
 #ifdef ENABLE_SPRITEEXT
-    // 0x40-0x4F: extension 2, tvc256++ (spriteext)
+    // 0x30-0x3F: extension 2, tvc256++ (spriteext)
     case 0x30:
     case 0x32:
     case 0x34:
     case 0x36:
+      // Register select or register increment change: just record the write
       if (vm.spriteExtEnabled)
         vm.spriteext.io_port_values[addr-0x30] = value;
       break;
@@ -1035,15 +1036,12 @@ namespace TVC64 {
            vm.memory.psram_p3_reg = value & 0x7F;
            vm.memory.spriteext_p3_reg = 0x11;
          }
-
 #ifdef ENABLE_RESID
          else if (vm.spriteext.io_port_values[addr-0x31] >= REG_SID_BASE &&
                   vm.spriteext.io_port_values[addr-0x31] <= REG_SID_LAST)
          {
-
-          if (!vm.sidModel)
-            return;
-          else {
+          if (vm.sidModel)
+          {
             if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
               vm.setCallback(&TVC64VM::sidCallback, &vm, true);
               vm.sidEnabled = true;
@@ -1058,6 +1056,7 @@ namespace TVC64 {
       break;
 #endif
     // 0x40-0x4F: extension 3 (reserved currently for GameCard)
+    // TODO: 0x4F control register, 0x40 SN76489 register
     case 0x50:                          // toggle tape output (repeated 8 times)
       vm.tapeOutputSignal = ~(vm.tapeOutputSignal) & 0x01;
       break;

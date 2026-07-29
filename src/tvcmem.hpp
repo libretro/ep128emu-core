@@ -85,6 +85,7 @@ namespace TVC64 {
     inline uint8_t readNoDebug(uint16_t addr) const;
     inline uint8_t readRaw(uint32_t addr) const;
     inline void memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value);
+    inline void memmoveRaw(uint32_t dstAddr, uint32_t startAddr, uint16_t len);
     inline uint8_t* memGet(uint16_t addr);
     inline void write(uint16_t addr, uint8_t value);
     inline void writeRaw(uint32_t addr, uint8_t value);
@@ -217,6 +218,18 @@ namespace TVC64 {
       uint16_t memsetEndAddr   = currSegment == endSegment   ? (startAddr+len-1) & 0x3FFF : 0x3FFF;
       std::memset(segmentTable[currSegment]+memsetStartAddr, value, memsetEndAddr - memsetStartAddr + 1);
     }
+  }
+
+  inline void Memory::memmoveRaw(uint32_t dstAddr, uint32_t startAddr, uint16_t len)
+  {
+    if (len > 0xFFFFFFFF - startAddr)
+      len = 0xFFFFFFFF - startAddr;
+    if (len > 0xFFFFFFFF - dstAddr)
+      len = 0xFFFFFFFF - dstAddr;
+    // Note: memmoveRaw is not expected to be used for sdext, as it is not mapped to raw address space
+    uint8_t startSegment = uint8_t(startAddr >> 14);
+    uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
+    // TODO: map to std::memmove();
   }
 
   inline void Memory::writeROM(uint32_t addr, uint8_t value)
