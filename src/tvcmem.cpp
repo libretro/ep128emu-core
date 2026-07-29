@@ -499,7 +499,7 @@ namespace TVC64 {
       uint8_t cardSlot = uint16_t((n & 0xC000) >> 14);
       if (cardSlot == 0 || segmentTable[0x03 + cardSlot] == (uint8_t *) 0)
       {
-         // This allows fallback to readExtension which is where vtdos rom sub-paging is handled
+         // This also allows fallback to extensionRead which is where vtdos rom sub-paging is handled
          pageAddressTableR[6] = (uint8_t *) 0;
          pageAddressTableW[6] = (uint8_t *) 0;
       }
