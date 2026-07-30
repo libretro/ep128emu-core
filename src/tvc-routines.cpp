@@ -279,6 +279,10 @@ uint8_t memory_move_short(uint8_t *buf) {
     if(((source + length) >= 16384) || ((destination + length) >= 16384)) {
         return 2;
     }
+    if (memoryBlock < 0x10) memoryBlock += TVC256_FASTRAM_START_SEGMENT;
+    else if (memoryBlock == 0x10) memoryBlock = TVC256_SLOWRAM_START_SEGMENT + emuMem->psram_p2_reg;
+    else if (memoryBlock == 0x11) memoryBlock = TVC256_SLOWRAM_START_SEGMENT + emuMem->psram_p3_reg;
+    emuMem->memmoveRaw(memoryBlock * 0x4000 + destination, memoryBlock * 0x4000 + source, length);
     //memmove(&TVC_RAM[memoryBlock * 16384 + destination], &TVC_RAM[memoryBlock * 16384 + source], length);
     return 0;
 }
