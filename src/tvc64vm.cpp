@@ -1056,7 +1056,20 @@ namespace TVC64 {
       break;
 #endif
     // 0x40-0x4F: extension 3 (reserved currently for GameCard)
-    // TODO: 0x4F control register, 0x40 SN76489 register
+    // TODO: 0x40 SN76489 register
+    case 0x4F:
+      {
+         // Carry out "paging": map the GameCard ROM (may be present on segments 0x20-0x23)
+         // to the IOMEM area.
+         uint8_t subPage = value & 7;
+         uint8_t sourceSegment = TVCGAMECARD_ROM_START_SEGMENT + (subPage>>1);
+         if (vm.memory.getSegmentPtr(sourceSegment) && vm.memory.getSegmentPtr(0x06)) {
+           uint8_t* src = (uint8_t*)vm.memory.getSegmentPtr(sourceSegment);
+           if (subPage & 1) src += 0x2000;
+           std::memcpy((uint8_t*)vm.memory.getSegmentPtr(0x06), src, 0x2000);
+         }
+      }
+      break;
     case 0x50:                          // toggle tape output (repeated 8 times)
       vm.tapeOutputSignal = ~(vm.tapeOutputSignal) & 0x01;
       break;

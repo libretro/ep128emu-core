@@ -387,6 +387,16 @@ namespace TVC64 {
                   &(segmentTable[segment][0]), dataSize);
     }
 #endif // ENABLE_SPRITEEXT
+
+    // Initialize TVC GameCard IOMEM contents (8 kB in segment 0x06, slot 3)
+    // with the last 8 kB of the 64 kB ROM - that is, upper half of content
+    // for ROM segment 0x23 - if there was no iomem loaded there
+    if (segment == TVCGAMECARD_ROM_START_SEGMENT+3 && dataSize == 16384 &&
+        !segmentTable[0x06]) {
+      allocateSegment(0x06, true);
+      std::memcpy(&(segmentTable[0x06][0]),
+                  &(segmentTable[TVCGAMECARD_ROM_START_SEGMENT+3][0x2000]), 0x2000);
+    }
   }
 
   void Memory::deleteSegment(uint8_t segment)
