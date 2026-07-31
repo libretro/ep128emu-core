@@ -302,7 +302,10 @@ uint8_t memory_move_full(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     //memmove(&TVC_RAM[destination], &TVC_RAM[source], length);
+    emuMem->memmoveRaw(destination, source, length);
     return 0;
 }
 
@@ -338,10 +341,14 @@ uint8_t memory_move_from_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 8192*1024) || ((destination + length) >= 256*1024)) {
+    if(((source + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
+    emuMem->memmoveRaw(destination, source, length);
+
     return 0;
 }
 
@@ -357,10 +364,13 @@ uint8_t memory_move_to_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 256*1024) || ((destination + length) >= 8192*1024)) {
+    if(((source + length) >= 256*1024) || ((destination + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 1;
     }
+    destination += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
+    emuMem->memmoveRaw(destination, source, length);
     return 0;
 }
 /*
