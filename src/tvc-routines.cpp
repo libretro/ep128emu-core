@@ -691,16 +691,17 @@ uint8_t replace_pixel_color(uint8_t *bufStart) {
     if((start_address + length) > 256*1024) {
         return 1;
     }
+    start_address += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     for(uint32_t i=0; i<length; i++) {
-/*        uint8_t pixel = TVC_RAM[start_address + i];
+        uint8_t pixel = emuMem->readRaw(start_address + i);
         if((pixel & 0x0f) == color_from) {
             pixel = (pixel & 0xf0) | color_to;
-            TVC_RAM[start_address + i] = pixel;
+            emuMem->writeRaw(start_address + i, pixel);
         }
         if((pixel >> 4) == color_from) {
             pixel = (pixel & 0x0f) | (color_to << 4);
-            TVC_RAM[start_address + i] = pixel;
-        }*/
+            emuMem->writeRaw(start_address + i, pixel);
+        }
     }
     return 0;
 }
@@ -752,7 +753,7 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         return 2;
     }
     if(sourceInPSRAM) {
-        if ((source + (uint32_t)chunkSize * count) > 8192*1024) {
+        if ((source + (uint32_t)chunkSize * count) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) {
             return 3;
         }
     } else {
@@ -761,17 +762,23 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         }
     }
 
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     if(sourceInPSRAM) {
         // source is in PSRAM
+        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+
         for(int i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += chunkSize;
         }
     } else {
         // source is in fast RAM
+        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
         for(int i=0; i<count; i++) {
             //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += chunkSize;
         }
@@ -806,34 +813,40 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
     if(destination + chunkSize + (count-1)*increment > 256*1024) {
         return 2;
     }
-    if(sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > 8192*1024)) {
+    if(sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 3;
     }
     if(!sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > 256*1024)) {
         return 3;
     }
 
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     if(sourceInPSRAM) {
         // source is in PSRAM
+        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
         for(uint16_t i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += increment;
         }
     } else {
         // source is in fast RAM
+        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
         if((destination < source + chunkSize + (count - 1) * increment) && (destination > source)) {
             // destination is within the source blocks, copy backwards to handle overlap
             destination += (count - 1) * increment;
             source += (count - 1) * increment;
             for(int i=count-1; i>=0; i--) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+                emuMem->memmoveRaw(destination, source, chunkSize);
                 destination -= increment;
                 source -= increment;
             }
         } else {
             for(uint16_t i=0; i<count; i++) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+                emuMem->memmoveRaw(destination, source, chunkSize);
                 destination += increment;
                 source += increment;
             }
