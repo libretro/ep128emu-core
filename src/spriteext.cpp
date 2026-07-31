@@ -149,33 +149,34 @@ namespace Ep128 {
     }
   }
 
+  static const uint8_t i4ConvTable[16] = {
+    // I0,R0 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0x00, 0x03, 0x30, 0x33,
+    // I0,R1 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0x0C, 0x0F, 0x3C, 0x3F,
+    // I1,R0 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0xC0, 0xC3, 0xF0, 0xF3,
+    // I1,R1 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0xCC, 0xCF, 0xFC, 0xFF };
+
   // Convert one 4-bit 16-color value to a 8-bit TVCemu specific format
   // except when color is transparent - then fall back to provided value
   uint8_t SpriteExt::i4ToTVCRGB(uint8_t val, uint8_t transparent_val)
   {
     // igrb with double bits - see TVCVideo::convertPixelToRGB
-    // todo: replace with fixed palette conversion array for emulation speed
     if (val == SPRITEEXT_TRANSPARENT_COLOR)
       return transparent_val;
-    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
-    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
-    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
-    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
-    return (i |r | g | b);
+    return i4ConvTable[val & 0x0F];
   }
 
+  // Same as i4ToTVCRGB, but set collision bit if there is no transparency
   uint8_t SpriteExt::i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit)
   {
     // igrb with double bits - see TVCVideo::convertPixelToRGB
-    // todo: replace with fixed palette conversion array for emulation speed
     if (val == SPRITEEXT_TRANSPARENT_COLOR)
       return transparent_val;
     SET_BIT(*collision_mask,collision_bit);
-    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
-    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
-    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
-    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
-    return (i |r | g | b);
+    return i4ConvTable[val & 0x0F];
   }
   
   void SpriteExt::setEnabled(bool isEnabled)
@@ -241,7 +242,7 @@ namespace Ep128 {
         printf("Func call: %d params at %04x, val %02x %02x\n",
                funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
                bufferStart[0],bufferStart[1]);
-        TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
+        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)
