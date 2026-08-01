@@ -29,7 +29,6 @@
    - Update SConstruct - simplify fltk, portaudio etc. version detection
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
-   - Fake gamecard rom for presenting the ID string
    - State save/load support
    - Improve performance
    - Debug ports: show tvcext ports from 256-512
@@ -49,11 +48,17 @@
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
    - SID emulation sound test against HW and frequency correction
-   - Function registers
    - Function implementation
-   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio -- poke 2821,129 is enough
    - Extra file i/o functions (get_pwd .. seek_file)
-   - File i/o functions for card (get_iobase, get_membase)
+            DW      pwd_handler             ;  6
+            DW      opendir_handler         ;  7
+            DW      readdir_handler         ;  8
+            DW      mkdir_handler           ;  9
+            DW      delete_handler          ; 10
+            DW      rename_handler          ; 11
+            DW      seek_handler            ; 12
+            DW      iobase_handler          ; 13
+            DW      membase_handler         ; 14
 
 */
 
@@ -149,33 +154,34 @@ namespace Ep128 {
     }
   }
 
+  static const uint8_t i4ConvTable[16] = {
+    // I0,R0 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0x00, 0x03, 0x30, 0x33,
+    // I0,R1 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0x0C, 0x0F, 0x3C, 0x3F,
+    // I1,R0 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0xC0, 0xC3, 0xF0, 0xF3,
+    // I1,R1 + B0,G0 - B1,G0 - B0,G1 - B1,G1
+    0xCC, 0xCF, 0xFC, 0xFF };
+
   // Convert one 4-bit 16-color value to a 8-bit TVCemu specific format
   // except when color is transparent - then fall back to provided value
   uint8_t SpriteExt::i4ToTVCRGB(uint8_t val, uint8_t transparent_val)
   {
     // igrb with double bits - see TVCVideo::convertPixelToRGB
-    // todo: replace with fixed palette conversion array for emulation speed
     if (val == SPRITEEXT_TRANSPARENT_COLOR)
       return transparent_val;
-    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
-    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
-    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
-    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
-    return (i |r | g | b);
+    return i4ConvTable[val & 0x0F];
   }
 
+  // Same as i4ToTVCRGB, but set collision bit if there is no transparency
   uint8_t SpriteExt::i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit)
   {
     // igrb with double bits - see TVCVideo::convertPixelToRGB
-    // todo: replace with fixed palette conversion array for emulation speed
     if (val == SPRITEEXT_TRANSPARENT_COLOR)
       return transparent_val;
     SET_BIT(*collision_mask,collision_bit);
-    uint8_t r = (val & 0x04) ? 0x0C : 0x00;
-    uint8_t g = (val & 0x02) ? 0x30 : 0x00;
-    uint8_t b = (val & 0x01) ? 0x03 : 0x00;
-    uint8_t i = (val & 0x08) ? 0xC0 : 0x00;
-    return (i |r | g | b);
+    return i4ConvTable[val & 0x0F];
   }
   
   void SpriteExt::setEnabled(bool isEnabled)
@@ -241,7 +247,7 @@ namespace Ep128 {
         printf("Func call: %d params at %04x, val %02x %02x\n",
                funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
                bufferStart[0],bufferStart[1]);
-        TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
+        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)
@@ -260,6 +266,7 @@ namespace Ep128 {
        case REG_MEMORY_PSRAM_SIZE_IN_MB:
          retval = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
          break;
+       // Mouse is reported always
        case REG_USB_INIT:
          retval = REG_USB_INIT_DEFAULT;
          break;
@@ -271,6 +278,7 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P2_HIGH:
        case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_FUNCTION_BITMAP_BASE:
          retval = namedPortValues[portAddr];
          break;
        // Clear on read
@@ -284,8 +292,10 @@ namespace Ep128 {
          namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
          namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
        break;
+       case REG_SCREEN_Y:
+         retval = (uint8_t) curLine;
        case REG_FUNCTION_EXECUTE:
-         return 0xFF; // TODO - delayed execution
+         return namedPortValues[REG_FUNCTION_EXECUTE]; // TODO - delayed execution
        case REG_FUNCTION_RESULT:
          return lastFunctionResult;
        default:

@@ -302,7 +302,10 @@ uint8_t memory_move_full(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     //memmove(&TVC_RAM[destination], &TVC_RAM[source], length);
+    emuMem->memmoveRaw(destination, source, length);
     return 0;
 }
 
@@ -338,10 +341,14 @@ uint8_t memory_move_from_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 8192*1024) || ((destination + length) >= 256*1024)) {
+    if(((source + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
+    emuMem->memmoveRaw(destination, source, length);
+
     return 0;
 }
 
@@ -357,10 +364,13 @@ uint8_t memory_move_to_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 256*1024) || ((destination + length) >= 8192*1024)) {
+    if(((source + length) >= 256*1024) || ((destination + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 1;
     }
+    destination += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
+    emuMem->memmoveRaw(destination, source, length);
     return 0;
 }
 /*
@@ -681,16 +691,17 @@ uint8_t replace_pixel_color(uint8_t *bufStart) {
     if((start_address + length) > 256*1024) {
         return 1;
     }
+    start_address += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     for(uint32_t i=0; i<length; i++) {
-/*        uint8_t pixel = TVC_RAM[start_address + i];
+        uint8_t pixel = emuMem->readRaw(start_address + i);
         if((pixel & 0x0f) == color_from) {
             pixel = (pixel & 0xf0) | color_to;
-            TVC_RAM[start_address + i] = pixel;
+            emuMem->writeRaw(start_address + i, pixel);
         }
         if((pixel >> 4) == color_from) {
             pixel = (pixel & 0x0f) | (color_to << 4);
-            TVC_RAM[start_address + i] = pixel;
-        }*/
+            emuMem->writeRaw(start_address + i, pixel);
+        }
     }
     return 0;
 }
@@ -742,7 +753,7 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         return 2;
     }
     if(sourceInPSRAM) {
-        if ((source + (uint32_t)chunkSize * count) > 8192*1024) {
+        if ((source + (uint32_t)chunkSize * count) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) {
             return 3;
         }
     } else {
@@ -751,17 +762,23 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         }
     }
 
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     if(sourceInPSRAM) {
         // source is in PSRAM
+        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+
         for(int i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += chunkSize;
         }
     } else {
         // source is in fast RAM
+        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
         for(int i=0; i<count; i++) {
             //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += chunkSize;
         }
@@ -796,34 +813,40 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
     if(destination + chunkSize + (count-1)*increment > 256*1024) {
         return 2;
     }
-    if(sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > 8192*1024)) {
+    if(sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 3;
     }
     if(!sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > 256*1024)) {
         return 3;
     }
 
+    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     if(sourceInPSRAM) {
         // source is in PSRAM
+        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
         for(uint16_t i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
+            emuMem->memmoveRaw(destination, source, chunkSize);
             destination += increment;
             source += increment;
         }
     } else {
         // source is in fast RAM
+        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
         if((destination < source + chunkSize + (count - 1) * increment) && (destination > source)) {
             // destination is within the source blocks, copy backwards to handle overlap
             destination += (count - 1) * increment;
             source += (count - 1) * increment;
             for(int i=count-1; i>=0; i--) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+                emuMem->memmoveRaw(destination, source, chunkSize);
                 destination -= increment;
                 source -= increment;
             }
         } else {
             for(uint16_t i=0; i<count; i++) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
+                emuMem->memmoveRaw(destination, source, chunkSize);
                 destination += increment;
                 source += increment;
             }
@@ -864,6 +887,7 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
         return 1;
     }
 
+    phase_address += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     if (color_mode == 0) {
         // 2c sprite phase
         if(flip_mode == 0) {
@@ -871,11 +895,11 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
             for(int i=0; i<phase_count; i++) {
                 for(int j=0; j<21; j++) {
                     uint32_t baseAddress = phase_address + i*64 + j*3;
-                    //uint8_t leftByte = reverse8BitOrder(TVC_RAM[baseAddress + 2]);
-                    //uint8_t rightByte = reverse8BitOrder(TVC_RAM[baseAddress]);
-                    //TVC_RAM[baseAddress + 1] = reverse8BitOrder(TVC_RAM[baseAddress + 1]);
-                    //TVC_RAM[baseAddress] = leftByte;
-                    //TVC_RAM[baseAddress+2] = rightByte;
+                    uint8_t leftByte = reverse8BitOrder(emuMem->readRaw(baseAddress + 2));
+                    uint8_t rightByte = reverse8BitOrder(emuMem->readRaw(baseAddress));
+                    emuMem->writeRaw(baseAddress + 1, reverse8BitOrder(emuMem->readRaw(baseAddress + 1)));
+                    emuMem->writeRaw(baseAddress, leftByte);
+                    emuMem->writeRaw(baseAddress+2, rightByte);
                 }
             }
         } else {
@@ -888,6 +912,14 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
                     //uint32_t bottomLine = *(uint32_t *)&TVC_RAM[bottomAddress] & 0x00ffffff;
                     //*(uint32_t *)&TVC_RAM[topAddress] = ((*(uint32_t *)&TVC_RAM[topAddress]) & 0xff000000 ) | bottomLine;
                     //*(uint32_t *)&TVC_RAM[bottomAddress] = ((*(uint32_t *)&TVC_RAM[bottomAddress]) & 0xff000000 ) | topLine;
+                    uint8_t topLine;
+                    uint8_t botLine;
+                    for (int k=0; k<3; k++) {
+                      topLine = emuMem->readRaw(topAddress + k);
+                      botLine = emuMem->readRaw(bottomAddress + k);
+                      emuMem->writeRaw(topAddress + k, botLine);
+                      emuMem->writeRaw(bottomAddress + k, topLine);
+                    }
                 }
             }
         }
@@ -899,10 +931,10 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
                 for(int j=0; j<21; j++) {
                     uint32_t baseAddress = phase_address + i*256 + j*12;
                     for(int k = 0; k<6; k++) {
-                        //uint8_t leftByte = reverseNibbles(TVC_RAM[baseAddress + (11-k)]);
-                        //uint8_t rightByte = reverseNibbles(TVC_RAM[baseAddress + k]);
-                        //TVC_RAM[baseAddress + k] = leftByte;
-                        //TVC_RAM[baseAddress + (11-k)] = rightByte;
+                        uint8_t leftByte = reverseNibbles(emuMem->readRaw(baseAddress + (11-k)));
+                        uint8_t rightByte = reverseNibbles(emuMem->readRaw(baseAddress + k));
+                        emuMem->writeRaw(baseAddress + k, leftByte);
+                        emuMem->writeRaw(baseAddress + (11-k),rightByte);
                     }
                 }
             }
@@ -913,9 +945,9 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
                     uint32_t topAddress = phase_address + i*256 + j*12;
                     uint32_t bottomAddress = phase_address + i*256 + (20-j)*12;
                     for(int k=0; k<12; k++) {
-                        //uint8_t temp = TVC_RAM[topAddress + k];
-                        //TVC_RAM[topAddress + k] = TVC_RAM[bottomAddress + k];
-                        //TVC_RAM[bottomAddress + k] = temp;
+                        uint8_t temp = emuMem->readRaw(topAddress + k);
+                        emuMem->writeRaw(topAddress + k, emuMem->readRaw(bottomAddress + k));
+                        emuMem->writeRaw(bottomAddress + k, temp);
                     }
                 }
             }
@@ -968,12 +1000,15 @@ uint8_t get_pen_color(uint8_t *color) {
 void set_dotc_impl(uint8_t x, uint8_t y, uint8_t color) {
     // draw pixel at (x, y) with the given color
     uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
+    offset += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+
     if(x & 1) {
         // odd pixel, color is in lower 4 bits
-        //TVC_RAM[offset] = (TVC_RAM[offset] & 0xf0) | color;
+        emuMem->writeRaw(offset, emuMem->readRaw(offset) & 0xf0 | color);
     } else {
         // even pixel, color is in higher 4 bits
         //TVC_RAM[offset] = (TVC_RAM[offset] & 0x0f) | (color << 4);
+        emuMem->writeRaw(offset, emuMem->readRaw(offset) & 0x0f | color << 4);
     }
 }
 
@@ -986,24 +1021,25 @@ uint8_t set_dot_color(uint8_t *bufStart) {
         return 1;
     }
 
-/*    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
+    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
             (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;*/
+            (registerFunctionBitmapBase & 0x1f) * 0x8000;
 
     set_dotc_impl(x, y, penColor);
     return 0;
 }
 
 uint8_t get_dot_color_impl(uint8_t x, uint8_t y) {
-    //uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
+    uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
+    offset += TVC256_FASTRAM_START_SEGMENT * 0x4000;
     uint8_t retVal = 0;
-    /*if(x & 1) {
+    if(x & 1) {
         // odd pixel, color is in lower 4 bits
-        retVal = TVC_RAM[offset] & 0x0f;
+        retVal = emuMem->readRaw(offset) & 0x0f;
     } else {
         // even pixel, color is in higher 4 bits
-        retVal = (TVC_RAM[offset] >> 4) & 0x0f;
-    }*/
+        retVal = (emuMem->readRaw(offset) >> 4) & 0x0f;
+    }
     return retVal;
 }
 
@@ -1013,9 +1049,9 @@ uint8_t get_dot_color(uint8_t *bufStart) {
     if(y>=screenMaxY) {
         return 1;
     }
-    /*functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
+    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
             (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;*/
+            (registerFunctionBitmapBase & 0x1f) * 0x8000;
 
     bufStart[0] = get_dot_color_impl(x, y);
     return 0;
@@ -1366,7 +1402,12 @@ uint8_t copy_image_block(uint8_t *bufStart) {
 
 /*    uint8_t *source_array = sourceAddress & 0x00800000 ? 
                             psram_array : 
-                            TVC_RAM;
+                            TVC_RAM;*/
+
+    if (sourceAddress & 0x00800000)
+      sourceAddress += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+    else
+      sourceAddress += TVC256_FASTRAM_START_SEGMENT * 0x4000;
 
     sourceAddress &= 0x007FFFFF;
 
@@ -1389,10 +1430,10 @@ uint8_t copy_image_block(uint8_t *bufStart) {
 
             if(x & 1) {
                 // odd pixel, color is in lower 4 bits
-                color = source_array[offset + (x>>1)] & 0x0f;
+                color = (emuMem->readRaw(offset + (x>>1)) & 0x0f);
             } else {
                 // even pixel, color is in higher 4 bits
-                color = (source_array[offset + (x>>1)] >> 4) & 0x0f;
+                color = (emuMem->readRaw(offset + (x>>1)) >> 4) & 0x0f;
             }
             if(color == 0x08) {
                 continue; // skip transparent color
@@ -1400,7 +1441,7 @@ uint8_t copy_image_block(uint8_t *bufStart) {
 
             set_dotc_impl(destX + x, destY + y, color);
         }
-    }*/
+    }
     return 0;
 }
 
@@ -1564,7 +1605,12 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
 
 /*    uint8_t *source_array = sourceAddress & 0x00800000 ? 
                             psram_array : 
-                            TVC_RAM;
+                            TVC_RAM;*/
+
+    if (sourceAddress & 0x00800000)
+      sourceAddress += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+    else
+      sourceAddress += TVC256_FASTRAM_START_SEGMENT * 0x4000;
 
     sourceAddress &= 0x007FFFFF;
 
@@ -1597,16 +1643,16 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
             } else {
                 if(sx & 1) {
                     // odd pixel, color is in lower 4 bits
-                    color = source_array[offset + (sx >> 1)] & 0x0f;
+                    color = (emuMem->readRaw(offset + (sx >> 1))) & 0x0f;
                 } else {
                     // even pixel, color is in higher 4 bits
-                    color = (source_array[offset + (sx >> 1)] >> 4) & 0x0f;
+                    color = (emuMem->readRaw(offset + (sx >> 1)) >> 4) & 0x0f;
                 }
             }
             if(!(transparent && (color == 0x08)))
                 set_dotc_impl(dstX + dx, dstY + dy, color);
         }
-    }*/
+    }
     return 0;
 }
 /**
