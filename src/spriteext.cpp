@@ -266,6 +266,7 @@ namespace Ep128 {
        case REG_MEMORY_PSRAM_SIZE_IN_MB:
          retval = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
          break;
+       // Mouse is reported always
        case REG_USB_INIT:
          retval = REG_USB_INIT_DEFAULT;
          break;
@@ -277,6 +278,7 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P2_HIGH:
        case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_FUNCTION_BITMAP_BASE:
          retval = namedPortValues[portAddr];
          break;
        // Clear on read
@@ -290,8 +292,10 @@ namespace Ep128 {
          namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
          namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
        break;
+       case REG_SCREEN_Y:
+         retval = (uint8_t) curLine;
        case REG_FUNCTION_EXECUTE:
-         return 0xFF; // TODO - delayed execution
+         return namedPortValues[REG_FUNCTION_EXECUTE]; // TODO - delayed execution
        case REG_FUNCTION_RESULT:
          return lastFunctionResult;
        default:
