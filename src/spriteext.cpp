@@ -29,7 +29,6 @@
    - Update SConstruct - simplify fltk, portaudio etc. version detection
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
-   - Fake gamecard rom for presenting the ID string
    - State save/load support
    - Improve performance
    - Debug ports: show tvcext ports from 256-512
@@ -49,11 +48,17 @@
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
    - SID emulation sound test against HW and frequency correction
-   - Function registers
    - Function implementation
-   - File I/O disable from rom (use tvcfileio in emulator instead) -- or insert file io from tvcfileio -- poke 2821,129 is enough
    - Extra file i/o functions (get_pwd .. seek_file)
-   - File i/o functions for card (get_iobase, get_membase)
+            DW      pwd_handler             ;  6
+            DW      opendir_handler         ;  7
+            DW      readdir_handler         ;  8
+            DW      mkdir_handler           ;  9
+            DW      delete_handler          ; 10
+            DW      rename_handler          ; 11
+            DW      seek_handler            ; 12
+            DW      iobase_handler          ; 13
+            DW      membase_handler         ; 14
 
 */
 
