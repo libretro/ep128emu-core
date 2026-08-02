@@ -1,33 +1,77 @@
+; File handling extension for TVC - ep128emu bridge
+; Will be embedded to RST $30 calls as standard cassette functions.
+; CAS identifiers (b7 0: out, b7 1: in, b6-b4: 101, b3-b0: index in jump table)
+;   $D0 / $50: IRQ service routine
+;   $D1 / $51: CAS_CHIN / CAS_CHOUT char in/out
+;   $D2 / $52: CAS_BKIN / CAS_BKOUT block in/out
+;   $D3 / $53: CAS_OPEN / CAS_CRTE  open file for read/write
+;   $D4 / $54: CAS_CLOSE  close file / close and flush file
+;   $D5      : CAS_VERIFY compare memory and file
+
+; Extensions for floppy:
+; note: $EOF is not set??
+;   $D6 / $56: Seek within file   (absolute, from file start)
+;     returns new pointer in BCDE
+;   $D7 / $57: Seek within file   (relative, from current position)
+;     returns new pointer in BCDE
+;   $D8 / $58: Seek to file end   (offset is irrelevant)
+;   $D9 / $59: Define CLI buffer  (not emulated in tvcfileio)
+;   $DA / $5A: Execute CLI buffer (not emulated in tvcfileio)
+;   $DB / $5B: Run FISH function  (not emulated in tvcfileio)
+
+; Extensions for tvc256++:
+;   $D6 / $56: GET_PWD / CH_DIR     Get current dir / change dir
+;   $D7 / $57: OPEN_DIR             Open directory
+;   $D8 / $58: READ_DIR / CLOSE_DIR Read one dir entry / Close dir
+;   $D9 / $59: MK_DIR               Make dir
+;   $DA / $5A: DELETE               Delete file or empty dir
+;   $DB / $5B: RENAME               Rename file or dir
+;   $DC / $5C: SEEK_FILE            Seek within file (absolute, from file start)
+;   $DD / $5D: GET_IOBASE           Return the I/O base of the card
+;   $DE / $5E: GET_MEMBASE          Return the memory base of the card
 
         org   0c000h
 
-        defm  "MOPS"
-        defb  4
-        defm  "FILE"
+        defm  "MOPS"                        ; Fixed ID string
+        defb  4                             ; Length of extension ID
+        defm  "FILE"                        ; Identifier for tvcfileio
 
-        defw  irqRoutine1
-        defw  initDevice
-        defb  9
-        defw  irqRoutine2
+        defw  0
+        defw  initDevice                    ; Extension init - must be on 0xC00B
+        defb  15                            ; number of functions
+        defw  irqRoutine                    ; IRQ service - no-op
         defw  characterIO
         defw  blockIO
         defw  fileOpen
         defw  fileClose
         defw  blockVerify
-        defw  fileSeekSet
-        defw  fileSeekCur
-        defw  fileSeekEnd
+        defw  fileSeekSet                   ; overloaded - get_pwd/ch_dir
+        defw  fileSeekCur                   ; overloaded - open_dir
+        defw  fileSeekEnd                   ; overloaded - read_dir/close_dir
+        defw  mkdir
+        defw  delete
+        defw  rename
+        defw  fileSeekSet2
+        defw  iobase
+        defw  membase
 
-; n = 0: initialization (close file)
-; n = 1: open input file (DE = name address), store file name at IX+8
-; n = 2: open output file (DE = name address), store file name at IX+8
-; n = 3: close file
-; n = 4: close file
-; n = 5: read character to C
-; n = 6: write character from C
-; n = 7: get file size in BC:DE
-; n = 8: get file position in BC:DE
-; n = 9: set file position to BC:DE
+; ep128emuSystemCall identifiers
+; n =  0: initialization (close file)
+; n =  1: open input file (DE = name address), store file name at IX+8
+; n =  2: open output file (DE = name address), store file name at IX+8
+; n =  3: close file
+; n =  4: close file
+; n =  5: read character to C
+; n =  6: write character from C
+; Identifiers between 7-9 are used for both floppy emulation and tvc256++
+; n =  7: fileSeekEnd / readdir-closedir
+; n =  8: fileSeekCur / opendir
+; n =  9: fileSeekSet / getpwd-chdir 
+; Identifiers above 9 are used for tvc256++
+; n = 10 : mkdir
+; n = 11 : delete
+; n = 12 : rename
+; n = 13 : fileSeekSet2 (tvc256++ params)
 
     macro ep128emuSystemCall n
         defb  0edh, 0feh, 0feh, 0f0h | n
@@ -73,8 +117,7 @@ initDevice:
         ep128emuSystemCall  0
         or    a
 
-irqRoutine1:
-irqRoutine2:
+irqRoutine:
         ret
 
 characterIO:
@@ -385,37 +428,46 @@ blockVerify:
         pop   hl
         ret
 
+; Overlapping functions are handled on emu side completely
+; Indexes 7-9 are reversed vs. function order due to historical reasons
 fileSeekEnd:
-        push  bc
-        push  de
         ep128emuSystemCall  7
-        or    a
-        jp    z, fileSeekCur.l1
-.l1:    pop   de
-        pop   bc
         ret
 
 fileSeekCur:
-        push  bc
-        push  de
         ep128emuSystemCall  8
-        or    a
-        jr    nz, fileSeekEnd.l1
-.l1:    ex    (sp), hl
-        add   hl, de
-        ld    e, l
-        ld    d, h
-        pop   hl
-        ex    (sp), hl
-        adc   hl, bc
-        ld    c, l
-        ld    b, h
-        pop   hl
+        ret
 
 fileSeekSet:
         ep128emuSystemCall  9
-        or    a
+        ret
+
+; tvc256++ specific functions
+mkdir:
+        ep128emuSystemCall 10
+        ret
+
+delete:
+        ep128emuSystemCall 11
+        ret
+
+rename:
+        ep128emuSystemCall 12
+        ret
+
+fileSeekSet2:
+        ep128emuSystemCall 13
+        ret
+
+; extension slot 2 is fixed in emulation, so these are also fixed
+iobase:
+        ld c, $30
+        xor a
+        ret
+
+membase:
+        ld c, $A0
+        xor a
         ret
 
         block 0e000h - $, 0ffh
-
