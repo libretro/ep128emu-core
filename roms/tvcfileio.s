@@ -63,15 +63,17 @@
 ; n =  4: close file
 ; n =  5: read character to C
 ; n =  6: write character from C
-; Identifiers between 7-9 are used for both floppy emulation and tvc256++
-; n =  7: fileSeekEnd / readdir-closedir
+; Identifiers between 7-10 are used for both floppy emulation and tvc256++
+; n =  7: fileSeekEnd / closedir ("out")
 ; n =  8: fileSeekCur / opendir
-; n =  9: fileSeekSet / getpwd-chdir 
+; n =  9: fileSeekSet / getpwd   ("out")
+; n = 10: fileSeekEnd / readdir  ("in")
+; n = 11: fileSeekSet / chdir    ("in")
 ; Identifiers above 9 are used for tvc256++
-; n = 10 : mkdir
-; n = 11 : delete
-; n = 12 : rename
-; n = 13 : fileSeekSet2 (tvc256++ params)
+; n = 12 : mkdir
+; n = 13 : delete
+; n = 14 : rename
+; n = 15 : fileSeekSet2 (tvc256++ params)
 
     macro ep128emuSystemCall n
         defb  0edh, 0feh, 0feh, 0f0h | n
@@ -431,7 +433,11 @@ blockVerify:
 ; Overlapping functions are handled on emu side completely
 ; Indexes 7-9 are reversed vs. function order due to historical reasons
 fileSeekEnd:
+        jp    m, fileSeekEndR          ; in or out?
         ep128emuSystemCall  7
+        ret
+fileSeekEndR:
+        ep128emuSystemCall 10
         ret
 
 fileSeekCur:
@@ -439,24 +445,28 @@ fileSeekCur:
         ret
 
 fileSeekSet:
+        jp    m, fileSeekSetR          ; in or out?
         ep128emuSystemCall  9
+        ret
+fileSeekSetR:
+        ep128emuSystemCall 11
         ret
 
 ; tvc256++ specific functions
 mkdir:
-        ep128emuSystemCall 10
-        ret
-
-delete:
-        ep128emuSystemCall 11
-        ret
-
-rename:
         ep128emuSystemCall 12
         ret
 
-fileSeekSet2:
+delete:
         ep128emuSystemCall 13
+        ret
+
+rename:
+        ep128emuSystemCall 14
+        ret
+
+fileSeekSet2:
+        ep128emuSystemCall 15
         ret
 
 ; extension slot 2 is fixed in emulation, so these are also fixed
