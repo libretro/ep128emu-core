@@ -32,6 +32,7 @@
    - State save/load support
    - Improve performance
    - Debug ports: show tvcext ports from 256-512
+   - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
 
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
@@ -40,9 +41,9 @@
    - Screen height setting
    
    TVC256++ drives:
-   - USB drive handling
-   - Flash mem drive handling
-   - PSRAM drive handling
+   - USB drive handling (no functions disabled via tvcfileio)
+   - Flash mem drive handling (readonly)
+   - PSRAM drive handling (no directories)
    
    TVC256++ others:
    - Delay for slow RAM paging
@@ -57,8 +58,8 @@
             DW      delete_handler          ; 10
             DW      rename_handler          ; 11
             DW      seek_handler            ; 12
-            DW      iobase_handler          ; 13
-            DW      membase_handler         ; 14
+            DW      iobase_handler          ; 13 // in asm
+            DW      membase_handler         ; 14 // in asm
 
 */
 

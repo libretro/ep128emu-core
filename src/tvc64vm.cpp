@@ -345,6 +345,7 @@ namespace TVC64 {
     vm.updateCPUCycles(cycles);
   }
 
+  // Counterpart of ep128emuSystemCall in tvcfileio
   EP128EMU_REGPARM1 void TVC64VM::Z80_::tapePatch()
   {
     uint8_t n;
@@ -360,7 +361,10 @@ namespace TVC64 {
       R.AF.B.h = (n > 0 ? 0xFF : 0x00);
       return;
     }
-    if (n >= 3 && n <= 9 && !fileIOFile) {
+    // Actual file I/O is not possible without a file being open
+    if (((!vm.spriteExtEnabled &&  (n >= 3 && n <= 9)) ||
+         ( vm.spriteExtEnabled && ((n >= 3 && n <= 5) || (n==13))))
+        && !fileIOFile) {
       R.AF.B.h = 0xE9;          // file not open
       if (n == 5) {
         R.BC.B.l = 0xFF;
@@ -371,6 +375,9 @@ namespace TVC64 {
       }
       return;
     }
+    // If spriteextenabled, use n+100 for nonstandard actions
+    if (vm.spriteExtEnabled && n > 6)
+      n += 100;
     switch (n) {
     case 0:                             // initialization
       closeFile();
@@ -471,7 +478,7 @@ namespace TVC64 {
       else
         R.AF.B.h = 0x00;
       break;
-    case 7:                             // get file size
+    case 7:                             // fileSeekEnd
       R.BC.W = 0x0000;
       R.DE.W = 0x0000;
       R.AF.B.h = 0xE5;          // invalid file position
@@ -491,8 +498,8 @@ namespace TVC64 {
         }
       }
       break;
-    case 8:                             // get file position
-    case 9:                             // set file position
+    case 8:                             // fileSeekCur
+    case 9:                             // fileSeekSet - absolute, floppy version
       {
         long    filePos = long(R.DE.W) | (long(R.BC.W) << 16);
         R.DE.W = 0xFFFF;
@@ -512,6 +519,17 @@ namespace TVC64 {
           R.AF.B.h = 0x00;
         }
       }
+      break;
+    case 107:
+    case 108:
+    case 109:
+    case 110:
+    case 111:
+    case 112:
+    case 113:
+      R.BC.W = 0x0000 + n;
+      R.DE.W = 0x0000;
+      R.AF.B.h = 0xFE;          // "USB drive" error
       break;
     default:
       R.AF.B.h = 0xFF;          // invalid function
