@@ -349,6 +349,7 @@ namespace TVC64 {
   EP128EMU_REGPARM1 void TVC64VM::Z80_::tapePatch()
   {
     uint8_t n;
+    bool opIn;
     if (!((R.PC.W.l >= 0xC000 && R.PC.W.l < 0xCFFC) &&
           vm.memory.getPage(uint8_t(R.PC.W.l >> 14)) == 0x02 &&
           vm.readMemory(uint16_t(R.PC.W.l + 2), true) == 0xFE &&
@@ -362,8 +363,8 @@ namespace TVC64 {
       return;
     }
     // Actual file I/O is not possible without a file being open
-    if (((!vm.spriteExtEnabled &&  (n >= 3 && n <= 9)) ||
-         ( vm.spriteExtEnabled && ((n >= 3 && n <= 5) || (n==13))))
+    if (((!vm.spriteExtEnabled &&  (n >= 3 && n <= 11)) ||
+         ( vm.spriteExtEnabled && ((n >= 3 && n <= 5) || (n==15))))
         && !fileIOFile) {
       R.AF.B.h = 0xE9;          // file not open
       if (n == 5) {
@@ -378,6 +379,7 @@ namespace TVC64 {
     // If spriteextenabled, use n+100 for nonstandard actions
     if (vm.spriteExtEnabled && n > 6)
       n += 100;
+
     switch (n) {
     case 0:                             // initialization
       closeFile();
@@ -479,6 +481,7 @@ namespace TVC64 {
         R.AF.B.h = 0x00;
       break;
     case 7:                             // fileSeekEnd
+    case 10:                            // same as 7, but "in" direction - this function does not care
       R.BC.W = 0x0000;
       R.DE.W = 0x0000;
       R.AF.B.h = 0xE5;          // invalid file position
@@ -500,12 +503,13 @@ namespace TVC64 {
       break;
     case 8:                             // fileSeekCur
     case 9:                             // fileSeekSet - absolute, floppy version
+    case 11:                            // same as 9, but "in" direction - this function does not care
       {
         long    filePos = long(R.DE.W) | (long(R.BC.W) << 16);
         R.DE.W = 0xFFFF;
         R.BC.W = 0xFFFF;
         R.AF.B.h = 0xE5;        // invalid file position
-        if (n == 9) {
+        if (n != 8) {
           if (!(filePos >= 0L && filePos <= 0x01FFFFFFL))
             break;
           fileIOWriteFlag = false;
@@ -520,13 +524,23 @@ namespace TVC64 {
         }
       }
       break;
+    case 111:
+      {
+        uint16_t bufPtr = R.DE.W;
+        unsigned char slash = '/';
+        vm.writeMemory(bufPtr  ,     1, true);
+        vm.writeMemory(bufPtr+1, slash, true);
+        R.AF.B.h = 0;
+      }
+      break;
     case 107:
     case 108:
     case 109:
     case 110:
-    case 111:
     case 112:
     case 113:
+    case 114:
+    case 115:
       R.BC.W = 0x0000 + n;
       R.DE.W = 0x0000;
       R.AF.B.h = 0xFE;          // "USB drive" error
