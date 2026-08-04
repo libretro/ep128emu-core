@@ -5,6 +5,7 @@
 #define EP128EMU_TVCROUTINES_H
 
 #include <stdint.h>
+#include <dirent.h>
 #include "tvcmem.hpp"
 
 typedef uint8_t (*tvc_function_t)(uint8_t* bufferStart);
