@@ -63,13 +63,13 @@
 ; n =  4: close file
 ; n =  5: read character to C
 ; n =  6: write character from C
-; Identifiers between 7-10 are used for both floppy emulation and tvc256++
+; Identifiers between 7-11 are used for both floppy emulation and tvc256++
 ; n =  7: fileSeekEnd / closedir ("out")
 ; n =  8: fileSeekCur / opendir
 ; n =  9: fileSeekSet / getpwd   ("out")
 ; n = 10: fileSeekEnd / readdir  ("in")
 ; n = 11: fileSeekSet / chdir    ("in")
-; Identifiers above 9 are used for tvc256++
+; Identifiers above 11 are used for tvc256++
 ; n = 12 : mkdir
 ; n = 13 : delete
 ; n = 14 : rename
