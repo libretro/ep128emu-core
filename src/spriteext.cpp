@@ -97,7 +97,7 @@ namespace Ep128 {
       1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
    0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87,  0xF,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    1,   0,    1,    0,    1,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
    0xff, 0xff, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
@@ -279,6 +279,7 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P2_HIGH:
        case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_MEMORY_ROM_PAGE:
        case REG_FUNCTION_BITMAP_BASE:
          retval = namedPortValues[portAddr];
          break;
@@ -335,6 +336,15 @@ namespace Ep128 {
          namedPortValues[REG_USB_MOUSE_SPEED] = value;
          updateMouseSpeed(value);
        break;
+       case REG_MEMORY_P2:
+       case REG_MEMORY_P3:
+       case REG_MEMORY_MAP_8M_P2_LOW:
+       case REG_MEMORY_MAP_8M_P2_HIGH:
+       case REG_MEMORY_MAP_8M_P3_LOW:
+       case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_MEMORY_ROM_PAGE:
+         namedPortValues[portAddr] = value;
+         break;
        case REG_FUNCTION_EXECUTE:
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
          lastFunctionResult = 0xff;

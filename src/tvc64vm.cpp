@@ -1100,22 +1100,55 @@ namespace TVC64 {
     case 0x31:
     case 0x35:
       if (vm.spriteExtEnabled) {
-         if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
-           vm.memory.spriteext_p2_reg = value;
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
-           vm.memory.spriteext_p3_reg = value;
-         // TODO: delayed paging in case of slow ram
-         // Limitation: only 2MB available for now, so high reg is ignored
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
-         {
-           vm.memory.psram_p2_reg = value & 0x7F;
-           vm.memory.spriteext_p2_reg = 0x10;
-         }
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
-         {
-           vm.memory.psram_p3_reg = value & 0x7F;
-           vm.memory.spriteext_p3_reg = 0x11;
-         }
+      if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
+        vm.memory.spriteext_p2_reg = value;
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
+        vm.memory.spriteext_p3_reg = value;
+      // TODO: delayed paging in case of slow ram
+      // Limitation: only 2MB available for now, so high reg is ignored
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
+      {
+        vm.memory.psram_p2_reg = value & 0x7F;
+        vm.memory.spriteext_p2_reg = 0x10;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
+      {
+        vm.memory.psram_p3_reg = value & 0x7F;
+        vm.memory.spriteext_p3_reg = 0x11;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_ROM_PAGE)
+      {
+        // Carry out "ROM paging": swap the appropriate 6(!)kB part
+        // to the start of the IOMEM area.
+        // Note that the prepared ROM is actually 6+2+6+2=16 kB large so that
+        // the 2 kB RAM area at the end of the IOMEM range is not overwritten.
+        uint8_t subPage = value & 7;
+        uint8_t* areaLow;
+        uint8_t tmp;
+        if (areaLow = (uint8_t*)vm.memory.getSegmentPtr(0x05)) {
+          uint8_t* areaHigh = areaLow + 0x2000;
+          if (subPage == 1 && areaLow[0] == 'M' && areaLow[1] == 'O' &&
+                              areaLow[2] == 'P' && areaLow[3] == 'S') {
+            // Low-performance naive swap routine. Still, it does not matter much
+            // as 2nd page is only used for "help" output.
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+          else if (subPage == 0 && areaHigh[0] == 'M' && areaHigh[1] == 'O' &&
+                                   areaHigh[2] == 'P' && areaHigh[3] == 'S') {
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+        }
+      }
 #ifdef ENABLE_RESID
          else if (vm.spriteext.io_port_values[addr-0x31] >= REG_SID_BASE &&
                   vm.spriteext.io_port_values[addr-0x31] <= REG_SID_LAST)

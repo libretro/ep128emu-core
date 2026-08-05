@@ -176,6 +176,8 @@ namespace Ep128Emu {
 #define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
 // Hardware default: 8 MB / 0x08, emulated: 2 MB / 0x02
 #define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
+#define REG_MEMORY_ROM_PAGE 0xB7
+
 // Layout of fast and slow ram mapped to the 4MB segment space
 #define TVC256_FASTRAM_START_SEGMENT 0xE8
 #define TVC256_SLOWRAM_START_SEGMENT 0x68
