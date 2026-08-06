@@ -4,6 +4,26 @@
 #ifndef EP128EMU_TVCROUTINES_H
 #define EP128EMU_TVCROUTINES_H
 
+#define MSC_FOPENFILE  0x01
+#define MSC_FCLOSEFILE 0x02
+#define MSC_FREAD      0x03
+#define MSC_FWRITE     0x04
+#define MSC_FOPENDIR   0x05
+#define MSC_FCLOSEDIR  0x06
+#define MSC_FREADDIR   0x07
+#define MSC_FWRITE_SRC 0x08
+#define MSC_FREAD_DEST 0x09
+#define MSC_FSEEK      0x0A
+#define MSC_FGETCWD    0x0B
+#define MSC_FCHDIR     0x0C
+#define MSC_FMKDIR     0x0D
+#define MSC_FDELETE    0x0E
+#define MSC_FRENAME    0x0F
+#define MSC_FSTAT      0x10
+#define MSC_FSYNC      0x11
+#define MSC_MOUNT_DSK  0x12
+#define MSC_UMOUNT_DSK 0x13
+
 #include <stdint.h>
 #include <dirent.h>
 #include "tvcmem.hpp"
@@ -22,6 +42,7 @@ extern uint8_t registerBitmapBaseAddr;
 extern uint8_t registerScreenColorBaseAddr;
 extern uint8_t registerFunctionBitmapBase;
 extern TVC64::Memory *emuMem;
+extern bool fileFunctionViaIOMEM;
 extern uint16_t screenMaxY;
 extern tvc_function_struct_t tvc256k_funct_struct_array[256];
 

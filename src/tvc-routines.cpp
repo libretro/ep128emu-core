@@ -25,12 +25,15 @@
 #define __unused
 #define FASTRAMBASE ((TVC256_FASTRAM_START_SEGMENT)<<14)
 #define SLOWRAMBASE ((TVC256_SLOWRAM_START_SEGMENT)<<14)
+// Single error code lifted from FatFS definitions
+#define FR_INVALID_PARAMETER 19
 namespace TVC256 {
 
 uint8_t registerScreenBaseAddr;
 uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
 TVC64::Memory *emuMem = NULL;
+bool fileFunctionViaIOMEM = false;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -1683,9 +1686,9 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
  *  [8]/1 - found filename length
  *  [9]/len - fileName
  */
-/*
+
 uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
+/*    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
     TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting
     uint8_t len = bufferStart[2];       // filename length
     if(len == 0) {
@@ -1720,11 +1723,12 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
         bufferStart[8] = TVC_ROM[0x1a08];
         memcpy(&bufferStart[9], &TVC_ROM[0x1a09], bufferStart[8]);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     FRESULT res;
 
     switch(SELECTED_DEVICE) {
@@ -1746,7 +1750,8 @@ uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
             break;
     }
     
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 /**
@@ -1791,6 +1796,7 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
         }
     }
     return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
@@ -1825,6 +1831,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
     return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 /*
@@ -1837,9 +1844,9 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (2 bytes)
 */
-/*
+
 uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     uint16_t length = (*(uint16_t *)&bufferStart[4]);
     *(uint16_t *)&TVC_ROM[0x1904] = length;
     *(uint32_t *)&TVC_ROM[0x1906] = (uint32_t)&bufferStart[6];
@@ -1872,9 +1879,10 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
         // On success, store the number of bytes stored to bufferStart
         *(uint16_t *)&bufferStart[4] = *(uint16_t *)&TVC_ROM[0x1a00];
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
-*/
+
 /*
  * Write bytes to file from fast RAM memory area
  * IN:
@@ -1885,9 +1893,9 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (3 bytes)
 */
-/*
+
 uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
     *(uint32_t *)&TVC_ROM[0x1907] = (*(uint32_t *)&bufferStart[7]) & 0x00ffffff;
 
@@ -1913,11 +1921,12 @@ uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
         // On success, store the number of bytes stored to bufferStart
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
-    uint8_t len = bufferStart[0];
+/*    uint8_t len = bufferStart[0];
     if(len == 0) {
         return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
     }
@@ -1945,11 +1954,12 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
         // On success, store the dir handle pointer back to bufferStart
         *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
@@ -1968,11 +1978,12 @@ uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
             res = 4;
             break;
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
 
     FRESULT res;
     switch(SELECTED_DEVICE) {
@@ -1996,11 +2007,12 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
     if(res == FR_OK) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], sizeof(FILINFO)+1);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
-
+/*
     *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];   // file handle
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint32_t *)&bufferStart[4];   // file position
     FRESULT res;
@@ -2021,11 +2033,12 @@ uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
             res = 4;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
-    FRESULT res;
+/*    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
             res = tvc_fatfs_pendrive_getcwd();
@@ -2047,11 +2060,12 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         int len = TVC_ROM[0x1a00];
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
-    if(bufferStart[0] != 0) {
+/*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
@@ -2074,11 +2088,12 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
             res = 4;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
-    if(bufferStart[0] != 0) {
+/*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
@@ -2102,11 +2117,12 @@ uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
             res = 4;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_delete(uint8_t *bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];
+/*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1901], &bufferStart[1], bufferStart[0]+1);
     } else {
@@ -2131,11 +2147,12 @@ uint8_t tvcfunc_delete(uint8_t *bufferStart) {
             res = 3;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_rename(uint8_t *bufferStart) {
-    uint8_t len1 = bufferStart[0];
+/*    uint8_t len1 = bufferStart[0];
     uint8_t len2 = bufferStart[len1 + 1];
     memcpy(&TVC_ROM[0x1900], &bufferStart[0], (uint16_t)len1 + (uint16_t)len2 + 2);
     switch(SELECTED_DEVICE) {
@@ -2149,9 +2166,10 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
             return (uint8_t) tvc_fatfs_dskdrive_rename();
         default:
             return 4;
-    }
+    }*/
+    return FR_INVALID_PARAMETER;
 }
-*/
+
 
 /**
  * Gets a file's stat. Returns non-zero if error, otherwise 0 and file info is stored in bufferStart
@@ -2164,9 +2182,9 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
  * bufferStart[0x100]: file size (4 bytes)
  * bufferStart[0x104]: file attributes (1 byte)
  */
-/*
+
 uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];
+/*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0)
         memcpy(&TVC_ROM[0x1901], &bufferStart[1], bufferStart[0]);
 
@@ -2192,12 +2210,13 @@ uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
     if(res == FR_OK) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], sizeof(FILINFO));
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 
 uint8_t tvcfunc_sync(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     switch(SELECTED_DEVICE) {
         case 0x00:
             return (uint8_t) tvc_fatfs_pendrive_sync();
@@ -2209,11 +2228,12 @@ uint8_t tvcfunc_sync(uint8_t* bufferStart) {
             return (uint8_t) tvc_fatfs_dskdrive_sync();
         default:
             return 3;
-    }
+    }*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
-    if(bufferStart[0] != 0) {
+/*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
@@ -2233,11 +2253,12 @@ uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
             res = 1;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
-    FRESULT res = 0;
+/*    FRESULT res = 0;
     switch(dsk_file_type) {
         case 0x01:
             res = tvc_fatfs_pendrive_unmount_dsk();
@@ -2255,11 +2276,12 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
             res = 1;
             break;
     }
-    return res;
+    return res;*/
+    return FR_INVALID_PARAMETER;
 }
 
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
-    if((paramSize & 0x80) == 0)
+/*    if((paramSize & 0x80) == 0)
         return paramSize;
     uint size = 1;
     switch (paramSize) {
@@ -2284,9 +2306,10 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
             size += bufStart[size] + 1;
             break;
     }
-    return size;
+    return size;*/
+    return FR_INVALID_PARAMETER;
 }
-*/
+
 tvc_function_struct_t tvc256k_funct_struct_array[256];
 
 void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
@@ -2333,7 +2356,7 @@ void init_routines() {
     setStructArrayElement(35, get_first_usable_psram_pos,    0);
     setStructArrayElement(36, delete_psram_drive,            0);
 
-/*
+
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);
     setStructArrayElement(128+MSC_FREAD,        tvcfunc_read_file,       6);
@@ -2353,7 +2376,7 @@ void init_routines() {
     setStructArrayElement(128+MSC_FSYNC,        tvcfunc_sync,            4);
     setStructArrayElement(128+MSC_MOUNT_DSK,    tvcfunc_mount_dsk,       0x81);
     setStructArrayElement(128+MSC_UMOUNT_DSK,   tvcfunc_unmount_dsk,     0);
-*/
+
     init_bitmap_byte_masks();
 }
 }

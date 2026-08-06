@@ -233,13 +233,14 @@ namespace Ep128 {
   {
   }
 
-  void SpriteExt::executeFunction(uint8_t funcCode)
+  void SpriteExt::executeFunction(uint8_t funcCode, bool useIOMEM)
   {
      TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
      TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
+     TVC256::fileFunctionViaIOMEM = useIOMEM;
      TVC256::emuMem = hostMem;
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
@@ -348,7 +349,12 @@ namespace Ep128 {
        case REG_FUNCTION_EXECUTE:
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
          lastFunctionResult = 0xff;
-         executeFunction(value);
+         executeFunction(value, false);
+         break;
+       case REG_USB_MSC_CMD:
+         namedPortValues[REG_USB_MSC_CMD] = value;
+         lastFunctionResult = 0xff;
+         executeFunction(value + 0x80, true);
          break;
        // Combined enable/disable registers.
        // Note: these are delayed on real HW
