@@ -107,6 +107,7 @@ namespace Ep128 {
 
   SpriteExt::SpriteExt()
     : hostMem(nullptr),
+      hostVm(nullptr),
       spriteExt_enabled(false),
       anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
@@ -215,6 +216,13 @@ namespace Ep128 {
     namedPortValues[REG_SID_BASE + 24]    = 0;
     for (int i = REG_SPRITE_ENABLE; i <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX; i++)
       namedPortValues[i] = 0x00;
+
+    TVC256::emuMem = hostMem;
+    TVC256::emuVm = hostVm;
+    TVC256::currDir.len = 1;
+    TVC256::currDir.str[0]   = '/';
+    TVC256::currDir.str[1]   = 0;
+    TVC256::currDir.str[255] = 0;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -223,6 +231,14 @@ namespace Ep128 {
       hostMem = m;
     else
       hostMem = nullptr;
+  }
+
+  void SpriteExt::setVmRef(Ep128Emu::VirtualMachine *vm)
+  {
+    if (vm)
+      hostVm = vm;
+    else
+      hostVm = nullptr;
   }
 
   void SpriteExt::openImage(const char *sdimg_path)
@@ -241,11 +257,15 @@ namespace Ep128 {
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
      TVC256::fileFunctionViaIOMEM = useIOMEM;
-     TVC256::emuMem = hostMem;
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        uint8_t* bufferStart = hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
+        // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is always fixed
+        // and output buffer is different to input buffer (this needs to be
+        // handled on function side)
+        uint8_t* bufferStart = useIOMEM ?
+          hostMem->memGet(0xC000 + 0x1800) :
+          hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
         printf("Func call: %d params at %04x, val %02x %02x\n",
                funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
                bufferStart[0],bufferStart[1]);
@@ -256,6 +276,7 @@ namespace Ep128 {
   {
      uint8_t retval = 0xFF;
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
+
      switch (portAddr)
      {
        // Fixed defaults
@@ -282,6 +303,7 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P3_HIGH:
        case REG_MEMORY_ROM_PAGE:
        case REG_FUNCTION_BITMAP_BASE:
+       case REG_USB_MSC_CMD:
          retval = namedPortValues[portAddr];
          break;
        // Clear on read
@@ -315,6 +337,7 @@ namespace Ep128 {
   else
     io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
 
+  printf("Port %x read, val %x\n", portAddr, retval);
   return retval;
   }
 
@@ -329,6 +352,7 @@ namespace Ep128 {
      if (namedPortMasks[portAddr])
         value = value & namedPortMasks[portAddr];
 
+     printf("Port %x write, val %x\n", portAddr, value);
      switch (portAddr)
      {
        // Note: rest of mouse handling is done in TVC64VM::ioPortReadCallback
@@ -352,7 +376,7 @@ namespace Ep128 {
          executeFunction(value, false);
          break;
        case REG_USB_MSC_CMD:
-         namedPortValues[REG_USB_MSC_CMD] = value;
+         namedPortValues[REG_USB_MSC_CMD] = 0; // function becomes immediately ready
          lastFunctionResult = 0xff;
          executeFunction(value + 0x80, true);
          break;

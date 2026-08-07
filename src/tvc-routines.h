@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <dirent.h>
+#include "vm.hpp"
 #include "tvcmem.hpp"
 
 typedef uint8_t (*tvc_function_t)(uint8_t* bufferStart);
@@ -35,6 +36,11 @@ typedef struct {
     uint8_t param_size;
 } tvc_function_struct_t;
 
+typedef struct {
+    uint8_t len;
+    uint8_t str[255];
+} TVCString;
+
 namespace TVC256 {
 
 extern uint8_t registerScreenBaseAddr;
@@ -42,9 +48,12 @@ extern uint8_t registerBitmapBaseAddr;
 extern uint8_t registerScreenColorBaseAddr;
 extern uint8_t registerFunctionBitmapBase;
 extern TVC64::Memory *emuMem;
+extern Ep128Emu::VirtualMachine *emuVm;
 extern bool fileFunctionViaIOMEM;
 extern uint16_t screenMaxY;
 extern tvc_function_struct_t tvc256k_funct_struct_array[256];
+extern DIR *routinesDirHandle;
+extern TVCString currDir;
 
 uint8_t clear_text_screen(uint8_t* bufferStart);
 uint8_t clear_bitmap_screen(uint8_t* bufferStart);

@@ -33,7 +33,10 @@ uint8_t registerScreenBaseAddr;
 uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
 TVC64::Memory *emuMem = NULL;
+Ep128Emu::VirtualMachine *emuVm = NULL;
 bool fileFunctionViaIOMEM = false;
+TVCString dirBuffer;
+TVCString currDir;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -1955,6 +1958,19 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
         *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
     }
     return (uint8_t)res;*/
+    if (fileFunctionViaIOMEM)
+    {
+      
+    }
+    else
+    {
+      
+    }
+    routinesDirHandle = (DIR *) 0;
+    std::string dirName(reinterpret_cast< char const* >(currDir.str));
+
+    return emuVm->openDirInWorkingDirectory(routinesDirHandle, dirName);
+
     return FR_INVALID_PARAMETER;
 }
 
@@ -2061,7 +2077,13 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    if (fileFunctionViaIOMEM) bufferStart += 0x100; // move pointer to output buffer
+    bufferStart[0] = currDir.len;
+    for (int i=0; i<currDir.len; i++)
+      bufferStart[i+1] = currDir.str[i];
+    bufferStart[currDir.len + 1] = 0;
+    printf("cwd called, curr: %d %s\n", currDir.len, currDir.str);
+    return 0;
 }
 
 uint8_t tvcfunc_chdir(uint8_t *bufferStart) {

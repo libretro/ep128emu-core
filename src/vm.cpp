@@ -915,6 +915,20 @@ namespace Ep128Emu {
     }
   }
 
+  int VirtualMachine::openDirInWorkingDirectory(DIR*& d,
+                                                 std::string& dirName_)
+  {
+    struct dirent *dirptr = 0;
+    d = (DIR *) 0;
+    if ((d = opendir(std::string(fileIOWorkingDirectory + dirName_).c_str())) != NULL) {
+      while ((dirptr = readdir(d)) != NULL) {
+        printf("Dir entry: %s\n",dirptr->d_name);
+      }
+      return 0;
+    }
+    return 1;
+  }
+
   int VirtualMachine::openFileInWorkingDirectory(std::FILE*& f,
                                                  std::string& fileName_,
                                                  const char *mode,
