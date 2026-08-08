@@ -34,9 +34,10 @@ uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
 TVC64::Memory *emuMem = NULL;
 Ep128Emu::VirtualMachine *emuVm = NULL;
-bool fileFunctionViaIOMEM = false;
 TVCString dirBuffer;
 TVCString currDir;
+uint8_t* tvcRomBufferIn;
+uint8_t* tvcRomBufferOut;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -1929,11 +1930,11 @@ uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
 }
 
 uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
-/*    uint8_t len = bufferStart[0];
+    uint8_t len = bufferStart[0];
     if(len == 0) {
         return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
     }
-    memcpy(&TVC_ROM[0x1900], &bufferStart[0], len+1);
+    /*memcpy(&TVC_ROM[0x1900], &bufferStart[0], len+1);
     FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
@@ -1958,20 +1959,17 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
         *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
     }
     return (uint8_t)res;*/
-    if (fileFunctionViaIOMEM)
-    {
-      
-    }
-    else
-    {
-      
-    }
+
     routinesDirHandle = (DIR *) 0;
     std::string dirName(reinterpret_cast< char const* >(currDir.str));
-
+    // Handle is set to 1
+    *(uint32_t *)&bufferStart[0] = 1;
+    printf("open dir 1: %s\n",currDir.str);
+    printf("open dir 2: %s\n",dirName.c_str());
+    
+    if (tvcRomBufferOut)
+      memcpy(tvcRomBufferOut,bufferStart,4);
     return emuVm->openDirInWorkingDirectory(routinesDirHandle, dirName);
-
-    return FR_INVALID_PARAMETER;
 }
 
 uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
@@ -1995,7 +1993,7 @@ uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
             break;
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    return emuVm->closeDirInWorkingDirectory(routinesDirHandle);
 }
 
 uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
@@ -2018,13 +2016,42 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
         default:
             res = 4;
             break;
-    }
+    }*/
 
-    if(res == FR_OK) {
+    struct dirent *dirptr = 0;
+    int i=0;
+
+    if ((dirptr = readdir(routinesDirHandle)) != NULL) {
+      printf("Dir entry: %s\n",dirptr->d_name);
+      for (i=0; i<255 && dirptr->d_name[i]; i++) {
+        bufferStart[4+1+i] = dirptr->d_name[i];
+      }
+      bufferStart[4] = (uint8_t)i;
+      bufferStart[4+1+i] = 0;
+      // Short name
+      if (i>12) {
+        for (int j=0; j<12; j++) {
+          bufferStart[4+256+1+4+j] = dirptr->d_name[j];
+        }
+      }
+      if (dirptr->d_type == DT_DIR)
+        bufferStart[4+256+1] = 0x10;
+      else
+        bufferStart[4+256+1] = 0x00;
+    } 
+    else
+    {
+      bufferStart[4] = 0;
+    }
+  // TODO: file size and other info
+  if (tvcRomBufferOut)
+    memcpy(tvcRomBufferOut,&bufferStart[4],256+1+4+13);
+/*  if(res == FR_OK) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], sizeof(FILINFO)+1);
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+
+  return 0;
 }
 
 uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
@@ -2077,16 +2104,22 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
     return (uint8_t)res;*/
-    if (fileFunctionViaIOMEM) bufferStart += 0x100; // move pointer to output buffer
     bufferStart[0] = currDir.len;
     for (int i=0; i<currDir.len; i++)
       bufferStart[i+1] = currDir.str[i];
-    bufferStart[currDir.len + 1] = 0;
-    printf("cwd called, curr: %d %s\n", currDir.len, currDir.str);
+    bufferStart[currDir.len+1] = 0;
+    if (tvcRomBufferOut)
+      memcpy(tvcRomBufferOut,bufferStart,currDir.len+2);
+
     return 0;
 }
 
 uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
+    if (tvcRomBufferIn)
+      bufferStart = tvcRomBufferIn;
+    if(bufferStart[0] == 0)
+        return FR_INVALID_PARAMETER;
+
 /*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
@@ -2111,7 +2144,64 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+
+
+    // cd . and cd ..
+    // Note: niceties like "cd ../.." will not work.
+    if (bufferStart[1] == '.')
+    {
+      // cd . -- no-op
+      if (bufferStart[0] == 1)
+        return 0;
+      // cd .. - move up
+      else if (bufferStart[2] == '.')
+      {
+        for (int j=currDir.len-2; j>0; j--)
+        {
+          if (currDir.str[j] == '/')
+          {
+            currDir.len = j;
+            currDir.str[currDir.len] = 0;
+            printf("chdir 2a: %s\n",currDir.str);
+            return 0;
+          }
+        }
+        // If no upper level, just return to root
+        currDir.len = 1;
+        currDir.str[0] = '/';
+        currDir.str[currDir.len] = 0;
+        printf("chdir 2b: %s\n",currDir.str);
+        return 0;
+      }
+    }
+
+    // cd /something - abs path, replace
+    // same if there is no current dir or it is the root
+    if (bufferStart[1] == '/' || currDir.len == 0 ||
+        (currDir.len == 1 && currDir.str[0] == '/'))
+    {
+      int newStart = (bufferStart[1] == '/') ? 0 : 1;
+      currDir.str[newStart] = '/';
+
+      currDir.len = bufferStart[0] + newStart;
+      for (int i=newStart; i<currDir.len; i++)
+        currDir.str[i] = bufferStart[i+1-newStart];
+      currDir.str[currDir.len] = 0;
+      printf("chdir 1: %s\n",currDir.str);
+      return 0;
+    }
+
+    if (currDir.str[currDir.len-1] != '/')
+    {
+      currDir.str[currDir.len] = '/';
+      currDir.len++;
+    }
+    for (int i=0; i<bufferStart[0]; i++)
+      currDir.str[currDir.len+i] = bufferStart[i+1];
+    currDir.len += bufferStart[0];
+    currDir.str[currDir.len] = 0;
+    printf("chdir 3: %s\n",currDir.str);
+    return 0;
 }
 
 uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {

@@ -49,11 +49,12 @@ extern uint8_t registerScreenColorBaseAddr;
 extern uint8_t registerFunctionBitmapBase;
 extern TVC64::Memory *emuMem;
 extern Ep128Emu::VirtualMachine *emuVm;
-extern bool fileFunctionViaIOMEM;
 extern uint16_t screenMaxY;
 extern tvc_function_struct_t tvc256k_funct_struct_array[256];
 extern DIR *routinesDirHandle;
 extern TVCString currDir;
+extern uint8_t* tvcRomBufferIn;
+extern uint8_t* tvcRomBufferOut;
 
 uint8_t clear_text_screen(uint8_t* bufferStart);
 uint8_t clear_bitmap_screen(uint8_t* bufferStart);

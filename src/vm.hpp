@@ -718,8 +718,9 @@ namespace Ep128Emu {
     }
     void setAudioConverterSampleRate(float sampleRate_);
    public:
-    int openDirInWorkingDirectory(DIR*& d,
-                                                 std::string& dirName_);
+    int openDirInWorkingDirectory(DIR*& d, std::string& dirName_);
+    int closeDirInWorkingDirectory(DIR*& d);
+
     /*!
      * Open a file in the user specified working directory. 'fileName_' is the
      * file name without any leading directory components; it is converted to

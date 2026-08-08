@@ -256,20 +256,33 @@ namespace Ep128 {
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
-     TVC256::fileFunctionViaIOMEM = useIOMEM;
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is always fixed
-        // and output buffer is different to input buffer (this needs to be
-        // handled on function side)
-        uint8_t* bufferStart = useIOMEM ?
-          hostMem->memGet(0xC000 + 0x1800) :
-          hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
-        printf("Func call: %d params at %04x, val %02x %02x\n",
-               funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
-               bufferStart[0],bufferStart[1]);
+        uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
+        uint8_t* bufferStart = hostMem->memGet(bufferAddr);
+        printf("Func call: %d params at %04x, val %02x %02x %02x %02x %02x %02x\n",
+               funcCode,bufferAddr,
+               bufferStart[0],bufferStart[1],bufferStart[2],bufferStart[3],bufferStart[4],bufferStart[5]);
+
+        // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is still there
+        // but actual input/output uses different, fixed addresses.
+        // File functions will act differently if tvcRomBuffer is filled or not
+        if (useIOMEM)
+        {
+          TVC256::tvcRomBufferIn  = hostMem->memGet(0xD900);
+          TVC256::tvcRomBufferOut = hostMem->memGet(0xDA00);
+        }
+        else
+        {
+          TVC256::tvcRomBufferIn  = NULL;
+          TVC256::tvcRomBufferOut = NULL;
+        }
+
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
+        printf("Func res: %d return val %02x %02x %02x %02x %02x %02x\n",
+               lastFunctionResult,
+               bufferStart[0],bufferStart[1],bufferStart[2],bufferStart[3],bufferStart[4],bufferStart[5]);
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)
