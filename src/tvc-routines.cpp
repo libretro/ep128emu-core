@@ -25,8 +25,12 @@
 #define __unused
 #define FASTRAMBASE ((TVC256_FASTRAM_START_SEGMENT)<<14)
 #define SLOWRAMBASE ((TVC256_SLOWRAM_START_SEGMENT)<<14)
-// Single error code lifted from FatFS definitions
-#define FR_INVALID_PARAMETER 19
+// Error codes lifted from FatFS definitions
+#define FR_OK 0				            /* (0) Function succeeded */
+#define FR_NO_FILE 4              /* (4) Could not find the file */
+#define FR_NO_PATH 5              /* (5) Could not find the path */
+#define FR_TOO_MANY_OPEN_FILES 18	/* (18) Number of open files > FF_FS_LOCK */
+#define FR_INVALID_PARAMETER 19   /* (19) Given parameter is invalid */
 namespace TVC256 {
 
 uint8_t registerScreenBaseAddr;
@@ -36,8 +40,8 @@ TVC64::Memory *emuMem = NULL;
 Ep128Emu::VirtualMachine *emuVm = NULL;
 TVCString dirBuffer;
 TVCString currDir;
-uint8_t* tvcRomBufferIn;
-uint8_t* tvcRomBufferOut;
+uint8_t* tvcRomBufferIn  = NULL;
+uint8_t* tvcRomBufferOut = NULL;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -389,9 +393,9 @@ uint8_t memory_move_to_slow(uint8_t *buf) {
     return 0;
 }
 
-DIR* routinesDirHandle;
+DIR* routinesDirHandle  = NULL;
 //FILINFO routinesFileInfo;
-FILE* routinesFile;
+std::FILE* routinesFile  = NULL;
 /*
 lfs_file_t routinesLFSFile;
 extern lfs_t lfs_psram;
@@ -1692,13 +1696,20 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
  */
 
 uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
 /*    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
-    TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting
-    uint8_t len = bufferStart[2];       // filename length
+    TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting*/
+    uint8_t len = inBuf[2];       // filename length
     if(len == 0) {
-        return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
+        return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
     }
-    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
+/*    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
     memcpy(&TVC_ROM[0x1902], &bufferStart[2], (uint16_t)len + 1);
     FRESULT res = 0;
     switch(SELECTED_DEVICE) {
@@ -1717,18 +1728,43 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
         default:
             res = 4;
             break;
-    }
-
-    bufferStart[0] = (uint8_t)res;
-    if(res == FR_OK) {
+    }*/
+    // ensure null-terminated string
+    inBuf[3+len] = 0;
+    std::string  dirName(reinterpret_cast< char const* >(currDir.str));
+    std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
+    bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
+    if (!isCas)
+      isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
+    
+    fileName = dirName == "/" ? fileName : dirName + '/' + fileName;
+    printf("Opening file %s ...",fileName.c_str());
+    int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
+    printf("result %d\n",res);
+    // todo: stat -- it requires fullpath, so maybe add it to vm.cpp?
+    // fileName may have changed
+    
+    if(res == 0) {
         // On success, store the file handle pointer back to bufferStart
-        *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
+        *(uint32_t *)&outBuf[0] = 1;
+        *(uint32_t *)&outBuf[4] = isCas ? (uint32_t) (emuVm->getLastFileSize() - 0x80) : (uint32_t) (emuVm->getLastFileSize());
+        outBuf[4+4] = (uint8_t) fileName.length();
+        for (int i=0; i<255 && fileName.c_str()[i]; i++) {
+          outBuf[4+4+1+i] = fileName.c_str()[i];
+        }
+        // CAS header skip
+        if (isCas)
+          std::fseek(routinesFile, long(0x80), SEEK_SET);
+        /**(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
         *(uint32_t *)&bufferStart[4] = *(uint32_t *)&TVC_ROM[0x1a04];
         bufferStart[8] = TVC_ROM[0x1a08];
-        memcpy(&bufferStart[9], &TVC_ROM[0x1a09], bufferStart[8]);
+        memcpy(&bufferStart[9], &TVC_ROM[0x1a09], bufferStart[8]);*/
     }
-    return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    else
+    {
+      res = 0x80 + FR_NO_FILE;
+    }
+    return (uint8_t)res;
 }
 
 uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
@@ -1755,15 +1791,28 @@ uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
     }
     
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    if (routinesFile)
+    {
+      std::fclose(routinesFile);
+      routinesFile = NULL;
+    }
+    return 0;
 }
 
 /**
- * Reaf file into INPUT buffer
+ * Read file into INPUT buffer
  * fileHandle(4): the open file handle
  * lengh(2): the length of data to be readf
  */
 uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint16_t length = *(uint16_t *)&inBuf[4];
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint16_t *)&bufferStart[4];
     
@@ -1800,10 +1849,43 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
         }
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    // problematic, normal buffer and iomem buffer layout is different
+    int i;
+    if (!routinesFile)
+      return FR_NO_FILE + 0x80;
+    for (i=0; i<length; i++)
+    {
+      int c = std::fgetc(routinesFile);
+      if (c == EOF)
+        break;
+      bufferStart[4+2+i] = (uint8_t) c;
+    }
+    *(uint16_t *)&bufferStart[4] = (uint16_t) i;
+    if (tvcRomBufferOut)
+    {
+      memcpy(tvcRomBufferOut,&bufferStart[4],i+2);
+    }
+    printf("read_file, wanted %d got %d\n", length, i);
+    return 0;
 }
 
 uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint32_t length = (*(uint32_t *)&inBuf[4]) & 0x00ffffff;
+    uint32_t dstAddress = (*(uint32_t *)&inBuf[4+3]) & 0x00ffffff;
+    if (dstAddress & 0x00800000)
+      dstAddress += SLOWRAMBASE;
+    else
+      dstAddress += FASTRAMBASE;
+
+    dstAddress &= 0x007FFFFF;
+
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
         // size
@@ -1835,7 +1917,17 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    int i;
+    for (i=0; i<length; i++)
+    {
+      int c = std::fgetc(routinesFile);
+      if (c == EOF)
+        break;
+      emuMem->writeRaw(dstAddress+i, c);
+    }
+    *(uint32_t *)&outBuf[4] = (uint32_t) i;
+    printf("read_file_dest, wanted %d got %d\n", length, i);
+    return 0;
 }
 
 /*
@@ -1884,7 +1976,7 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
         *(uint16_t *)&bufferStart[4] = *(uint16_t *)&TVC_ROM[0x1a00];
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 /*
@@ -1926,13 +2018,20 @@ uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
-    uint8_t len = bufferStart[0];
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint8_t len = inBuf[0];
     if(len == 0) {
-        return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
+        return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
     }
     /*memcpy(&TVC_ROM[0x1900], &bufferStart[0], len+1);
     FRESULT res;
@@ -1963,13 +2062,15 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
     routinesDirHandle = (DIR *) 0;
     std::string dirName(reinterpret_cast< char const* >(currDir.str));
     // Handle is set to 1
-    *(uint32_t *)&bufferStart[0] = 1;
-    printf("open dir 1: %s\n",currDir.str);
-    printf("open dir 2: %s\n",dirName.c_str());
+    *(uint32_t *)&outBuf[0] = 1;
     
     if (tvcRomBufferOut)
-      memcpy(tvcRomBufferOut,bufferStart,4);
-    return emuVm->openDirInWorkingDirectory(routinesDirHandle, dirName);
+      memcpy(bufferStart,tvcRomBufferOut,4);
+    int retval = emuVm->openDirInWorkingDirectory(routinesDirHandle, dirName);
+    if (retval < 0)
+      return 0x80 + FR_NO_PATH; // assume error code as no deeper info is available
+    else
+      return 0;
 }
 
 uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
@@ -1997,6 +2098,7 @@ uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
 }
 
 uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
+// tricky case... function out is not the same as with iomem
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
 
     FRESULT res;
@@ -2021,6 +2123,9 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
     struct dirent *dirptr = 0;
     int i=0;
 
+    if (!routinesDirHandle)
+      return 0x80 + FR_NO_PATH;
+
     if ((dirptr = readdir(routinesDirHandle)) != NULL) {
       printf("Dir entry: %s\n",dirptr->d_name);
       for (i=0; i<255 && dirptr->d_name[i]; i++) {
@@ -2035,9 +2140,9 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
         }
       }
       if (dirptr->d_type == DT_DIR)
-        bufferStart[4+256+1] = 0x10;
+        bufferStart[4+256] = 0x10;
       else
-        bufferStart[4+256+1] = 0x00;
+        bufferStart[4+256] = 0x00;
     } 
     else
     {
@@ -2055,6 +2160,9 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
 }
 
 uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
+    uint8_t* inBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
 /*
     *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];   // file handle
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint32_t *)&bufferStart[4];   // file position
@@ -2077,10 +2185,19 @@ uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+    uint32_t pos = (*(uint32_t *)&inBuf[4]);
+    int retval = std::fseek(routinesFile, pos, SEEK_SET);
+    if (retval < 0)
+      return FR_INVALID_PARAMETER + 0x80;
+    else
+      return 0;
 }
 
 uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
 /*    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
@@ -2104,21 +2221,22 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
     return (uint8_t)res;*/
-    bufferStart[0] = currDir.len;
+    outBuf[0] = currDir.len;
     for (int i=0; i<currDir.len; i++)
-      bufferStart[i+1] = currDir.str[i];
-    bufferStart[currDir.len+1] = 0;
-    if (tvcRomBufferOut)
-      memcpy(tvcRomBufferOut,bufferStart,currDir.len+2);
+      outBuf[i+1] = currDir.str[i];
+    outBuf[currDir.len+1] = 0;
+/*    if (tvcRomBufferOut)
+      memcpy(tvcRomBufferOut,bufferStart,currDir.len+2);*/
 
     return 0;
 }
 
 uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
+    uint8_t* inBuf = bufferStart;
     if (tvcRomBufferIn)
-      bufferStart = tvcRomBufferIn;
-    if(bufferStart[0] == 0)
-        return FR_INVALID_PARAMETER;
+      inBuf = tvcRomBufferIn;
+    if(inBuf[0] == 0)
+        return FR_INVALID_PARAMETER + 0x80;
 
 /*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
@@ -2148,13 +2266,13 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
 
     // cd . and cd ..
     // Note: niceties like "cd ../.." will not work.
-    if (bufferStart[1] == '.')
+    if (inBuf[1] == '.')
     {
       // cd . -- no-op
-      if (bufferStart[0] == 1)
+      if (inBuf[0] == 1)
         return 0;
       // cd .. - move up
-      else if (bufferStart[2] == '.')
+      else if (inBuf[2] == '.')
       {
         for (int j=currDir.len-2; j>0; j--)
         {
@@ -2177,15 +2295,15 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
 
     // cd /something - abs path, replace
     // same if there is no current dir or it is the root
-    if (bufferStart[1] == '/' || currDir.len == 0 ||
+    if (inBuf[1] == '/' || currDir.len == 0 ||
         (currDir.len == 1 && currDir.str[0] == '/'))
     {
-      int newStart = (bufferStart[1] == '/') ? 0 : 1;
+      int newStart = (inBuf[1] == '/') ? 0 : 1;
       currDir.str[newStart] = '/';
 
-      currDir.len = bufferStart[0] + newStart;
+      currDir.len = inBuf[0] + newStart;
       for (int i=newStart; i<currDir.len; i++)
-        currDir.str[i] = bufferStart[i+1-newStart];
+        currDir.str[i] = inBuf[i+1-newStart];
       currDir.str[currDir.len] = 0;
       printf("chdir 1: %s\n",currDir.str);
       return 0;
@@ -2196,9 +2314,9 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
       currDir.str[currDir.len] = '/';
       currDir.len++;
     }
-    for (int i=0; i<bufferStart[0]; i++)
-      currDir.str[currDir.len+i] = bufferStart[i+1];
-    currDir.len += bufferStart[0];
+    for (int i=0; i<inBuf[0]; i++)
+      currDir.str[currDir.len+i] = inBuf[i+1];
+    currDir.len += inBuf[0];
     currDir.str[currDir.len] = 0;
     printf("chdir 3: %s\n",currDir.str);
     return 0;
@@ -2230,7 +2348,7 @@ uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_delete(uint8_t *bufferStart) {
@@ -2260,7 +2378,7 @@ uint8_t tvcfunc_delete(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_rename(uint8_t *bufferStart) {
@@ -2279,7 +2397,7 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
         default:
             return 4;
     }*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 
@@ -2323,7 +2441,7 @@ uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], sizeof(FILINFO));
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 
@@ -2341,7 +2459,7 @@ uint8_t tvcfunc_sync(uint8_t* bufferStart) {
         default:
             return 3;
     }*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
@@ -2366,7 +2484,7 @@ uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
@@ -2389,7 +2507,7 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
@@ -2419,7 +2537,7 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
             break;
     }
     return size;*/
-    return FR_INVALID_PARAMETER;
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 tvc_function_struct_t tvc256k_funct_struct_array[256];

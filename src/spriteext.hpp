@@ -46,6 +46,7 @@ namespace Ep128 {
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
     uint8_t lastFunctionResult;
+    bool functionResultDelay;
      unsigned int  nBytes_;
      // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
      // ( = 108 * 4) bytes in compressed format

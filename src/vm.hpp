@@ -77,6 +77,7 @@ namespace Ep128Emu {
     std::string     fileIOWorkingDirectory;
     void            (*fileNameCallback)(void *userData, std::string& fileName);
     void            *fileNameCallbackUserData;
+    int             lastFileSize;
    public:
     struct VMStatus {
       bool      isRecordingDemo;
@@ -720,6 +721,7 @@ namespace Ep128Emu {
    public:
     int openDirInWorkingDirectory(DIR*& d, std::string& dirName_);
     int closeDirInWorkingDirectory(DIR*& d);
+    int getLastFileSize();
 
     /*!
      * Open a file in the user specified working directory. 'fileName_' is the

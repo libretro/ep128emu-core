@@ -39,27 +39,21 @@
    - Sprite collision under the left/right border, both standard and extra (not under top/bottom)
    - Sprite interrupt - to be tested?
    - Screen height setting
+   - Border color change?
    
    TVC256++ drives:
    - USB drive handling (no functions disabled via tvcfileio)
    - Flash mem drive handling (readonly)
    - PSRAM drive handling (no directories)
+   - Multi file, multi dir handling
+   - Write, create, delete functions
    
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
    - SID emulation sound test against HW and frequency correction
-   - Function implementation
-   - Extra file i/o functions (get_pwd .. seek_file)
-            DW      pwd_handler             ;  6
-            DW      opendir_handler         ;  7
-            DW      readdir_handler         ;  8
-            DW      mkdir_handler           ;  9
-            DW      delete_handler          ; 10
-            DW      rename_handler          ; 11
-            DW      seek_handler            ; 12
-            DW      iobase_handler          ; 13 // in asm
-            DW      membase_handler         ; 14 // in asm
+   - Function multi execute
+   - tvcfileio2 - file access via rst 30h - probably not needed
 
 */
 
@@ -261,9 +255,7 @@ namespace Ep128 {
      {
         uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
         uint8_t* bufferStart = hostMem->memGet(bufferAddr);
-        printf("Func call: %d params at %04x, val %02x %02x %02x %02x %02x %02x\n",
-               funcCode,bufferAddr,
-               bufferStart[0],bufferStart[1],bufferStart[2],bufferStart[3],bufferStart[4],bufferStart[5]);
+        uint8_t* realParams = bufferStart;
 
         // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is still there
         // but actual input/output uses different, fixed addresses.
@@ -272,6 +264,7 @@ namespace Ep128 {
         {
           TVC256::tvcRomBufferIn  = hostMem->memGet(0xD900);
           TVC256::tvcRomBufferOut = hostMem->memGet(0xDA00);
+          realParams = TVC256::tvcRomBufferIn;
         }
         else
         {
@@ -279,10 +272,16 @@ namespace Ep128 {
           TVC256::tvcRomBufferOut = NULL;
         }
 
+        printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x\n",
+               funcCode,bufferAddr,
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+
+
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
-        printf("Func res: %d return val %02x %02x %02x %02x %02x %02x\n",
+        printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
-               bufferStart[0],bufferStart[1],bufferStart[2],bufferStart[3],bufferStart[4],bufferStart[5]);
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+        functionResultDelay = true;
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)
@@ -329,11 +328,20 @@ namespace Ep128 {
          retval = namedPortValues[portAddr];
          namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
          namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
-       break;
+         break;
+       /* Ja, meg a REG_Y. Annak is mennie kell hozzá.
+A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első sorban 21. Körbefordul, majd megáll. A HSYNC után újrakezdődik. */
+       // TODO: is this correct?
        case REG_SCREEN_Y:
-         retval = (uint8_t) curLine;
+         retval = (uint8_t) curLine - 6;
+         break;
        case REG_FUNCTION_EXECUTE:
-         return namedPortValues[REG_FUNCTION_EXECUTE]; // TODO - delayed execution
+         if (functionResultDelay)
+         {
+           functionResultDelay = false;
+           return namedPortValues[REG_FUNCTION_EXECUTE];
+         }
+         return 0xFF;
        case REG_FUNCTION_RESULT:
          return lastFunctionResult;
        default:
@@ -350,7 +358,7 @@ namespace Ep128 {
   else
     io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
 
-  printf("Port %x read, val %x\n", portAddr, retval);
+  //printf("Port %x read, val %x\n", portAddr, retval);
   return retval;
   }
 
@@ -365,7 +373,7 @@ namespace Ep128 {
      if (namedPortMasks[portAddr])
         value = value & namedPortMasks[portAddr];
 
-     printf("Port %x write, val %x\n", portAddr, value);
+     //printf("Port %x write, val %x\n", portAddr, value);
      switch (portAddr)
      {
        // Note: rest of mouse handling is done in TVC64VM::ioPortReadCallback
