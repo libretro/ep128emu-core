@@ -9,7 +9,9 @@
 //#include "TVC-IO-main-sys.h"
 //#include "TVC-IO-main-gfx.h"
 #include "tvc-routines.h"
-//#include "tvc-fs.h"
+//#include "tvc-fatfs.h"
+//#include "tvc-fatfs-pendrive.h"
+//#include "tvc-fatfs-dskdrive.h"
 //#include "tvc-usb.h"
 //#include "tusb.h"
 //#include "psram.h"
@@ -27,10 +29,11 @@
 #define SLOWRAMBASE ((TVC256_SLOWRAM_START_SEGMENT)<<14)
 // Error codes lifted from FatFS definitions
 #define FR_OK 0				            /* (0) Function succeeded */
-#define FR_NO_FILE 4              /* (4) Could not find the file */
-#define FR_NO_PATH 5              /* (5) Could not find the path */
+#define FR_NO_FILE 4              /* (4) Could not find the file -- used here as generic file error */
+#define FR_NO_PATH 5              /* (5) Could not find the path -- used here as generic dir error */
+#define FR_WRITE_PROTECTED 10     /* (10) The physical drive is write protected -- no writes to protect host FS */
 #define FR_TOO_MANY_OPEN_FILES 18	/* (18) Number of open files > FF_FS_LOCK */
-#define FR_INVALID_PARAMETER 19   /* (19) Given parameter is invalid */
+#define FR_INVALID_PARAMETER 19   /* (19) Given parameter is invalid -- used here as generic error */
 namespace TVC256 {
 
 uint8_t registerScreenBaseAddr;
@@ -343,6 +346,7 @@ uint8_t memory_move_chunks_full(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    // This function is never used.
     //memmove(&TVC_RAM[destination], &TVC_RAM[source], length);
     return 0;
 }
@@ -1495,7 +1499,7 @@ uint8_t copy_image_block_fast(uint8_t *bufStart) {
     int y = MAX(0, destY);
     if(((destY + height) < 0) || (destY >= screenMaxY))
         return 0;
-
+//TODO - it is now substituted by copy_image_block
 /*    uint8_t *source_array = sourceAddress & 0x00800000 ? 
                             psram_array : 
                             TVC_RAM;
@@ -1940,7 +1944,6 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (2 bytes)
 */
-
 uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     uint16_t length = (*(uint16_t *)&bufferStart[4]);
@@ -1989,7 +1992,6 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (3 bytes)
 */
-
 uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
@@ -2127,7 +2129,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       return 0x80 + FR_NO_PATH;
 
     if ((dirptr = readdir(routinesDirHandle)) != NULL) {
-      printf("Dir entry: %s\n",dirptr->d_name);
+      //printf("Dir entry: %s\n",dirptr->d_name);
       for (i=0; i<255 && dirptr->d_name[i]; i++) {
         bufferStart[4+1+i] = dirptr->d_name[i];
       }
@@ -2148,7 +2150,10 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
     {
       bufferStart[4] = 0;
     }
-  // TODO: file size and other info
+
+  // TODO: file size
+  *(uint32_t *)&bufferStart[4+256+1] = 0;
+
   if (tvcRomBufferOut)
     memcpy(tvcRomBufferOut,&bufferStart[4],256+1+4+13);
 /*  if(res == FR_OK) {
@@ -2221,6 +2226,7 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
     return (uint8_t)res;*/
+    // Todo: check if dir exists at all
     outBuf[0] = currDir.len;
     for (int i=0; i<currDir.len; i++)
       outBuf[i+1] = currDir.str[i];
@@ -2348,7 +2354,7 @@ uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return FR_WRITE_PROTECTED + 0x80;
 }
 
 uint8_t tvcfunc_delete(uint8_t *bufferStart) {
@@ -2378,7 +2384,7 @@ uint8_t tvcfunc_delete(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return FR_WRITE_PROTECTED + 0x80;
 }
 
 uint8_t tvcfunc_rename(uint8_t *bufferStart) {
@@ -2397,9 +2403,8 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
         default:
             return 4;
     }*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return FR_WRITE_PROTECTED + 0x80;
 }
-
 
 /**
  * Gets a file's stat. Returns non-zero if error, otherwise 0 and file info is stored in bufferStart
@@ -2412,7 +2417,6 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
  * bufferStart[0x100]: file size (4 bytes)
  * bufferStart[0x104]: file attributes (1 byte)
  */
-
 uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
 /*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0)
@@ -2580,12 +2584,12 @@ void init_routines() {
     setStructArrayElement(29, scanline_flood_fill,           2);
     setStructArrayElement(30, draw_ellipse,                  6);     // 30
     setStructArrayElement(31, fill_ellipse,                  6);
-    setStructArrayElement(32, copy_image_block_fast,         9);
+//    setStructArrayElement(32, copy_image_block_fast,         9);
+    setStructArrayElement(32, copy_image_block,              9);
     setStructArrayElement(33, copy_sub_image,                18);
     setStructArrayElement(34, create_psram_drive,            2);
     setStructArrayElement(35, get_first_usable_psram_pos,    0);
     setStructArrayElement(36, delete_psram_drive,            0);
-
 
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);

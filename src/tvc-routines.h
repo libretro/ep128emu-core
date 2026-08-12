@@ -71,6 +71,7 @@ uint8_t get_text_color(uint8_t* bufferStart);
 uint8_t replace_pixel_color(uint8_t* bufferStart);
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize);
 
+
 /*
 void print_hex_digit(uint8_t digit);
 void clear_text_screen(uint8_t* bufferStart);

@@ -30,7 +30,7 @@
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
    - State save/load support
-   - Improve performance
+   - Improve performance (also sid!)
    - Debug ports: show tvcext ports from 256-512
    - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
 
@@ -47,6 +47,7 @@
    - PSRAM drive handling (no directories)
    - Multi file, multi dir handling
    - Write, create, delete functions
+   - autostart
    
    TVC256++ others:
    - Delay for slow RAM paging
@@ -141,13 +142,6 @@ namespace Ep128 {
 
   SpriteExt::~SpriteExt()
   {
-    openImage((char *) 0);
-    try {
-      openROMFile((char *) 0);
-    }
-    catch (...) {
-      // FIXME: errors are ignored here
-    }
   }
 
   static const uint8_t i4ConvTable[16] = {
@@ -233,14 +227,6 @@ namespace Ep128 {
       hostVm = vm;
     else
       hostVm = nullptr;
-  }
-
-  void SpriteExt::openImage(const char *sdimg_path)
-  {
-  }
-
-  void SpriteExt::openROMFile(const char *fileName)
-  {
   }
 
   void SpriteExt::executeFunction(uint8_t funcCode, bool useIOMEM)
@@ -551,7 +537,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
                       spritePosY * 3;
            uint32_t spriteBits = hostMem->readRaw(spriteBaseAddr) << 16 | hostMem->readRaw(spriteBaseAddr+1) << 8 | hostMem->readRaw(spriteBaseAddr+2);
            // what about transparent sprite color?
-           if (spriteBits & (uint32_t)(1 << 23-spritePosX)) 
+           if (spriteBits & (uint32_t)(1 << (23-spritePosX)))
            {
               buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+spriteNum], buf[j*2]);
               SET_BIT(sprite_active_pixels[spriteNum],j*2  );
@@ -803,7 +789,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
       curLine = 0;
     else 
       curLine++;
-    if (curLine == namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
+    if (curLine == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE))
     {
        if ((namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] & namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ]) ||
            (namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] & namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH]) ||
@@ -972,70 +958,6 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     return &buf_[0];
   }
 
-  static int safe_read(int fd, uint8_t *buffer, int size)
-  {
-    int all = 0;
-    while (size) {
-      int ret = read(fd, buffer, size);
-      if (ret <= 0)
-        break;
-      all += ret;
-      size -= ret;
-      buffer += ret;
-    }
-    return all;
-  }
-
-  void SpriteExt::_block_read()
-  {
-  }
-
-  /* SPI is a read/write in once stuff. We have only a single function ...
-   * _write_b is the data value to put on MOSI
-   * _read_b is the data read from MISO without spending _ANY_ SPI time to do
-   * shifting!
-   * This is not a real thing, but easier to code this way.
-   * The implementation of the real behaviour is up to the caller of this
-   * function.
-   */
-  void SpriteExt::_spi_shifting_with_sd_card()
-  {
-  }
-
-  /* Warning:
-   * Some resources mention addresses like 0xFC00 for the I/O area.
-   * Here, I mean addresses within segment 7 only, so it becomes 0x3C00 ...
-   */
-
-  uint8_t SpriteExt::readCartP3(uint32_t addr)
-  {
-    return 0xFF;        // make GCC happy :)
-  }
-
-  void SpriteExt::writeCartP3(uint32_t addr, uint8_t data)
-  {
-  }
-
-  uint8_t SpriteExt::readCartP3Debug(uint32_t addr) const
-  {
-  }
-
-  // --------------------------------------------------------------------------
-
-  uint8_t SpriteExt::flashRead(uint32_t addr)
-  {
-    return 0xFF;
-  }
-
-  void SpriteExt::flashWrite(uint32_t addr, uint8_t data)
-  {
-  }
-
-  uint8_t SpriteExt::flashReadDebug(uint32_t addr) const
-  {
-    return 0xFF;
-  }
-
   // --------------------------------------------------------------------------
 
   class ChunkType_SpriteExtSnapshot : public Ep128Emu::File::ChunkTypeHandler {
@@ -1084,8 +1006,6 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
       throw Ep128Emu::Exception("incompatible spriteext snapshot format");
     }
     try {
-      // save flash ROM first if changed, reset it to erased state
-      openROMFile((char *) 0);
       // reset the interface as most registers are not saved in the snapshot
       this->reset(1);
       // load saved state
@@ -1094,7 +1014,6 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     catch (...) {
       // reset spriteext
       this->reset(2);
-      openROMFile((char *) 0);
       throw;
     }
   }
