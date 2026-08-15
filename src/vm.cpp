@@ -921,6 +921,29 @@ namespace Ep128Emu {
     }
   }
 
+  int VirtualMachine::openDirInWorkingDirectory(DIR*& d,
+                                                 std::string& dirName_)
+  {
+    d = (DIR *) 0;
+    if ((d = opendir(std::string(fileIOWorkingDirectory + dirName_).c_str())) != NULL)
+      return 0;
+    else
+      return -1;
+  }
+
+  int VirtualMachine::closeDirInWorkingDirectory(DIR*& d)
+  {
+    if (d)
+      closedir(d);
+    d = (DIR *) 0;
+    return 0;
+  }
+
+  int VirtualMachine::getLastFileSize()
+  {
+    return lastFileSize;
+  }
+
   int VirtualMachine::openFileInWorkingDirectory(std::FILE*& f,
                                                  std::string& fileName_,
                                                  const char *mode,
@@ -936,7 +959,7 @@ namespace Ep128Emu {
         for (size_t i = 0; i < baseName.length(); i++) {
           const std::string&  s = baseName;
           if (!((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9') ||
-                s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_'))
+                s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_' || s[i] == '/'))
             baseName[i] = '_';
         }
         fullName = fileIOWorkingDirectory + baseName;
@@ -989,9 +1012,11 @@ namespace Ep128Emu {
         if (err == 0)
           fullName = tmpName;
       }
+      lastFileSize = st.st_size;
 #else
       struct _stat  st;
       int     err = fileStat(fullName.c_str(), &st);
+      lastFileSize = st.st_size;
 #endif
       if (err != 0) {
         if (mode == (char *) 0 || mode[0] != 'w')

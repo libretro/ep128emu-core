@@ -30,19 +30,23 @@
 
 #include "ep128emu.hpp"
 #include "tvcmem.hpp"
+#include "vm.hpp"
 #include <vector>
+#include <dirent.h>
 
 namespace Ep128 {
 
   class SpriteExt {
    protected:
     TVC64::Memory *hostMem;
+    Ep128Emu::VirtualMachine *hostVm;
     bool      spriteExt_enabled;    // only used in temporaryDisable()
     bool      anyGfxEnabled;
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
     uint8_t lastFunctionResult;
+    bool functionResultDelay;
      unsigned int  nBytes_;
      // a line of 768 pixels needs a maximum space of 768 * (9 / 16) = 432
      // ( = 108 * 4) bytes in compressed format
@@ -53,11 +57,6 @@ namespace Ep128 {
     // 64K flash ROM
     std::vector< uint8_t >  sd_rom_ext;
    // ----------------
-    void _block_read();
-    void _spi_shifting_with_sd_card();
-    uint8_t flashRead(uint32_t addr);
-    void flashWrite(uint32_t addr, uint8_t data);
-    uint8_t flashReadDebug(uint32_t addr) const;
     void updateMouseSpeed(uint8_t binValue);
     void updateAnyGfxEnabled();
     void updateLineWithGfx(size_t outPos, uint8_t currSlot);
@@ -73,11 +72,12 @@ namespace Ep128 {
     uint16_t sprite_active_pixels[16];
     uint8_t i4ToTVCRGB(uint8_t val, uint8_t transparent_val);
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
-    void executeFunction(uint8_t funcCode);
+    void executeFunction(uint8_t funcCode, bool useIOMEM);
 
    public:
     uint8_t io_port_values[16];
     float mouse_speed;
+    DIR *fileIODir;
     SpriteExt();
     virtual ~SpriteExt();
     void setEnabled(bool isEnabled);
@@ -88,17 +88,13 @@ namespace Ep128 {
     // 1 = simulate disk change
     // 2 = clear SRAM
     void reset(int reset_level);
-    void openImage(const char *sdimg_path);
-    void openROMFile(const char *fileName);
     uint8_t readNamedPort(bool secondary);
     void   writeNamedPort(bool secondary, uint8_t value);
     uint8_t readNamedPortDebug(uint8_t portIndex);
     void   writeNamedPortDebug(uint8_t portIndex, uint8_t value);
     void setMemRef(TVC64::Memory *m);
+    void setVmRef(Ep128Emu::VirtualMachine *vm);
     const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
-    uint8_t readCartP3(uint32_t addr);
-    void writeCartP3(uint32_t addr, uint8_t data);
-    uint8_t readCartP3Debug(uint32_t addr) const;
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const
     {
       return (segment == spriteExtSegment);

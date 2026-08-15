@@ -9,7 +9,9 @@
 //#include "TVC-IO-main-sys.h"
 //#include "TVC-IO-main-gfx.h"
 #include "tvc-routines.h"
-//#include "tvc-fs.h"
+//#include "tvc-fatfs.h"
+//#include "tvc-fatfs-pendrive.h"
+//#include "tvc-fatfs-dskdrive.h"
 //#include "tvc-usb.h"
 //#include "tusb.h"
 //#include "psram.h"
@@ -23,14 +25,26 @@
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define abs(x) ((x) < 0 ? (x) : (-(x)))
 #define __unused
-// TVC256_FASTRAM_START_SEGMENT 0xE8
-#define RAMBASE ((0xE8)<<14)
+#define FASTRAMBASE ((TVC256_FASTRAM_START_SEGMENT)<<14)
+#define SLOWRAMBASE ((TVC256_SLOWRAM_START_SEGMENT)<<14)
+// Error codes lifted from FatFS definitions
+#define FR_OK 0				            /* (0) Function succeeded */
+#define FR_NO_FILE 4              /* (4) Could not find the file -- used here as generic file error */
+#define FR_NO_PATH 5              /* (5) Could not find the path -- used here as generic dir error */
+#define FR_WRITE_PROTECTED 10     /* (10) The physical drive is write protected -- no writes to protect host FS */
+#define FR_TOO_MANY_OPEN_FILES 18	/* (18) Number of open files > FF_FS_LOCK */
+#define FR_INVALID_PARAMETER 19   /* (19) Given parameter is invalid -- used here as generic error */
 namespace TVC256 {
 
 uint8_t registerScreenBaseAddr;
 uint8_t registerBitmapBaseAddr;
 uint8_t registerScreenColorBaseAddr;
 TVC64::Memory *emuMem = NULL;
+Ep128Emu::VirtualMachine *emuVm = NULL;
+TVCString dirBuffer;
+TVCString currDir;
+uint8_t* tvcRomBufferIn  = NULL;
+uint8_t* tvcRomBufferOut = NULL;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -43,6 +57,9 @@ uint8_t registerFunctionBitmapBase;
 bool psram_drive_initialized;
 uint32_t free_psram_start;
 
+uint8_t dsk_file_type;
+
+
 uint8_t screenTextPosX = 0;
 uint8_t screenTextPosY = 0;
 uint8_t screenTextColor = 0x0f;
@@ -54,10 +71,10 @@ uint8_t bitmap_byte_masks[256];
 // Fills the text screen area with spaces and the set to current text color
 uint8_t clear_text_screen(__unused uint8_t* bufferStart) {
     (void) bufferStart;
-    emuMem->memsetRaw(RAMBASE + registerScreenBaseAddr      * 0x0400, 32*screenMaxY/8, 0x20);
-    emuMem->memsetRaw(RAMBASE + registerScreenColorBaseAddr * 0x0400, 32*screenMaxY/8, screenTextColor);
 /*    memset(&TVC_RAM[registerScreenBaseAddr * 0x0400], 0x20, 32*screenMaxY/8);
     memset(&TVC_RAM[registerScreenColorBaseAddr * 0x0400], screenTextColor, 32*screenMaxY/8);*/
+    emuMem->memsetRaw(FASTRAMBASE + registerScreenBaseAddr      * 0x0400, 32*screenMaxY/8, 0x20);
+    emuMem->memsetRaw(FASTRAMBASE + registerScreenColorBaseAddr * 0x0400, 32*screenMaxY/8, screenTextColor);
     screenTextPosX = 0;
     screenTextPosY = 0;
     return 0;
@@ -71,18 +88,23 @@ uint8_t clear_bitmap_screen(__unused uint8_t* bufferStart) {
             (uint32_t)(registerBitmapBaseAddr & 0x03) * 0x8000 : 
             (uint32_t)(registerFunctionBitmapBase & 0x1f) * 0x8000;
     //memset(&TVC_RAM[functionBitmapBaseAddr], 0x88, 128 * screenMaxY);
-    emuMem->memsetRaw(RAMBASE + functionBitmapBaseAddr, 128*screenMaxY, 0x88);
+    emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr, 128*screenMaxY, 0x88);
     return 0;
 }
 
 // Scrolls the text screen up by one line
 uint8_t scrollScreenUp() {
-/*    uint32_t screenBaseAddr = (registerScreenBaseAddr & 0x3F) * 0x0400;
+    uint32_t screenBaseAddr = (registerScreenBaseAddr & 0x3F) * 0x0400;
     uint32_t sColorBaseAddr = (registerScreenColorBaseAddr & 0x3F) * 0x0400;
-    memmove(&TVC_RAM[screenBaseAddr], &TVC_RAM[screenBaseAddr + 32], 32*(screenMaxY/8 - 1));
-    memset(&TVC_RAM[screenBaseAddr + 32*(screenMaxY/8 - 1)], 0x20, 32);
-    memmove(&TVC_RAM[sColorBaseAddr], &TVC_RAM[sColorBaseAddr + 32], 32*(screenMaxY/8 - 1));
+/*    memmove(&TVC_RAM[screenBaseAddr], &TVC_RAM[screenBaseAddr + 32], 32*(screenMaxY/8 - 1));
+    memset(&TVC_RAM[screenBaseAddr + 32*(screenMaxY/8 - 1)], 0x20, 32);*/
+    emuMem->memmoveRaw(FASTRAMBASE + screenBaseAddr, FASTRAMBASE+screenBaseAddr+32, 32*(screenMaxY/8 - 1));
+    emuMem->memsetRaw(FASTRAMBASE + screenBaseAddr + 32*(screenMaxY/8 - 1), 32, 0x20);
+/*    memmove(&TVC_RAM[sColorBaseAddr], &TVC_RAM[sColorBaseAddr + 32], 32*(screenMaxY/8 - 1));
     memset(&TVC_RAM[sColorBaseAddr + 32*(screenMaxY/8 - 1)], screenTextColor, 32);*/
+    emuMem->memmoveRaw(FASTRAMBASE + sColorBaseAddr, FASTRAMBASE+sColorBaseAddr+32, 32*(screenMaxY/8 - 1));
+    emuMem->memsetRaw(FASTRAMBASE + sColorBaseAddr + 32*(screenMaxY/8 - 1), 32, 0x20);
+
     return 0;
 }
 
@@ -91,9 +113,9 @@ void print_char_scr_code(uint8_t ch) {
     uint32_t sColorBaseAddr = (registerScreenColorBaseAddr & 0x3F) * 0x0400;
     uint16_t pos = screenBaseAddr + screenTextPosY*32 + screenTextPosX;
     //TVC_RAM[pos] = ch;
-    emuMem->memsetRaw(RAMBASE + pos, 1, ch);
+    emuMem->memsetRaw(FASTRAMBASE + pos, 1, ch);
     //TVC_RAM[sColorBaseAddr + screenTextPosY*32 + screenTextPosX] = screenTextColor;
-    emuMem->memsetRaw(RAMBASE + sColorBaseAddr + screenTextPosY*32 + screenTextPosX, 1, screenTextColor);
+    emuMem->memsetRaw(FASTRAMBASE + sColorBaseAddr + screenTextPosY*32 + screenTextPosX, 1, screenTextColor);
     screenTextPosX++;
     if(screenTextPosX >= 32) {
         screenTextPosX = 0;
@@ -282,8 +304,8 @@ uint8_t memory_move_short(uint8_t *buf) {
     if (memoryBlock < 0x10) memoryBlock += TVC256_FASTRAM_START_SEGMENT;
     else if (memoryBlock == 0x10) memoryBlock = TVC256_SLOWRAM_START_SEGMENT + emuMem->psram_p2_reg;
     else if (memoryBlock == 0x11) memoryBlock = TVC256_SLOWRAM_START_SEGMENT + emuMem->psram_p3_reg;
-    emuMem->memmoveRaw(memoryBlock * 0x4000 + destination, memoryBlock * 0x4000 + source, length);
     //memmove(&TVC_RAM[memoryBlock * 16384 + destination], &TVC_RAM[memoryBlock * 16384 + source], length);
+    emuMem->memmoveRaw(memoryBlock * 0x4000 + destination, memoryBlock * 0x4000 + source, length);
     return 0;
 }
 
@@ -302,8 +324,8 @@ uint8_t memory_move_full(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
-    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
-    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    destination += FASTRAMBASE;
+    source      += FASTRAMBASE;
     //memmove(&TVC_RAM[destination], &TVC_RAM[source], length);
     emuMem->memmoveRaw(destination, source, length);
     return 0;
@@ -324,6 +346,7 @@ uint8_t memory_move_chunks_full(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
+    // This function is never used.
     //memmove(&TVC_RAM[destination], &TVC_RAM[source], length);
     return 0;
 }
@@ -344,8 +367,8 @@ uint8_t memory_move_from_slow(uint8_t *buf) {
     if(((source + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) || ((destination + length) >= 256*1024)) {
         return 1;
     }
-    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
-    source      += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+    destination += FASTRAMBASE;
+    source      += SLOWRAMBASE;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
     emuMem->memmoveRaw(destination, source, length);
 
@@ -367,28 +390,30 @@ uint8_t memory_move_to_slow(uint8_t *buf) {
     if(((source + length) >= 256*1024) || ((destination + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 1;
     }
-    destination += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
-    source      += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    destination += SLOWRAMBASE;
+    source      += FASTRAMBASE;
     //memcpy(&TVC_RAM[destination], &psram_array[source], length);
     emuMem->memmoveRaw(destination, source, length);
     return 0;
 }
+
+DIR* routinesDirHandle  = NULL;
+//FILINFO routinesFileInfo;
+std::FILE* routinesFile  = NULL;
 /*
-DIR routinesDirHandle;
-FILINFO routinesFileInfo;
-FIL routinesFile;
 lfs_file_t routinesLFSFile;
 extern lfs_t lfs_psram;
 void str_tolower(char *str);
 uint8_t transferBuffer[4096];
+*/
 
 uint8_t copy_dir_to_psram(uint8_t *bufStart) {
     // usb_printf("cache: psram is %d\n", psram_size());main_loop_task();sleep_ms(50);
 
-    if(psram_size() == 0) {
+    if( 1 /*psram_size() == 0*/) {
         return 128;
     }
-
+/*
     if((registerInitializedUSBDevices & 2) == 0) {
         return 129;
     }
@@ -466,11 +491,11 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
         res = f_opendir(&routinesDirHandle, (char *)bufStart);
     }
     if(res!=0) {
-        print_string_ascii("2nd opendir failed");
+        print_string_ascii((uint8_t *)"2nd opendir failed");
         return res;
     }
 
-    print_string_ascii("Copying files...\r\n");
+    print_string_ascii((uint8_t *)"Copying files...\r\n");
     int prevLen = 0;
     while(res == FR_OK) {
         res = f_readdir(&routinesDirHandle, &routinesFileInfo);
@@ -506,7 +531,7 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
         char temp[256];
         strcat(temp, "./");
         if(bufStart[0] !=0 ) {
-            strcpy(temp, bufStart);
+            strcpy(temp, (char *)bufStart);
             if(bufStart[len-1] != '/')
                 strcat(temp, "/");
         }
@@ -672,7 +697,7 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
     //     checkSum+=TVC_ROM[i];
     // usb_printf("cache: chkSum is %d\n", checkSum);main_loop_task();sleep_ms(50);
     */
-//}
+}
 
 /**
  * Replaces the pixel data (4bits) in the buffer with the color defined in the parameter.
@@ -691,7 +716,7 @@ uint8_t replace_pixel_color(uint8_t *bufStart) {
     if((start_address + length) > 256*1024) {
         return 1;
     }
-    start_address += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    start_address += FASTRAMBASE;
     for(uint32_t i=0; i<length; i++) {
         uint8_t pixel = emuMem->readRaw(start_address + i);
         if((pixel & 0x0f) == color_from) {
@@ -762,10 +787,10 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         }
     }
 
-    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    destination += FASTRAMBASE;
     if(sourceInPSRAM) {
         // source is in PSRAM
-        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+        source += SLOWRAMBASE;
 
         for(int i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
@@ -775,7 +800,7 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
         }
     } else {
         // source is in fast RAM
-        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+        source += FASTRAMBASE;
         for(int i=0; i<count; i++) {
             //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
             emuMem->memmoveRaw(destination, source, chunkSize);
@@ -820,10 +845,10 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
         return 3;
     }
 
-    destination += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    destination += FASTRAMBASE;
     if(sourceInPSRAM) {
         // source is in PSRAM
-        source += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+        source += SLOWRAMBASE;
         for(uint16_t i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
             emuMem->memmoveRaw(destination, source, chunkSize);
@@ -832,7 +857,7 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
         }
     } else {
         // source is in fast RAM
-        source += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+        source += FASTRAMBASE;
         if((destination < source + chunkSize + (count - 1) * increment) && (destination > source)) {
             // destination is within the source blocks, copy backwards to handle overlap
             destination += (count - 1) * increment;
@@ -887,7 +912,7 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
         return 1;
     }
 
-    phase_address += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    phase_address += FASTRAMBASE;
     if (color_mode == 0) {
         // 2c sprite phase
         if(flip_mode == 0) {
@@ -1000,7 +1025,7 @@ uint8_t get_pen_color(uint8_t *color) {
 void set_dotc_impl(uint8_t x, uint8_t y, uint8_t color) {
     // draw pixel at (x, y) with the given color
     uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
-    offset += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    offset += FASTRAMBASE;
 
     if(x & 1) {
         // odd pixel, color is in lower 4 bits
@@ -1031,7 +1056,7 @@ uint8_t set_dot_color(uint8_t *bufStart) {
 
 uint8_t get_dot_color_impl(uint8_t x, uint8_t y) {
     uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
-    offset += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+    offset += FASTRAMBASE;
     uint8_t retVal = 0;
     if(x & 1) {
         // odd pixel, color is in lower 4 bits
@@ -1405,9 +1430,9 @@ uint8_t copy_image_block(uint8_t *bufStart) {
                             TVC_RAM;*/
 
     if (sourceAddress & 0x00800000)
-      sourceAddress += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+      sourceAddress += SLOWRAMBASE;
     else
-      sourceAddress += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+      sourceAddress += FASTRAMBASE;
 
     sourceAddress &= 0x007FFFFF;
 
@@ -1474,7 +1499,7 @@ uint8_t copy_image_block_fast(uint8_t *bufStart) {
     int y = MAX(0, destY);
     if(((destY + height) < 0) || (destY >= screenMaxY))
         return 0;
-
+//TODO - it is now substituted by copy_image_block
 /*    uint8_t *source_array = sourceAddress & 0x00800000 ? 
                             psram_array : 
                             TVC_RAM;
@@ -1608,9 +1633,9 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
                             TVC_RAM;*/
 
     if (sourceAddress & 0x00800000)
-      sourceAddress += TVC256_SLOWRAM_START_SEGMENT * 0x4000;
+      sourceAddress += SLOWRAMBASE;
     else
-      sourceAddress += TVC256_FASTRAM_START_SEGMENT * 0x4000;
+      sourceAddress += FASTRAMBASE;
 
     sourceAddress &= 0x007FFFFF;
 
@@ -1673,20 +1698,27 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
  *  [8]/1 - found filename length
  *  [9]/len - fileName
  */
-/*
+
 uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
-    TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting
-    uint8_t len = bufferStart[2];       // filename length
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+/*    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
+    TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting*/
+    uint8_t len = inBuf[2];       // filename length
     if(len == 0) {
-        return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
+        return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
     }
-    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
+/*    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
     memcpy(&TVC_ROM[0x1902], &bufferStart[2], (uint16_t)len + 1);
     FRESULT res = 0;
     switch(SELECTED_DEVICE) {
         case 0x00:  // USB
-            res = tvc_open_file();
+            res = tvc_fatfs_pendrive_open_file();
             break;
         case 0x01:   // psram
             res = tvc_lfs_psram_file_open();
@@ -1694,30 +1726,58 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
         case 0x02:    // internal flash drive
             res = tvc_lfs_flash_file_open();
             break;
-        default:
-            res = 3;
+        case 0x03:  // dsk
+            res = tvc_fatfs_dskdrive_open_file();
             break;
-    }
-
-    bufferStart[0] = (uint8_t)res;
-    if(res == FR_OK) {
+        default:
+            res = 4;
+            break;
+    }*/
+    // ensure null-terminated string
+    inBuf[3+len] = 0;
+    std::string  dirName(reinterpret_cast< char const* >(currDir.str));
+    std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
+    bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
+    if (!isCas)
+      isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
+    
+    fileName = dirName == "/" ? fileName : dirName + '/' + fileName;
+    printf("Opening file %s ...",fileName.c_str());
+    int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
+    printf("result %d\n",res);
+    // todo: stat -- it requires fullpath, so maybe add it to vm.cpp?
+    // fileName may have changed
+    
+    if(res == 0) {
         // On success, store the file handle pointer back to bufferStart
-        *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
+        *(uint32_t *)&outBuf[0] = 1;
+        *(uint32_t *)&outBuf[4] = isCas ? (uint32_t) (emuVm->getLastFileSize() - 0x80) : (uint32_t) (emuVm->getLastFileSize());
+        outBuf[4+4] = (uint8_t) fileName.length();
+        for (int i=0; i<255 && fileName.c_str()[i]; i++) {
+          outBuf[4+4+1+i] = fileName.c_str()[i];
+        }
+        // CAS header skip
+        if (isCas)
+          std::fseek(routinesFile, long(0x80), SEEK_SET);
+        /**(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
         *(uint32_t *)&bufferStart[4] = *(uint32_t *)&TVC_ROM[0x1a04];
         bufferStart[8] = TVC_ROM[0x1a08];
-        memcpy(&bufferStart[9], &TVC_ROM[0x1a09], bufferStart[8]);
+        memcpy(&bufferStart[9], &TVC_ROM[0x1a09], bufferStart[8]);*/
+    }
+    else
+    {
+      res = 0x80 + FR_NO_FILE;
     }
     return (uint8_t)res;
 }
 
 uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     FRESULT res;
-
 
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_close_file();
+            res = tvc_fatfs_pendrive_close_file();
             break;
         case 0x01:   // psram
             res = tvc_lfs_psram_file_close();
@@ -1725,34 +1785,54 @@ uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
         case 0x02:    // internal flash drive
             res = tvc_lfs_flash_file_close();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_close_file();
+            break;
+
         default:
-            res = 3;
+            res = 4;
             break;
     }
     
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    if (routinesFile)
+    {
+      std::fclose(routinesFile);
+      routinesFile = NULL;
+    }
+    return 0;
 }
 
 /**
- * Reaf file into INPUT buffer
+ * Read file into INPUT buffer
  * fileHandle(4): the open file handle
  * lengh(2): the length of data to be readf
  */
-/*
 uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint16_t length = *(uint16_t *)&inBuf[4];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint16_t *)&bufferStart[4];
     
     FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_read_file();
+            res = tvc_fatfs_pendrive_read_file();
             break;
         case 0x01:   // psram
             res = tvc_lfs_psram_file_read();
             break;
         case 0x02:    // internal flash drive
             res = tvc_lfs_flash_file_read();
+            break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_read_file();
             break;
         default:
             res = 3;
@@ -1772,21 +1852,55 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
             memcpy(&bufferStart[6], &TVC_ROM[0x1a02], readBytes);
         }
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    // problematic, normal buffer and iomem buffer layout is different
+    int i;
+    if (!routinesFile)
+      return FR_NO_FILE + 0x80;
+    for (i=0; i<length; i++)
+    {
+      int c = std::fgetc(routinesFile);
+      if (c == EOF)
+        break;
+      bufferStart[4+2+i] = (uint8_t) c;
+    }
+    *(uint16_t *)&bufferStart[4] = (uint16_t) i;
+    if (tvcRomBufferOut)
+    {
+      memcpy(tvcRomBufferOut,&bufferStart[4],i+2);
+    }
+    printf("read_file, wanted %d got %d\n", length, i);
+    return 0;
 }
 
 uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint32_t length = (*(uint32_t *)&inBuf[4]) & 0x00ffffff;
+    uint32_t dstAddress = (*(uint32_t *)&inBuf[4+3]) & 0x00ffffff;
+    if (dstAddress & 0x00800000)
+      dstAddress += SLOWRAMBASE;
+    else
+      dstAddress += FASTRAMBASE;
+
+    dstAddress &= 0x007FFFFF;
+
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
         // size
     *(uint32_t *)&TVC_ROM[0x1907] = (*(uint32_t *)&bufferStart[7]) & 0x00ffffff;    // fast ram destination (0-256k)
     
     // usb_printf("tvcfunc_read_file_dest: size: %d, dest: %06x\n", (*(uint32_t *)&TVC_ROM[0x1904]) & 0x00ffffff, (*(uint32_t *)&TVC_ROM[0x1907]) & 0x00ffffff);main_loop_task();sleep_ms(50);
 
-    FRESULT res = 0xff;
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0:
-            res = tvc_read_file_dest();
+            res = tvc_fatfs_pendrive_read_file_dest();
             break;
         case 1:
             res = tvc_lfs_psram_file_read_dest();
@@ -1794,6 +1908,11 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         case 2:
             res = tvc_lfs_flash_file_read_dest();
             break;
+        case 3:
+            res = tvc_fatfs_dskdrive_read_file_dest();
+            break;
+        default:
+            res = 4;
     }
     // usb_printf("tvcfunc_read_file_dest: after read, res: %d\n", res);main_loop_task();sleep_ms(50);
 
@@ -1801,9 +1920,20 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         // On success, store the number of bytes read back to bufferStart, 4 bytes!
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    int i;
+    for (i=0; i<length; i++)
+    {
+      int c = std::fgetc(routinesFile);
+      if (c == EOF)
+        break;
+      emuMem->writeRaw(dstAddress+i, c);
+    }
+    *(uint32_t *)&outBuf[4] = (uint32_t) i;
+    printf("read_file_dest, wanted %d got %d\n", length, i);
+    return 0;
 }
-*/
+
 /*
  * Write bytes from routing parameter area 
  * IN:
@@ -1814,9 +1944,8 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (2 bytes)
 */
-/*
 uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     uint16_t length = (*(uint16_t *)&bufferStart[4]);
     *(uint16_t *)&TVC_ROM[0x1904] = length;
     *(uint32_t *)&TVC_ROM[0x1906] = (uint32_t)&bufferStart[6];
@@ -1826,10 +1955,10 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
         return FR_INVALID_PARAMETER;
     }
 
-    FRESULT res = 0xFF;
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_write_file();
+            res = tvc_fatfs_pendrive_write_file();
             break;
         case 0x01:
             res = tvc_lfs_psram_file_write();
@@ -1837,8 +1966,11 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
         case 0x02:    // internal flash drive
             res = tvc_lfs_flash_file_write();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_write_file();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
     
@@ -1846,9 +1978,10 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
         // On success, store the number of bytes stored to bufferStart
         *(uint16_t *)&bufferStart[4] = *(uint16_t *)&TVC_ROM[0x1a00];
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER + 0x80;
 }
-*/
+
 /*
  * Write bytes to file from fast RAM memory area
  * IN:
@@ -1859,16 +1992,15 @@ uint8_t  tvcfunc_write_file(uint8_t* bufferStart) {
  *  bufferStart[0]: fileHandle (4 bytes)
  *  bufferStart[4]: numOfBytesWritten (3 bytes)
 */
-/*
 uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
     *(uint32_t *)&TVC_ROM[0x1907] = (*(uint32_t *)&bufferStart[7]) & 0x00ffffff;
 
-    FRESULT res = 0;
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_write_file_source();
+            res = tvc_fatfs_pendrive_write_file_source();
             break;
         case 0x01:
             res = tvc_lfs_psram_file_write_source();
@@ -1876,24 +2008,38 @@ uint8_t tvcfunc_write_file_source(uint8_t* bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_file_write_source();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_write_file_source();
+            break;
+        default:
+            res = 4;
+            break;
     }
     if(res == FR_OK) {
         // On success, store the number of bytes stored to bufferStart
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
-    uint8_t len = bufferStart[0];
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    uint8_t len = inBuf[0];
     if(len == 0) {
-        return (uint8_t)FR_INVALID_PARAMETER; // Invalid filename length
+        return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
     }
-    memcpy(&TVC_ROM[0x1900], &bufferStart[0], len+1);
-    FRESULT res  = 0;
+    /*memcpy(&TVC_ROM[0x1900], &bufferStart[0], len+1);
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_open_dir();
+            res = tvc_fatfs_pendrive_open_dir();
             break;
         case 0x01:
             res = tvc_lfs_psram_dir_open();
@@ -1901,8 +2047,11 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_dir_open();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_open_dir();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
 
@@ -1910,15 +2059,28 @@ uint8_t tvcfunc_open_dir(uint8_t* bufferStart) {
         // On success, store the dir handle pointer back to bufferStart
         *(uint32_t *)&bufferStart[0] = *(uint32_t *)&TVC_ROM[0x1a00];
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+
+    routinesDirHandle = (DIR *) 0;
+    std::string dirName(reinterpret_cast< char const* >(currDir.str));
+    // Handle is set to 1
+    *(uint32_t *)&outBuf[0] = 1;
+    
+    if (tvcRomBufferOut)
+      memcpy(bufferStart,tvcRomBufferOut,4);
+    int retval = emuVm->openDirInWorkingDirectory(routinesDirHandle, dirName);
+    if (retval < 0)
+      return 0x80 + FR_NO_PATH; // assume error code as no deeper info is available
+    else
+      return 0;
 }
 
 uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
-    FRESULT res = 0;
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_close_dir();
+            res = tvc_fatfs_pendrive_close_dir();
             break;
         case 0x01:
             res = tvc_lfs_psram_dir_close();
@@ -1926,21 +2088,25 @@ uint8_t tvcfunc_close_dir(uint8_t* bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_dir_close();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_close_dir();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return emuVm->closeDirInWorkingDirectory(routinesDirHandle);
 }
 
 uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+// tricky case... function out is not the same as with iomem
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
 
-    FRESULT res = 0;
-
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_read_dir();
+            res = tvc_fatfs_pendrive_read_dir();
             break;
         case 0x01:
             res = tvc_lfs_psram_dir_read();
@@ -1948,25 +2114,67 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_dir_read();
             break;
-        default:
-            res = 3;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_read_dir();
             break;
+        default:
+            res = 4;
+            break;
+    }*/
+
+    struct dirent *dirptr = 0;
+    int i=0;
+
+    if (!routinesDirHandle)
+      return 0x80 + FR_NO_PATH;
+
+    if ((dirptr = readdir(routinesDirHandle)) != NULL) {
+      //printf("Dir entry: %s\n",dirptr->d_name);
+      for (i=0; i<255 && dirptr->d_name[i]; i++) {
+        bufferStart[4+1+i] = dirptr->d_name[i];
+      }
+      bufferStart[4] = (uint8_t)i;
+      bufferStart[4+1+i] = 0;
+      // Short name
+      if (i>12) {
+        for (int j=0; j<12; j++) {
+          bufferStart[4+256+1+4+j] = dirptr->d_name[j];
+        }
+      }
+      if (dirptr->d_type == DT_DIR)
+        bufferStart[4+256] = 0x10;
+      else
+        bufferStart[4+256] = 0x00;
+    } 
+    else
+    {
+      bufferStart[4] = 0;
     }
 
-    if(res == FR_OK) {
+  // TODO: file size
+  *(uint32_t *)&bufferStart[4+256+1] = 0;
+
+  if (tvcRomBufferOut)
+    memcpy(tvcRomBufferOut,&bufferStart[4],256+1+4+13);
+/*  if(res == FR_OK) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], sizeof(FILINFO)+1);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+
+  return 0;
 }
 
 uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
-
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
-    *(uint32_t *)&TVC_ROM[0x1904] = *(uint32_t *)&bufferStart[4];
+    uint8_t* inBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+/*
+    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];   // file handle
+    *(uint32_t *)&TVC_ROM[0x1904] = *(uint32_t *)&bufferStart[4];   // file position
     FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0: // USB
-            res = tvc_file_seek();
+            res = tvc_fatfs_pendrive_file_seek();
             break;
         case 1: // psram
             res = tvc_lfs_psram_file_seek();
@@ -1974,18 +2182,31 @@ uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
         case 2: // flash
             res = tvc_lfs_flash_file_seek();
             break;
+        case 3: // DSK
+            res = tvc_fatfs_dskdrive_file_seek();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
-    return res;
+    return res;*/
+    uint32_t pos = (*(uint32_t *)&inBuf[4]);
+    int retval = std::fseek(routinesFile, pos, SEEK_SET);
+    if (retval < 0)
+      return FR_INVALID_PARAMETER + 0x80;
+    else
+      return 0;
 }
 
 uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
-    FRESULT res = 0;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+/*    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_getcwd();
+            res = tvc_fatfs_pendrive_getcwd();
             break;
         case 0x01:
             res = tvc_lfs_psram_getcwd();
@@ -1993,27 +2214,45 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_getcwd();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_getcwd();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
     if(res == FR_OK) {
         int len = TVC_ROM[0x1a00];
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    // Todo: check if dir exists at all
+    outBuf[0] = currDir.len;
+    for (int i=0; i<currDir.len; i++)
+      outBuf[i+1] = currDir.str[i];
+    outBuf[currDir.len+1] = 0;
+/*    if (tvcRomBufferOut)
+      memcpy(tvcRomBufferOut,bufferStart,currDir.len+2);*/
+
+    return 0;
 }
 
 uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
-    if(bufferStart[0] != 0) {
+    uint8_t* inBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if(inBuf[0] == 0)
+        return FR_INVALID_PARAMETER + 0x80;
+
+/*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
     }
-    FRESULT res = 0;
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_chdir();
+            res = tvc_fatfs_pendrive_chdir();
             break;
         case 0x01:
             res = tvc_lfs_psram_chdir();
@@ -2021,24 +2260,85 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_chdir();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_chdir();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
-    return res;
+    return res;*/
+
+
+    // cd . and cd ..
+    // Note: niceties like "cd ../.." will not work.
+    if (inBuf[1] == '.')
+    {
+      // cd . -- no-op
+      if (inBuf[0] == 1)
+        return 0;
+      // cd .. - move up
+      else if (inBuf[2] == '.')
+      {
+        for (int j=currDir.len-2; j>0; j--)
+        {
+          if (currDir.str[j] == '/')
+          {
+            currDir.len = j;
+            currDir.str[currDir.len] = 0;
+            printf("chdir 2a: %s\n",currDir.str);
+            return 0;
+          }
+        }
+        // If no upper level, just return to root
+        currDir.len = 1;
+        currDir.str[0] = '/';
+        currDir.str[currDir.len] = 0;
+        printf("chdir 2b: %s\n",currDir.str);
+        return 0;
+      }
+    }
+
+    // cd /something - abs path, replace
+    // same if there is no current dir or it is the root
+    if (inBuf[1] == '/' || currDir.len == 0 ||
+        (currDir.len == 1 && currDir.str[0] == '/'))
+    {
+      int newStart = (inBuf[1] == '/') ? 0 : 1;
+      currDir.str[newStart] = '/';
+
+      currDir.len = inBuf[0] + newStart;
+      for (int i=newStart; i<currDir.len; i++)
+        currDir.str[i] = inBuf[i+1-newStart];
+      currDir.str[currDir.len] = 0;
+      printf("chdir 1: %s\n",currDir.str);
+      return 0;
+    }
+
+    if (currDir.str[currDir.len-1] != '/')
+    {
+      currDir.str[currDir.len] = '/';
+      currDir.len++;
+    }
+    for (int i=0; i<inBuf[0]; i++)
+      currDir.str[currDir.len+i] = inBuf[i+1];
+    currDir.len += inBuf[0];
+    currDir.str[currDir.len] = 0;
+    printf("chdir 3: %s\n",currDir.str);
+    return 0;
 }
 
 uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
-    if(bufferStart[0] != 0) {
+/*    if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
     }
     // usb_printf("rtns/mkdir: len: %d, dir: %s\n", bufferStart[0], (char *)&bufferStart[1]);main_loop_task();sleep_ms(50);
-    FRESULT res = 0;
+    FRESULT res;
     switch (SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_mkdir();
+            res = tvc_fatfs_pendrive_mkdir();
             break;
         case 0x01:
             res = tvc_lfs_psram_mkdir();
@@ -2046,15 +2346,19 @@ uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_mkdir();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_mkdir();
+            break;
         default:
-            res = 3;
+            res = 4;
             break;
     }
-    return res;
+    return res;*/
+    return FR_WRITE_PROTECTED + 0x80;
 }
 
 uint8_t tvcfunc_delete(uint8_t *bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];
+/*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1901], &bufferStart[1], bufferStart[0]+1);
     } else {
@@ -2064,7 +2368,7 @@ uint8_t tvcfunc_delete(uint8_t *bufferStart) {
     FRESULT res = 0;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_delete();
+            res = tvc_fatfs_pendrive_delete();
             break;
         case 0x01:
             res = tvc_lfs_psram_delete();
@@ -2072,30 +2376,35 @@ uint8_t tvcfunc_delete(uint8_t *bufferStart) {
         case 0x02:
             res = tvc_lfs_flash_delete();
             break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_delete();
+            break;
         default:
             res = 3;
             break;
     }
-    return res;
+    return res;*/
+    return FR_WRITE_PROTECTED + 0x80;
 }
 
 uint8_t tvcfunc_rename(uint8_t *bufferStart) {
-    uint8_t len1 = bufferStart[0];
+/*    uint8_t len1 = bufferStart[0];
     uint8_t len2 = bufferStart[len1 + 1];
     memcpy(&TVC_ROM[0x1900], &bufferStart[0], (uint16_t)len1 + (uint16_t)len2 + 2);
     switch(SELECTED_DEVICE) {
         case 0x00:
-            return (uint8_t) tvc_rename();
+            return (uint8_t) tvc_fatfs_pendrive_rename();
         case 0x01:
             return (uint8_t) tvc_lfs_psram_rename();
         case 0x02:
             return (uint8_t) tvc_lfs_flash_rename();
+        case 0x03:
+            return (uint8_t) tvc_fatfs_dskdrive_rename();
         default:
-            return 3;
-    }
-
+            return 4;
+    }*/
+    return FR_WRITE_PROTECTED + 0x80;
 }
-*/
 
 /**
  * Gets a file's stat. Returns non-zero if error, otherwise 0 and file info is stored in bufferStart
@@ -2108,22 +2417,24 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
  * bufferStart[0x100]: file size (4 bytes)
  * bufferStart[0x104]: file attributes (1 byte)
  */
-/*
 uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
-    TVC_ROM[0x1900] = bufferStart[0];
+/*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0)
         memcpy(&TVC_ROM[0x1901], &bufferStart[1], bufferStart[0]);
 
-    FRESULT res = 0;
+    FRESULT res;
     switch(SELECTED_DEVICE) {
         case 0x00:
-            res = tvc_getstat();
+            res = tvc_fatfs_pendrive_getstat();
             break;
         case 0x01:
             res = tvc_lfs_psram_getstat();
             break;
         case 0x02:
             res = tvc_lfs_flash_getstat();
+            break;
+        case 0x03:
+            res = tvc_fatfs_dskdrive_getstat();
             break;
         default:
             res = 3;
@@ -2133,26 +2444,78 @@ uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
     if(res == FR_OK) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], sizeof(FILINFO));
     }
-    return (uint8_t)res;
+    return (uint8_t)res;*/
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 
 uint8_t tvcfunc_sync(uint8_t* bufferStart) {
-    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
+/*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     switch(SELECTED_DEVICE) {
         case 0x00:
-            return (uint8_t) tvc_sync();
+            return (uint8_t) tvc_fatfs_pendrive_sync();
         case 0x01:
             return (uint8_t) tvc_lfs_psram_sync();
         case 0x02:
             return (uint8_t) tvc_lfs_flash_sync();
+        case 0x03:
+            return (uint8_t) tvc_fatfs_dskdrive_sync();
         default:
             return 3;
+    }*/
+    return FR_INVALID_PARAMETER + 0x80;
+}
+
+uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
+/*    if(bufferStart[0] != 0) {
+        memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
+    } else {
+        return FR_INVALID_PARAMETER;
     }
+    FRESULT res = 0;
+    switch(SELECTED_DEVICE) {
+        case 0x00:
+            res = tvc_fatfs_pendrive_mount_dsk();
+            break;
+        case 0x01:
+            res = tvc_lfs_psram_mount_dsk();
+            break;
+        case 0x02:
+            res = tvc_lfs_flash_mount_dsk();
+            break;
+        default:
+            res = 1;
+            break;
+    }
+    return res;*/
+    return FR_INVALID_PARAMETER + 0x80;
+}
+
+uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
+/*    FRESULT res = 0;
+    switch(dsk_file_type) {
+        case 0x01:
+            res = tvc_fatfs_pendrive_unmount_dsk();
+            TVC_ROM[0x1810] = 0;
+            break;
+        case 0x02:
+            res = tvc_lfs_psram_unmount_dsk();
+            TVC_ROM[0x1810] = 1;
+            break;
+        case 0x03:
+            res = tvc_lfs_flash_unmount_dsk();
+            TVC_ROM[0x1810] = 2;
+            break;
+        default:
+            res = 1;
+            break;
+    }
+    return res;*/
+    return FR_INVALID_PARAMETER + 0x80;
 }
 
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
-    if((paramSize & 0x80) == 0)
+/*    if((paramSize & 0x80) == 0)
         return paramSize;
     uint size = 1;
     switch (paramSize) {
@@ -2177,9 +2540,10 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
             size += bufStart[size] + 1;
             break;
     }
-    return size;
+    return size;*/
+    return FR_INVALID_PARAMETER + 0x80;
 }
-*/
+
 tvc_function_struct_t tvc256k_funct_struct_array[256];
 
 void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
@@ -2203,7 +2567,7 @@ void init_routines() {
     setStructArrayElement(12, memory_move_full,              9);
     setStructArrayElement(13, memory_move_from_slow,         9);
     setStructArrayElement(14, memory_move_to_slow,           9);
-//    setStructArrayElement(15, copy_dir_to_psram,             0x81);      // 15
+    setStructArrayElement(15, copy_dir_to_psram,             0x81);      // 15
     setStructArrayElement(16, replace_pixel_color,           8);
     setStructArrayElement(17, memory_move_chunks_from_block, 12);
     setStructArrayElement(18, memory_move_chunks,            12);
@@ -2220,13 +2584,13 @@ void init_routines() {
     setStructArrayElement(29, scanline_flood_fill,           2);
     setStructArrayElement(30, draw_ellipse,                  6);     // 30
     setStructArrayElement(31, fill_ellipse,                  6);
-    setStructArrayElement(32, copy_image_block_fast,         9);
+//    setStructArrayElement(32, copy_image_block_fast,         9);
+    setStructArrayElement(32, copy_image_block,              9);
     setStructArrayElement(33, copy_sub_image,                18);
     setStructArrayElement(34, create_psram_drive,            2);
     setStructArrayElement(35, get_first_usable_psram_pos,    0);
     setStructArrayElement(36, delete_psram_drive,            0);
 
-/*
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);
     setStructArrayElement(128+MSC_FREAD,        tvcfunc_read_file,       6);
@@ -2244,7 +2608,9 @@ void init_routines() {
     setStructArrayElement(128+MSC_FRENAME,      tvcfunc_rename,          0x85);
     setStructArrayElement(128+MSC_FSTAT,        tvcfunc_getstat,         0x81);
     setStructArrayElement(128+MSC_FSYNC,        tvcfunc_sync,            4);
-*/
+    setStructArrayElement(128+MSC_MOUNT_DSK,    tvcfunc_mount_dsk,       0x81);
+    setStructArrayElement(128+MSC_UMOUNT_DSK,   tvcfunc_unmount_dsk,     0);
+
     init_bitmap_byte_masks();
 }
 }

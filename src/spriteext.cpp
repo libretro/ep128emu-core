@@ -30,35 +30,33 @@
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
    - State save/load support
-   - Improve performance
+   - Improve performance (also sid!)
    - Debug ports: show tvcext ports from 256-512
+   - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
 
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
    - Sprite collision under the left/right border, both standard and extra (not under top/bottom)
    - Sprite interrupt - to be tested?
    - Screen height setting
+   - Border color change?
    
    TVC256++ drives:
-   - USB drive handling
-   - Flash mem drive handling
-   - PSRAM drive handling
+   - USB drive handling (no functions disabled via tvcfileio)
+   - Flash mem drive handling (readonly)
+   - PSRAM drive handling (no directories)
+   - Multi file, multi dir handling
+   - Write, create, delete functions
+   - autostart
    
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation sound test against HW and frequency correction
-   - Function implementation
-   - Extra file i/o functions (get_pwd .. seek_file)
-            DW      pwd_handler             ;  6
-            DW      opendir_handler         ;  7
-            DW      readdir_handler         ;  8
-            DW      mkdir_handler           ;  9
-            DW      delete_handler          ; 10
-            DW      rename_handler          ; 11
-            DW      seek_handler            ; 12
-            DW      iobase_handler          ; 13
-            DW      membase_handler         ; 14
+   - SID emulation finetune (still a bit different speed)
+   - Function multi execute
+   - tvcfileio2 - file access via rst 30h - probably not needed
+   - fix santa cap bitmap
+   - remove nonstd init ram, move into demo source
 
 */
 
@@ -96,7 +94,7 @@ namespace Ep128 {
       1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
    0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87,  0xF,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    1,   0,    1,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    1,   0,    1,    0,    1,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
    0xff, 0xff, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
@@ -106,6 +104,7 @@ namespace Ep128 {
 
   SpriteExt::SpriteExt()
     : hostMem(nullptr),
+      hostVm(nullptr),
       spriteExt_enabled(false),
       anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
@@ -145,13 +144,6 @@ namespace Ep128 {
 
   SpriteExt::~SpriteExt()
   {
-    openImage((char *) 0);
-    try {
-      openROMFile((char *) 0);
-    }
-    catch (...) {
-      // FIXME: errors are ignored here
-    }
   }
 
   static const uint8_t i4ConvTable[16] = {
@@ -214,6 +206,13 @@ namespace Ep128 {
     namedPortValues[REG_SID_BASE + 24]    = 0;
     for (int i = REG_SPRITE_ENABLE; i <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX; i++)
       namedPortValues[i] = 0x00;
+
+    TVC256::emuMem = hostMem;
+    TVC256::emuVm = hostVm;
+    TVC256::currDir.len = 1;
+    TVC256::currDir.str[0]   = '/';
+    TVC256::currDir.str[1]   = 0;
+    TVC256::currDir.str[255] = 0;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -224,36 +223,60 @@ namespace Ep128 {
       hostMem = nullptr;
   }
 
-  void SpriteExt::openImage(const char *sdimg_path)
+  void SpriteExt::setVmRef(Ep128Emu::VirtualMachine *vm)
   {
+    if (vm)
+      hostVm = vm;
+    else
+      hostVm = nullptr;
   }
 
-  void SpriteExt::openROMFile(const char *fileName)
-  {
-  }
-
-  void SpriteExt::executeFunction(uint8_t funcCode)
+  void SpriteExt::executeFunction(uint8_t funcCode, bool useIOMEM)
   {
      TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
      TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
      TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
-     TVC256::emuMem = hostMem;
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        uint8_t* bufferStart = hostMem->memGet(0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128);
-        printf("Func call: %d params at %04x, val %02x %02x\n",
-               funcCode,0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128,
-               bufferStart[0],bufferStart[1]);
+        uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
+        uint8_t* bufferStart = hostMem->memGet(bufferAddr);
+        uint8_t* realParams = bufferStart;
+
+        // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is still there
+        // but actual input/output uses different, fixed addresses.
+        // File functions will act differently if tvcRomBuffer is filled or not
+        if (useIOMEM)
+        {
+          TVC256::tvcRomBufferIn  = hostMem->memGet(0xD900);
+          TVC256::tvcRomBufferOut = hostMem->memGet(0xDA00);
+          realParams = TVC256::tvcRomBufferIn;
+        }
+        else
+        {
+          TVC256::tvcRomBufferIn  = NULL;
+          TVC256::tvcRomBufferOut = NULL;
+        }
+
+        printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x\n",
+               funcCode,bufferAddr,
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+
+
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
+        printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x\n",
+               lastFunctionResult,
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+        functionResultDelay = true;
      }
   }
   uint8_t SpriteExt::readNamedPort(bool secondary)
   {
      uint8_t retval = 0xFF;
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
+
      switch (portAddr)
      {
        // Fixed defaults
@@ -278,7 +301,9 @@ namespace Ep128 {
        case REG_MEMORY_MAP_8M_P2_HIGH:
        case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_MEMORY_ROM_PAGE:
        case REG_FUNCTION_BITMAP_BASE:
+       case REG_USB_MSC_CMD:
          retval = namedPortValues[portAddr];
          break;
        // Clear on read
@@ -291,11 +316,20 @@ namespace Ep128 {
          retval = namedPortValues[portAddr];
          namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] = 0;
          namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] = 0;
-       break;
+         break;
+       /* Ja, meg a REG_Y. Annak is mennie kell hozzá.
+A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első sorban 21. Körbefordul, majd megáll. A HSYNC után újrakezdődik. */
+       // TODO: is this correct?
        case REG_SCREEN_Y:
-         retval = (uint8_t) curLine;
+         retval = (uint8_t) curLine - 6;
+         break;
        case REG_FUNCTION_EXECUTE:
-         return namedPortValues[REG_FUNCTION_EXECUTE]; // TODO - delayed execution
+         if (functionResultDelay)
+         {
+           functionResultDelay = false;
+           return namedPortValues[REG_FUNCTION_EXECUTE];
+         }
+         return 0xFF;
        case REG_FUNCTION_RESULT:
          return lastFunctionResult;
        default:
@@ -312,6 +346,7 @@ namespace Ep128 {
   else
     io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
 
+  //printf("Port %x read, val %x\n", portAddr, retval);
   return retval;
   }
 
@@ -326,6 +361,7 @@ namespace Ep128 {
      if (namedPortMasks[portAddr])
         value = value & namedPortMasks[portAddr];
 
+     //printf("Port %x write, val %x\n", portAddr, value);
      switch (portAddr)
      {
        // Note: rest of mouse handling is done in TVC64VM::ioPortReadCallback
@@ -334,10 +370,24 @@ namespace Ep128 {
          namedPortValues[REG_USB_MOUSE_SPEED] = value;
          updateMouseSpeed(value);
        break;
+       case REG_MEMORY_P2:
+       case REG_MEMORY_P3:
+       case REG_MEMORY_MAP_8M_P2_LOW:
+       case REG_MEMORY_MAP_8M_P2_HIGH:
+       case REG_MEMORY_MAP_8M_P3_LOW:
+       case REG_MEMORY_MAP_8M_P3_HIGH:
+       case REG_MEMORY_ROM_PAGE:
+         namedPortValues[portAddr] = value;
+         break;
        case REG_FUNCTION_EXECUTE:
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
          lastFunctionResult = 0xff;
-         executeFunction(value);
+         executeFunction(value, false);
+         break;
+       case REG_USB_MSC_CMD:
+         namedPortValues[REG_USB_MSC_CMD] = 0; // function becomes immediately ready
+         lastFunctionResult = 0xff;
+         executeFunction(value + 0x80, true);
          break;
        // Combined enable/disable registers.
        // Note: these are delayed on real HW
@@ -489,7 +539,7 @@ namespace Ep128 {
                       spritePosY * 3;
            uint32_t spriteBits = hostMem->readRaw(spriteBaseAddr) << 16 | hostMem->readRaw(spriteBaseAddr+1) << 8 | hostMem->readRaw(spriteBaseAddr+2);
            // what about transparent sprite color?
-           if (spriteBits & (uint32_t)(1 << 23-spritePosX)) 
+           if (spriteBits & (uint32_t)(1 << (23-spritePosX)))
            {
               buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+spriteNum], buf[j*2]);
               SET_BIT(sprite_active_pixels[spriteNum],j*2  );
@@ -741,7 +791,7 @@ namespace Ep128 {
       curLine = 0;
     else 
       curLine++;
-    if (curLine == namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
+    if (curLine == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE))
     {
        if ((namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] & namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ]) ||
            (namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] & namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH]) ||
@@ -910,70 +960,6 @@ namespace Ep128 {
     return &buf_[0];
   }
 
-  static int safe_read(int fd, uint8_t *buffer, int size)
-  {
-    int all = 0;
-    while (size) {
-      int ret = read(fd, buffer, size);
-      if (ret <= 0)
-        break;
-      all += ret;
-      size -= ret;
-      buffer += ret;
-    }
-    return all;
-  }
-
-  void SpriteExt::_block_read()
-  {
-  }
-
-  /* SPI is a read/write in once stuff. We have only a single function ...
-   * _write_b is the data value to put on MOSI
-   * _read_b is the data read from MISO without spending _ANY_ SPI time to do
-   * shifting!
-   * This is not a real thing, but easier to code this way.
-   * The implementation of the real behaviour is up to the caller of this
-   * function.
-   */
-  void SpriteExt::_spi_shifting_with_sd_card()
-  {
-  }
-
-  /* Warning:
-   * Some resources mention addresses like 0xFC00 for the I/O area.
-   * Here, I mean addresses within segment 7 only, so it becomes 0x3C00 ...
-   */
-
-  uint8_t SpriteExt::readCartP3(uint32_t addr)
-  {
-    return 0xFF;        // make GCC happy :)
-  }
-
-  void SpriteExt::writeCartP3(uint32_t addr, uint8_t data)
-  {
-  }
-
-  uint8_t SpriteExt::readCartP3Debug(uint32_t addr) const
-  {
-  }
-
-  // --------------------------------------------------------------------------
-
-  uint8_t SpriteExt::flashRead(uint32_t addr)
-  {
-    return 0xFF;
-  }
-
-  void SpriteExt::flashWrite(uint32_t addr, uint8_t data)
-  {
-  }
-
-  uint8_t SpriteExt::flashReadDebug(uint32_t addr) const
-  {
-    return 0xFF;
-  }
-
   // --------------------------------------------------------------------------
 
   class ChunkType_SpriteExtSnapshot : public Ep128Emu::File::ChunkTypeHandler {
@@ -1022,8 +1008,6 @@ namespace Ep128 {
       throw Ep128Emu::Exception("incompatible spriteext snapshot format");
     }
     try {
-      // save flash ROM first if changed, reset it to erased state
-      openROMFile((char *) 0);
       // reset the interface as most registers are not saved in the snapshot
       this->reset(1);
       // load saved state
@@ -1032,7 +1016,6 @@ namespace Ep128 {
     catch (...) {
       // reset spriteext
       this->reset(2);
-      openROMFile((char *) 0);
       throw;
     }
   }

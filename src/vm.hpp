@@ -27,6 +27,7 @@
 #include "snd_conv.hpp"
 #include "soundio.hpp"
 #include "tape.hpp"
+#include <dirent.h>
 
 namespace Ep128 {
   struct Z80_REGISTERS;
@@ -76,6 +77,7 @@ namespace Ep128Emu {
     std::string     fileIOWorkingDirectory;
     void            (*fileNameCallback)(void *userData, std::string& fileName);
     void            *fileNameCallbackUserData;
+    int             lastFileSize;
    public:
     struct VMStatus {
       bool      isRecordingDemo;
@@ -732,6 +734,10 @@ namespace Ep128Emu {
     }
     void setAudioConverterSampleRate(float sampleRate_);
    public:
+    int openDirInWorkingDirectory(DIR*& d, std::string& dirName_);
+    int closeDirInWorkingDirectory(DIR*& d);
+    int getLastFileSize();
+
     /*!
      * Open a file in the user specified working directory. 'fileName_' is the
      * file name without any leading directory components; it is converted to

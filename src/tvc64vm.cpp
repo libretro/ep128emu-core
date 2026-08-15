@@ -38,6 +38,7 @@
 #endif
 
 #include <vector>
+#include <dirent.h>
 
 static const uint8_t  keyboardConvTable[128] = {
   //   N   BSLASH        B        C        V        X        Z   LSHIFT
@@ -345,6 +346,7 @@ namespace TVC64 {
     vm.updateCPUCycles(cycles);
   }
 
+  // Counterpart of ep128emuSystemCall in tvcfileio
   EP128EMU_REGPARM1 void TVC64VM::Z80_::tapePatch()
   {
     uint8_t n;
@@ -360,8 +362,16 @@ namespace TVC64 {
       R.AF.B.h = (n > 0 ? 0xFF : 0x00);
       return;
     }
-    if (n >= 3 && n <= 9 && !fileIOFile) {
-      R.AF.B.h = 0xE9;          // file not open
+    // Actual file I/O is not possible without a file being open
+    if (
+#ifdef SPRITEEXT_ENABLED
+        ((!vm.spriteExtEnabled &&  (n >= 3 && n <= 11)) ||
+         ( vm.spriteExtEnabled && ((n >= 3 && n <= 5) || (n==15))))
+#else
+       (n >= 3 && n <= 11)
+#endif
+        && !fileIOFile) {
+      R.AF.B.h = (n == 15) ? 0xE0 : 0xE9;          // file not open
       if (n == 5) {
         R.BC.B.l = 0xFF;
       }
@@ -371,6 +381,13 @@ namespace TVC64 {
       }
       return;
     }
+    // If sprite extension is enabled, use tvc256++ compatible variants
+    // of the non-standard CAS functions
+#ifdef SPRITEEXT_ENABLED
+    if (vm.spriteExtEnabled && n > 6)
+      n += 100;
+#endif
+
     switch (n) {
     case 0:                             // initialization
       closeFile();
@@ -471,7 +488,8 @@ namespace TVC64 {
       else
         R.AF.B.h = 0x00;
       break;
-    case 7:                             // get file size
+    case 7:                             // fileSeekEnd
+    case 10:                            // same as 7, but "in" direction - this function does not care
       R.BC.W = 0x0000;
       R.DE.W = 0x0000;
       R.AF.B.h = 0xE5;          // invalid file position
@@ -491,14 +509,20 @@ namespace TVC64 {
         }
       }
       break;
-    case 8:                             // get file position
-    case 9:                             // set file position
+    case 8:                             // fileSeekCur
+    case 9:                             // fileSeekSet - absolute, floppy version
+    case 11:                            // same as 9, but "in" direction - this function does not care
       {
         long    filePos = long(R.DE.W) | (long(R.BC.W) << 16);
         R.DE.W = 0xFFFF;
         R.BC.W = 0xFFFF;
         R.AF.B.h = 0xE5;        // invalid file position
-        if (n == 9) {
+        if (n == 8) {
+          fileIOWriteFlag = false;
+          if (std::fseek(fileIOFile, filePos, SEEK_CUR) < 0)
+            break;
+        }
+        else {
           if (!(filePos >= 0L && filePos <= 0x01FFFFFFL))
             break;
           fileIOWriteFlag = false;
@@ -513,6 +537,62 @@ namespace TVC64 {
         }
       }
       break;
+    // Open dir (which was selected by chdir earlier)
+#ifdef ENABLE_SPRITEEXT
+    case 108:
+      {
+/*        fileIODir = (DIR *) 0;
+        struct dirent *dirptr = 0;
+        if ((fileIODir = opendir("/tmp")) != NULL) {
+          while ((dirptr = readdir(fileIODir)) != NULL) {
+            printf("Dir entry: %s\n",dirptr->d_name);
+          }
+          R.AF.B.h = 0x00;
+        } else {
+          R.AF.B.h = 0xF0;
+        }*/
+      }
+      return;
+      break;
+    case 110:  // readdir
+      // Actual dir I/O is not possible without a dir being open
+      {
+      }
+      break;
+    case 109:  // getpwd
+      {
+        uint16_t bufPtr = R.DE.W;
+        unsigned char slash = '/';
+        vm.writeMemory(bufPtr  ,     1, true);
+        vm.writeMemory(bufPtr+1, slash, true);
+        R.AF.B.h = 0;
+      }
+      break;
+    case 107:  // closedir
+    case 111:  // chdir
+    case 112:  // mkdir
+    case 113:  // delete
+    case 114:  // rename
+    case 115:  // seek (abs)
+      {
+        // is pointer understood in Z80 mem or in fastram???
+        uint16_t posAddr = uint16_t(R.DE.W);
+        long    filePos  = long(vm.readMemory(posAddr, true)) +
+                           long(vm.readMemory(posAddr + 1, true) <<  8) +
+                           long(vm.readMemory(posAddr + 2, true) << 16) +
+                           long(vm.readMemory(posAddr + 3, true) << 24);
+        R.DE.W = 0xFFFF;
+        R.BC.W = 0xFFFF;
+        R.AF.B.h = 0xE1;        // invalid file position
+        if (!(filePos >= 0L && filePos <= 0x01FFFFFFL))
+          break;
+        fileIOWriteFlag = false;
+        if (std::fseek(fileIOFile, filePos, SEEK_SET) < 0)
+          break;
+        R.AF.B.h = 0x00;
+      }
+      break;
+#endif
     default:
       R.AF.B.h = 0xFF;          // invalid function
       break;
@@ -1020,22 +1100,55 @@ namespace TVC64 {
     case 0x31:
     case 0x35:
       if (vm.spriteExtEnabled) {
-         if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
-           vm.memory.spriteext_p2_reg = value;
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
-           vm.memory.spriteext_p3_reg = value;
-         // TODO: delayed paging in case of slow ram
-         // Limitation: only 2MB available for now, so high reg is ignored
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
-         {
-           vm.memory.psram_p2_reg = value & 0x7F;
-           vm.memory.spriteext_p2_reg = 0x10;
-         }
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
-         {
-           vm.memory.psram_p3_reg = value & 0x7F;
-           vm.memory.spriteext_p3_reg = 0x11;
-         }
+      if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
+        vm.memory.spriteext_p2_reg = value;
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
+        vm.memory.spriteext_p3_reg = value;
+      // TODO: delayed paging in case of slow ram
+      // Limitation: only 2MB available for now, so high reg is ignored
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
+      {
+        vm.memory.psram_p2_reg = value & 0x7F;
+        vm.memory.spriteext_p2_reg = 0x10;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
+      {
+        vm.memory.psram_p3_reg = value & 0x7F;
+        vm.memory.spriteext_p3_reg = 0x11;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_ROM_PAGE)
+      {
+        // Carry out "ROM paging": swap the appropriate 6(!)kB part
+        // to the start of the IOMEM area.
+        // Note that the prepared ROM is actually 6+2+6+2=16 kB large so that
+        // the 2 kB RAM area at the end of the IOMEM range is not overwritten.
+        uint8_t subPage = value & 7;
+        uint8_t* areaLow;
+        uint8_t tmp;
+        if (areaLow = (uint8_t*)vm.memory.getSegmentPtr(0x05)) {
+          uint8_t* areaHigh = areaLow + 0x2000;
+          if (subPage == 1 && areaLow[0] == 'M' && areaLow[1] == 'O' &&
+                              areaLow[2] == 'P' && areaLow[3] == 'S') {
+            // Low-performance naive swap routine. Still, it does not matter much
+            // as 2nd page is only used for "help" output.
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+          else if (subPage == 0 && areaHigh[0] == 'M' && areaHigh[1] == 'O' &&
+                                   areaHigh[2] == 'P' && areaHigh[3] == 'S') {
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+        }
+      }
 #ifdef ENABLE_RESID
          else if (vm.spriteext.io_port_values[addr-0x31] >= REG_SID_BASE &&
                   vm.spriteext.io_port_values[addr-0x31] <= REG_SID_LAST)
@@ -1640,11 +1753,14 @@ namespace TVC64 {
         sidEnabled = false;
       }
       sid->reset();
+      sidClockAccumulator = 0;
+      sidPrevCrtcClock = 0;
     }
 #endif
 #ifdef ENABLE_SPRITEEXT
      spriteext.reset(int(isColdReset));
      spriteext.setMemRef(&memory);
+     spriteext.setVmRef(this);
 #endif
   }
 
@@ -1968,26 +2084,28 @@ namespace TVC64 {
   void TVC64VM::sidCallback(void *userData)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    // TODO: scale the cycles with crctFrequency
-    int64_t   tmp = (vm.crtcCyclesRemainingH << 32) + vm.crtcCyclesRemainingL;
-    if (tmp >= 0L) {
-      do {
-        tmp -= (int64_t(1) << 32);
-        vm.sidOutputAccumulator = 0;
-        Ep128::SID::clockCallback(vm.sid);
-        Ep128::SID::clockCallback(vm.sid);
-        // FIXME: this is the maximum safe range with all 4 DAVE channels
-        // active, but it can overflow with tape feedback (unlikely in
-        // practice)
-        const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
-        const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
-        int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
-        int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
-        outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
-        outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
-        vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
-      } while (EP128EMU_UNLIKELY(tmp >= 0L));
+    // Scale the cycles with crctFrequency 1562500Hz vs. tvc256++ 985337Hz / sid orig 985248
+    int64_t currSidClock = (((int64_t)vm.crtcCyclesRemainingH<<32) / (int64_t)vm.crtcFrequency * (int64_t)985337);
+    if (currSidClock > vm.sidPrevCrtcClock)
+      vm.sidClockAccumulator += currSidClock;
+
+    while (EP128EMU_UNLIKELY(vm.sidClockAccumulator - currSidClock >= (int64_t)(1)<<32))
+    {
+      vm.sidClockAccumulator -= (int64_t)(1)<<32;
+      vm.sidOutputAccumulator = 0;
+      Ep128::SID::clockCallback(vm.sid);
+      // FIXME: this is the maximum safe range with all 4 DAVE channels
+      // active, but it can overflow with tape feedback (unlikely in
+      // practice)
+      const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
+      const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
+      int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
+      int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
+      outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
+      outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
+      vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
     }
+    vm.sidPrevCrtcClock = currSidClock;
   }
 
 #endif

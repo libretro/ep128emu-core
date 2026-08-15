@@ -176,6 +176,8 @@ namespace Ep128Emu {
 #define REG_MEMORY_PSRAM_SIZE_IN_MB 0xB6
 // Hardware default: 8 MB / 0x08, emulated: 2 MB / 0x02
 #define REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT 0x02
+#define REG_MEMORY_ROM_PAGE 0xB7
+
 // Layout of fast and slow ram mapped to the 4MB segment space
 #define TVC256_FASTRAM_START_SEGMENT 0xE8
 #define TVC256_SLOWRAM_START_SEGMENT 0x68
@@ -216,7 +218,7 @@ namespace Ep128Emu {
 #define REG_FW_VERSION_MAJOR 0xC3
 #define REG_FW_VERSION_MAJOR_DEFAULT 0x08
 #define REG_FW_VERSION_MINOR 0xC4
-#define REG_FW_VERSION_MINOR_DEFAULT 0x01
+#define REG_FW_VERSION_MINOR_DEFAULT 0x05
 #define REG_USB_INIT 0xD0
 #define REG_USB_INIT_DEFAULT 0x01
 #define REG_USB_MOUSE_BUTTONS 0xD1
@@ -225,6 +227,7 @@ namespace Ep128Emu {
 #define REG_USB_MOUSE_DW 0xD4
 #define REG_USB_MOUSE_SPEED 0xD5
 #define REG_USB_MOUSE_SPEED_DEFAULT 0x10
+#define REG_USB_MSC_CMD 0xD6
 #endif // ENABLE_SPRITEEXT
 #endif  // EP128EMU_EP128EMU_HPP
 
