@@ -2141,9 +2141,11 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
           bufferStart[4+256+1+4+j] = dirptr->d_name[j];
         }
       }
+#ifndef WIN32
       if (dirptr->d_type == DT_DIR)
         bufferStart[4+256] = 0x10;
       else
+#endif
         bufferStart[4+256] = 0x00;
     } 
     else
