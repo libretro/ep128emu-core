@@ -208,6 +208,8 @@ namespace TVC64 {
     int32_t   sidOutputAccumulator;
     int32_t   sidVolumeL;
     int32_t   sidVolumeR;
+    int64_t   sidClockAccumulator;
+    int64_t   sidPrevCrtcClock;
 #endif
     // ----------------
     EP128EMU_INLINE void updateCPUCycles(int cycles);

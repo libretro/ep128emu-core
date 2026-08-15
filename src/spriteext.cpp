@@ -52,9 +52,11 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation sound test against HW and frequency correction
+   - SID emulation finetune (still a bit different speed)
    - Function multi execute
    - tvcfileio2 - file access via rst 30h - probably not needed
+   - fix santa cap bitmap
+   - remove nonstd init ram, move into demo source
 
 */
 

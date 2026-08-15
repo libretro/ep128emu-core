@@ -1753,6 +1753,8 @@ namespace TVC64 {
         sidEnabled = false;
       }
       sid->reset();
+      sidClockAccumulator = 0;
+      sidPrevCrtcClock = 0;
     }
 #endif
 #ifdef ENABLE_SPRITEEXT
@@ -2082,26 +2084,28 @@ namespace TVC64 {
   void TVC64VM::sidCallback(void *userData)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    // TODO: scale the cycles with crctFrequency
-    int64_t   tmp = (vm.crtcCyclesRemainingH << 32) + vm.crtcCyclesRemainingL;
-    if (tmp >= 0L) {
-      do {
-        tmp -= (int64_t(1) << 32);
-        vm.sidOutputAccumulator = 0;
-        Ep128::SID::clockCallback(vm.sid);
-        Ep128::SID::clockCallback(vm.sid);
-        // FIXME: this is the maximum safe range with all 4 DAVE channels
-        // active, but it can overflow with tape feedback (unlikely in
-        // practice)
-        const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
-        const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
-        int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
-        int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
-        outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
-        outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
-        vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
-      } while (EP128EMU_UNLIKELY(tmp >= 0L));
+    // Scale the cycles with crctFrequency 1562500Hz vs. tvc256++ 985337Hz / sid orig 985248
+    int64_t currSidClock = (((int64_t)vm.crtcCyclesRemainingH<<32) / (int64_t)vm.crtcFrequency * (int64_t)985337);
+    if (currSidClock > vm.sidPrevCrtcClock)
+      vm.sidClockAccumulator += currSidClock;
+
+    while (EP128EMU_UNLIKELY(vm.sidClockAccumulator - currSidClock >= (int64_t)(1)<<32))
+    {
+      vm.sidClockAccumulator -= (int64_t)(1)<<32;
+      vm.sidOutputAccumulator = 0;
+      Ep128::SID::clockCallback(vm.sid);
+      // FIXME: this is the maximum safe range with all 4 DAVE channels
+      // active, but it can overflow with tape feedback (unlikely in
+      // practice)
+      const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
+      const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
+      int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
+      int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
+      outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
+      outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
+      vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
     }
+    vm.sidPrevCrtcClock = currSidClock;
   }
 
 #endif
