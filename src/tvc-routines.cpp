@@ -2490,7 +2490,7 @@ uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return 0xEF;
 }
 
 uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
@@ -2513,7 +2513,7 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
             break;
     }
     return res;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return 0xEF;
 }
 
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {

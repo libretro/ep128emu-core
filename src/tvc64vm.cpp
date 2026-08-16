@@ -1261,17 +1261,25 @@ namespace TVC64 {
   uint8_t TVC64VM::ioPortDebugReadCallback(void *userData, uint16_t addr)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    addr = addr & 0x7F;
-    if (addr >= 0x70)
-      addr = addr & 0x71;
-    else if (addr >= 0x60)
-      addr = addr & 0x73;
-    else if (addr >= 0x58)
-      addr = addr & 0x7B;
-    else if (addr >= 0x50)
-      addr = addr & 0x78;
-    else if ((addr >= 0x0C && addr < 0x10) || (addr >= 0x14 && addr < 0x1C))
-      addr = addr & 0x7C;
+
+    if (addr & 0x100)
+    {
+      addr = addr & 0x1FF;
+    }
+    else
+    {
+      addr = addr & 0xFF;
+      if (addr >= 0x70)
+        addr = addr & 0x71;
+      else if (addr >= 0x60)
+        addr = addr & 0x73;
+      else if (addr >= 0x58)
+        addr = addr & 0x7B;
+      else if (addr >= 0x50)
+        addr = addr & 0x78;
+      else if ((addr >= 0x0C && addr < 0x10) || (addr >= 0x14 && addr < 0x1C))
+        addr = addr & 0x7C;
+    }
     uint8_t   retval = vm.ioPorts.getLastValueWritten(addr);
     switch (addr) {
     case 0x10:                          // extension 0: floppy drive controller
@@ -1298,6 +1306,20 @@ namespace TVC64 {
                | (vm.wd177x.getFloppyDrive().getDiskChangeFlag() ? 0x00 : 0x40)
                | (vm.wd177x.getDataRequestFlag() ? 0x80 : 0x00);
       break;
+
+#ifdef ENABLE_SPRITEEXT
+    // 0x30-0x3F: extension 2, tvc256++ (spriteext)
+    case 0x30:
+    case 0x31:
+    case 0x32:
+    case 0x34:
+    case 0x35:
+    case 0x36:
+      if (vm.spriteExtEnabled)
+         retval = vm.spriteext.io_port_values[addr-0x30];
+      break;
+#endif
+
     case 0x58:                          // keyboard matrix
       retval = vm.tvcKeyboardState[vm.keyboardRow];
       break;
@@ -1316,10 +1338,9 @@ namespace TVC64 {
       break;
     }
 #ifdef ENABLE_SPRITEEXT
-// extra debug view - does not work yet
     if (vm.spriteExtEnabled) {
-       if (addr > 0xFF && addr < 0x200)
-         retval = vm.spriteext.readNamedPortDebug(addr - 0x100);
+       if (addr > 0xFF)
+         retval = vm.spriteext.readNamedPortDebug((uint8_t)(addr & 0xFF));
     }
 #endif // ENABLE_SPRITEEXT
     return retval;
@@ -1642,6 +1663,10 @@ namespace TVC64 {
         0x0000, 0x007F, &ioPortReadCallback, (void *) this, 0x0000);
     ioPorts.setDebugReadCallback(
         0x0000, 0x007F, &ioPortDebugReadCallback, (void *) this, 0x0000);
+#ifdef ENABLE_SPRITEEXT
+    ioPorts.setDebugReadCallback(
+        0x0100, 0x01FF, &ioPortDebugReadCallback, (void *) this, 0x0000);
+#endif
     ioPorts.setWriteCallback(
         0x0000, 0x007F, &ioPortWriteCallback, (void *) this, 0x0000);
     crtc.setHSyncStateChangeCallback(&hSyncStateChangeCallback, (void *) this);

@@ -57,8 +57,8 @@ namespace Ep128 {
         writeCallbacks[i].userData_ = (void*) 0;
         writeCallbacks[i].addr_ = 0;
       }
-      debugReadCallbacks = new ReadCallback[256];
-      for (int i = 0; i < 256; i++) {
+      debugReadCallbacks = new ReadCallback[256*2];
+      for (int i = 0; i < 256*2; i++) {
         debugReadCallbacks[i].func = (uint8_t (*)(void *, uint16_t)) 0;
         debugReadCallbacks[i].userData_ = (void*) 0;
         debugReadCallbacks[i].addr_ = 0;
@@ -180,7 +180,7 @@ namespace Ep128 {
 
   uint8_t IOPorts::readDebug(uint16_t addr) const
   {
-    uint8_t       offs = uint8_t(addr & 0xFF);
+    uint16_t    offs = addr & 0x1FF;
     ReadCallback& cb = debugReadCallbacks[offs];
     if (cb.func)
       return (cb.func(cb.userData_, cb.addr_));
@@ -217,14 +217,14 @@ namespace Ep128 {
                                      uint8_t (*func)(void *p, uint16_t addr),
                                      void *userData, uint16_t baseAddr)
   {
-    uint8_t i = (uint8_t) (firstAddr - 1) & 0xFF;
-    uint8_t j = (uint8_t) lastAddr & 0xFF;
+    uint16_t i = (firstAddr - 1) & 0x1FF;
+    uint16_t j = lastAddr & 0x1FF;
 
     do {
-      i = (i + 1) & 0xFF;
+      i = (i + 1) & 0x1FF;
       debugReadCallbacks[i].func = func;
       debugReadCallbacks[i].userData_ = userData;
-      debugReadCallbacks[i].addr_ = (i - (uint8_t) baseAddr) & 0xFF;
+      debugReadCallbacks[i].addr_ = (i - (uint16_t) baseAddr) & 0x1FF;
     } while (i != j);
   }
 

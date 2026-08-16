@@ -25,13 +25,10 @@
    Backlog (sort of)
    General:
    - Align SDExt segment / memory map handling with the common scheme
-   - Update SConstruct - introduce special wine+mingw cross-compile option for Devtool
-   - Update SConstruct - simplify fltk, portaudio etc. version detection
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
    - State save/load support
    - Improve performance (also sid!)
-   - Debug ports: show tvcext ports from 256-512
    - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
 
    TVC256++ gfx:
@@ -81,7 +78,7 @@
 namespace Ep128 {
 
   // Port masks to prevent unreasonable values on write
-  // 0: no mask, 0xFF: readonly register
+  // 0: no mask, 0xFF: readonly register, 254/0xFE: unused (read returns 0xFF)
   static const uint8_t namedPortMasks[256] = {
       0,    1,    0,    1,   0,    1,    0,    1,   0,  1,  0,  1,   0,  1,  0,  1,
       0,    1,    0,    1,   0,    1,    0,    1,   0,  1,  0,  1,   0,  1,  0,  1,
@@ -92,13 +89,13 @@ namespace Ep128 {
       1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
       1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
       1,    1,    1,    1,   1,    1,    1,    1,   1,  1,  1,  1,   1,  1,  1,  1,
-      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,  0,
-   0x03, 0x3f, 0x3f, 0x1f,   1, 0x87, 0x87,  0xF,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    1,   0,    1,    0,    1,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
-   0xff, 0xff, 0xff, 0xff,0xff,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,254,
+   0x03, 0x7f, 0x7f, 0x3f,   3, 0x87, 0x87,  0xF, 0xFF, 0,254,254, 254,254,254,254,
+      0,    0,    0,    1,   0,    1,    0,    1, 254,254,254,254, 254,254,254,254,
+      0,    0, 0xff, 0xff,0xff,    0,    0,    0, 254,254,254,254, 254,254,254,254,
+   0xff, 0xff, 0xff, 0xff,0xff, 0xdf,    0,  254, 254,254,254,254, 254,254,254,254,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
-      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,254,254, 254,254,254,254
 };
 
 
@@ -133,7 +130,12 @@ namespace Ep128 {
     namedPortValues[REG_MEMORY_MAP_8M_P2_LOW]    = REG_MEMORY_MAP_8M_P2_LOW_DEFAULT;
     namedPortValues[REG_MEMORY_MAP_8M_P3_LOW]    = REG_MEMORY_MAP_8M_P3_LOW_DEFAULT;
     namedPortValues[REG_FUNCTION_BITMAP_BASE]    = REG_FUNCTION_BITMAP_BASE_DEFAULT;
-    namedPortValues[REG_USB_MOUSE_SPEED] = REG_USB_MOUSE_SPEED_DEFAULT;
+    namedPortValues[REG_USB_MOUSE_SPEED]         = REG_USB_MOUSE_SPEED_DEFAULT;
+    namedPortValues[REG_FW_VERSION_MAJOR]        = REG_FW_VERSION_MAJOR_DEFAULT;
+    namedPortValues[REG_FW_VERSION_MINOR]        = REG_FW_VERSION_MINOR_DEFAULT;
+    namedPortValues[REG_MEMORY_PSRAM_SIZE_IN_MB] = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
+    namedPortValues[REG_USB_INIT]                = REG_USB_INIT_DEFAULT;
+
     updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
     // TODO: these are probably not needed
     sd_ram_ext.resize(0x00001C00, 0xFF);
@@ -279,33 +281,6 @@ namespace Ep128 {
 
      switch (portAddr)
      {
-       // Fixed defaults
-       case REG_FW_VERSION_MAJOR:
-         retval = REG_FW_VERSION_MAJOR_DEFAULT;
-         break;
-       case REG_FW_VERSION_MINOR:
-         retval = REG_FW_VERSION_MINOR_DEFAULT;
-         break;
-       case REG_MEMORY_PSRAM_SIZE_IN_MB:
-         retval = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
-         break;
-       // Mouse is reported always
-       case REG_USB_INIT:
-         retval = REG_USB_INIT_DEFAULT;
-         break;
-       // Simple reads above the video port range
-       case REG_USB_MOUSE_SPEED:
-       case REG_MEMORY_P2:
-       case REG_MEMORY_P3:
-       case REG_MEMORY_MAP_8M_P2_LOW:
-       case REG_MEMORY_MAP_8M_P2_HIGH:
-       case REG_MEMORY_MAP_8M_P3_LOW:
-       case REG_MEMORY_MAP_8M_P3_HIGH:
-       case REG_MEMORY_ROM_PAGE:
-       case REG_FUNCTION_BITMAP_BASE:
-       case REG_USB_MSC_CMD:
-         retval = namedPortValues[portAddr];
-         break;
        // Clear on read
        case REG_SPRITE_SP_COLLISION_LOW:
          retval = namedPortValues[portAddr];
@@ -327,35 +302,45 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
          if (functionResultDelay)
          {
            functionResultDelay = false;
-           return namedPortValues[REG_FUNCTION_EXECUTE];
+           retval = namedPortValues[REG_FUNCTION_EXECUTE];
          }
-         return 0xFF;
+         else
+          retval = 0xFF;
+         break;
        case REG_FUNCTION_RESULT:
-         return lastFunctionResult;
+         retval = lastFunctionResult;
+         break;
        default:
          // Video related ports are read instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)
+            retval = namedPortValues[portAddr];
+         else if (namedPortMasks[portAddr] != 0xfe)
             retval = namedPortValues[portAddr];
          else
             retval = 0xFF;
          break;
      }
-  // Increment register index after operation
-  if (secondary)
-    io_port_values[SPRITEEXT_SEC_REG_INDEX] += io_port_values[SPRITEEXT_SEC_REG_INCREMENT];
-  else
-    io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
+    // Increment register index after operation and store result for debug reads
+    if (secondary)
+    {
+      io_port_values[SPRITEEXT_SEC_REG_INDEX] += io_port_values[SPRITEEXT_SEC_REG_INCREMENT];
+      io_port_values[SPRITEEXT_SEC_REG_ACCESS] = retval;
+    }
+    else
+    {
+      io_port_values[SPRITEEXT_REG_INDEX] += io_port_values[SPRITEEXT_REG_INCREMENT];
+      io_port_values[SPRITEEXT_REG_ACCESS] = retval;
+    }
 
-  //printf("Port %x read, val %x\n", portAddr, retval);
-  return retval;
+    return retval;
   }
 
   void SpriteExt::writeNamedPort(bool secondary, uint8_t value)
   {
      uint8_t portAddr = secondary ? io_port_values[SPRITEEXT_SEC_REG_INDEX] : io_port_values[SPRITEEXT_REG_INDEX];
      
-     // Read-only register: no-op
-     if (namedPortMasks[portAddr] == 0xff)
+     // Read-only / unused register: no-op
+     if (namedPortMasks[portAddr] == 0xff || namedPortMasks[portAddr] == 0xfe)
         return;
      // Apply mask to prevent illegal values
      if (namedPortMasks[portAddr])
@@ -448,6 +433,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
          if (portAddr <= REG_SCREEN_MAXY)
             namedPortValues[portAddr] = value;
 
+         if (portAddr >= REG_SID_BASE && portAddr <= REG_SID_LAST)
+            namedPortValues[portAddr] = value;
+
          // Update bits of combined registers separately
          if (portAddr >= REG_SPRITE_FOREGROUND && portAddr < REG_SPRITE_FOREGROUND + SPRITEEXT_SPRITE_MAX)
          {
@@ -484,11 +472,15 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
 
   uint8_t SpriteExt::readNamedPortDebug(uint8_t portIndex)
   {
+     if (namedPortMasks[portIndex] == 0xfe)
+       return 0xFF;
      return namedPortValues[portIndex];
   }
 
   void SpriteExt::writeNamedPortDebug(uint8_t portIndex, uint8_t value)
   {
+     if (namedPortMasks[portIndex] == 0xff || namedPortMasks[portIndex] == 0xfe)
+      return;
      if (namedPortMasks[portIndex])
         value = value & namedPortMasks[portIndex];
      namedPortValues[portIndex] = value;
