@@ -31,8 +31,8 @@ BEGIN
   END
 END
 
-101 ICON ".\\resource\\ep128emu.ico"
-102 ICON ".\\resource\\zx128emu.ico"
-103 ICON ".\\resource\\cpc464emu.ico"
-104 ICON ".\\resource\\tvc64emu.ico"
+101 ICON "./resource/ep128emu.ico"
+102 ICON "./resource/zx128emu.ico"
+103 ICON "./resource/cpc464emu.ico"
+104 ICON "./resource/tvc64emu.ico"
 

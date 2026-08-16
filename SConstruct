@@ -5,6 +5,8 @@ import sys, os
 
 win64CrossCompile = int(ARGUMENTS.get('win64', 0))
 mingwCrossCompile = win64CrossCompile or int(ARGUMENTS.get('win32', 0))
+enableDevtoolIntegration = int(ARGUMENTS.get('devtool', 0))
+
 linux32CrossCompile = int(ARGUMENTS.get('linux32', 0))
 # on Linux, statically linked SDL version >= 1.2.10 that was not built
 # without video support (--disable-video) breaks FLTK
@@ -28,9 +30,10 @@ enableMIDI = int(ARGUMENTS.get('midi', 0))
 # use cURL library in makecfg to download the ROM package
 enableCURL = int(ARGUMENTS.get('curl', int(not mingwCrossCompile)))
 userFlags = ARGUMENTS.get('cflags', '')
-disablePkgConfig = int(ARGUMENTS.get('nopkgconfig',
-                                     int(linux32CrossCompile or \
-                                         mingwCrossCompile)))
+# pkgconfig does not want to cooperate with current fltk.
+# If wanted, it can still be invoked with explicit parameter
+# nopkgconfig=0
+disablePkgConfig = int(ARGUMENTS.get('nopkgconfig',1))
 enableBuildCache = int(ARGUMENTS.get('cache', 0))
 
 compilerFlags = ''
@@ -55,7 +58,7 @@ else:
 #             linux_flags, mingw_flags, c_header, cxx_header, optional ]
 
 fltkLibsLinux = '-lfltk -lfltk_images'
-fltkLibsMinGW = fltkLibsLinux + ' -lz -lcomdlg32 -lcomctl32 -lole32'
+fltkLibsMinGW = fltkLibsLinux + ' -lfltk_jpeg -lfltk_png -lz -lcomdlg32 -lcomctl32 -lole32'
 fltkLibsMinGW = fltkLibsMinGW + ' -luuid -lws2_32 -lwinmm -lgdi32'
 fltkLibsLinux = fltkLibsLinux + ' -lXcursor -lXinerama -lXrender'
 fltkLibsLinux = fltkLibsLinux + ' -lXext -lXft -lXfixes -lX11 -lfontconfig -ldl'
@@ -192,7 +195,10 @@ if not mingwCrossCompile:
 if sys.platform[:6] == 'darwin':
     ep128emuLibEnvironment.Append(CPPPATH = ['/usr/X11R6/include'])
 if not linux32CrossCompile:
-    linkFlags = ' -L. -Lmingw32/lib'
+    if win64CrossCompile:
+        linkFlags = ' -L. -Lmingw64/lib'
+    else:
+        linkFlags = ' -L. -Lmingw32/lib'
 else:
     linkFlags = ' -m32 -L. -L/usr/X11R6/lib '
 ep128emuLibEnvironment.Append(LINKFLAGS = Split(linkFlags))
@@ -207,13 +213,25 @@ if mingwCrossCompile:
     elif win64CrossCompile:
         toolNamePrefix = 'x86_64-w64-mingw32-'
     else:
+        toolNamePrefix = 'i686-w64-mingw32-'
+    # Devtool compatible setup requires reproduction of the exact ancient
+    # mingw32 setup, invoking it through wine. All other options can use
+    # sane defaults.
+    if enableDevtoolIntegration:
         toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
-    ep128emuLibEnvironment['AR'] = toolNamePrefix + 'ar'
-    ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc'
-    ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp'
-    ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++'
-    ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++'
-    ep128emuLibEnvironment['RANLIB'] = toolNamePrefix + 'ranlib'
+        ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw32/bin/ar.exe'
+        ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
+        ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp.exe'
+        ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++.exe'
+        ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++.exe'
+        ep128emuLibEnvironment['RANLIB'] = 'wine ~/.wine/drive_c/mingw32/bin/ranlib.exe'
+    else:
+        ep128emuLibEnvironment['AR'] = toolNamePrefix + 'ar'
+        ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc'
+        ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp'
+        ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++'
+        ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++'
+        ep128emuLibEnvironment['RANLIB'] = toolNamePrefix + 'ranlib'
     ep128emuLibEnvironment['PROGSUFFIX'] = '.exe'
     packageConfigs['Lua'][3] = '-llua' + ['53', '51'][int(bool(useLuaJIT))]
     ep128emuLibEnvironment.Append(
@@ -232,6 +250,9 @@ if enableMIDI:
     ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_MIDI_PORT'])
     ep128emuLibEnvironment.Append(CPPPATH = ['./portmidi/pm_common',
                                              './portmidi/porttime'])
+
+if enableDevtoolIntegration:
+    ep128emuLibEnvironment.Append(CCFLAGS = ['-DENABLE_DEVTOOL'])
 
 ep128emuGUIEnvironment = copyEnvironment(ep128emuLibEnvironment)
 if mingwCrossCompile:
@@ -252,7 +273,7 @@ configurePackage(ep128emuGUIEnvironment, 'PortAudio')
 
 ep128emuGLGUIEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 disableOpenGL = 1
-if configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
+if not enableDevtoolIntegration and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
     configure = ep128emuGLGUIEnvironment.Configure()
     if configure.CheckCHeader('GL/gl.h'):
         disableOpenGL = 0
@@ -304,11 +325,11 @@ if not oldSConsVersion:
                  ep128emuGUIEnvironment, ep128emuGLGUIEnvironment)
 
 configure = ep128emuLibEnvironment.Configure()
-if configure.CheckType('PaStreamCallbackTimeInfo', '#include <portaudio.h>'):
-    havePortAudioV19 = 1
-else:
-    havePortAudioV19 = 0
-    print('WARNING: using old v18 PortAudio interface')
+#if configure.CheckType('PaStreamCallbackTimeInfo', '#include <portaudio.h>'):
+havePortAudioV19 = 1
+#else:
+#    havePortAudioV19 = 0
+#    print('WARNING: using old v18 PortAudio interface')
 fltkVersion13 = 0
 if configure.CheckCXXHeader('FL/Fl_Cairo.H'):
     fltkVersion13 = 1
@@ -524,18 +545,32 @@ ep128emuSources += fluidCompile(['gui/gui.fl', 'gui/disk_cfg.fl',
                                  'gui/disp_cfg.fl', 'gui/kbd_cfg.fl',
                                  'gui/snd_cfg.fl', 'gui/vm_cfg.fl',
                                  'gui/debug.fl', 'gui/about.fl'])
-ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp']
+if enableDevtoolIntegration:
+    ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp', 'gui/devtool.cpp']
+else:
+    ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp']
+
 if mingwCrossCompile:
-    ep128emuResourceObject = ep128emuEnvironment.Command(
-        'resource/resource.o',
-        ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
-         'resource/ep128emu.ico', 'resource/tvc64emu.ico',
-         'resource/zx128emu.ico'],
+    if enableDevtoolIntegration:
+        ep128emuResourceObject = ep128emuEnvironment.Command(
+            'resource/resource.o',
+            ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
+             'resource/ep128emu.ico', 'resource/tvc64emu.ico',
+             'resource/zx128emu.ico'],
+            'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
+            + '-o $TARGET resource/ep128emu.rc')
+    else:
+        ep128emuResourceObject = ep128emuEnvironment.Command(
+            'resource/resource.o',
+            ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
+             'resource/ep128emu.ico', 'resource/tvc64emu.ico',
+             'resource/zx128emu.ico'],
 #        toolNamePrefix + 'windres -v --use-temp-file '
 #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
 #        + '-o $TARGET resource/ep128emu.rc')
-        toolNamePrefix + 'windres -v --use-temp-file '
-        + '-o $TARGET resource/ep128emu.rc')
+            toolNamePrefix + 'windres -v --use-temp-file '
+            + '-o $TARGET resource/ep128emu.rc')
+
     ep128emuSources += [ep128emuResourceObject]
 ep128emu = ep128emuEnvironment.Program('ep128emu', ep128emuSources)
 
@@ -550,12 +585,20 @@ tapeeditEnvironment.Prepend(LIBS = ['ep128emu'])
 tapeeditSources = fluidCompile(['tapeutil/tapeedit.fl'])
 tapeeditSources += ['tapeutil/tapeio.cpp']
 if mingwCrossCompile:
-    tapeeditResourceObject = tapeeditEnvironment.Command(
-        'resource/te_resrc.o',
-        ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
-        toolNamePrefix + 'windres -v --use-temp-file '
+    if enableDevtoolIntegration:
+        tapeeditResourceObject = tapeeditEnvironment.Command(
+            'resource/te_resrc.o',
+            ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
+            'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
 #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
-        + '-o $TARGET resource/tapeedit.rc')
+            + '-o $TARGET resource/tapeedit.rc')
+    else:
+        tapeeditResourceObject = tapeeditEnvironment.Command(
+            'resource/te_resrc.o',
+            ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
+            toolNamePrefix + 'windres -v --use-temp-file '
+#        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
+            + '-o $TARGET resource/tapeedit.rc')
     tapeeditSources += [tapeeditResourceObject]
 tapeedit = tapeeditEnvironment.Program('tapeedit', tapeeditSources)
 Depends(tapeedit, ep128emuLib)

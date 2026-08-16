@@ -25,8 +25,6 @@
    Backlog (sort of)
    General:
    - Align SDExt segment / memory map handling with the common scheme
-   - Update SConstruct - introduce special wine+mingw cross-compile option for Devtool
-   - Update SConstruct - simplify fltk, portaudio etc. version detection
    - Test devtool with 64-bit exe
    - Fix standalone version joystick handling in Linux
    - State save/load support
