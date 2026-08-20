@@ -75,8 +75,11 @@ namespace Ep128Emu {
     bool            fileIOEnabled;
    private:
     std::string     fileIOWorkingDirectory;
+    std::string     fileIOWorkingSubDir;
     void            (*fileNameCallback)(void *userData, std::string& fileName);
     void            *fileNameCallbackUserData;
+    bool            sanitizeFileOrDirName(std::string& fileOrDirName);
+    bool            getRealFileOrDirName(std::string& fileOrDirName, uint8_t* attr, uint32_t* fsize);
     int             lastFileSize;
    public:
     struct VMStatus {
@@ -734,6 +737,9 @@ namespace Ep128Emu {
     }
     void setAudioConverterSampleRate(float sampleRate_);
    public:
+    bool getFileOrDirStat(std::string& fileOrDirName, uint8_t* attr, uint32_t* fsize);
+    int setWorkingDirSubdir(std::string& subDirName);
+    int getWorkingDirSubdir(std::string& subDirName);
     int openDirInWorkingDirectory(DIR*& d, std::string& dirName_);
     int closeDirInWorkingDirectory(DIR*& d);
     int getLastFileSize();

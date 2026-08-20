@@ -156,6 +156,7 @@ namespace Ep128Emu {
 #else
       fileIOWorkingDirectory(".\\"),
 #endif
+      fileIOWorkingSubDir(""),
       fileNameCallback(&defaultFileNameCallback),
       fileNameCallbackUserData((void *) 0)
   {
@@ -499,6 +500,7 @@ namespace Ep128Emu {
         fileIOWorkingDirectory += '\\';
     }
 #endif
+  fileIOWorkingSubDir = "";
   }
 
   void VirtualMachine::setFileNameCallback(void (*fileNameCallback_)(
@@ -921,73 +923,53 @@ namespace Ep128Emu {
     }
   }
 
-  int VirtualMachine::openDirInWorkingDirectory(DIR*& d,
-                                                 std::string& dirName_)
+  bool VirtualMachine::sanitizeFileOrDirName(std::string& FileOrDirName)
   {
-    d = (DIR *) 0;
-    if ((d = opendir(std::string(fileIOWorkingDirectory + dirName_).c_str())) != NULL)
-      return 0;
-    else
-      return -1;
+    if (FileOrDirName.length() > 0) {
+      // convert file name to lower case, replace invalid characters with '_'
+      std::string baseName(FileOrDirName);
+      stringToLowerCase(baseName);
+      for (size_t i = 0; i < baseName.length(); i++) {
+        const std::string&  s = baseName;
+        if (!((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9') ||
+              s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_' || s[i] == '/'))
+          baseName[i] = '_';
+      }
+      FileOrDirName = baseName;
+      return true;
+    }
+    return false;
   }
 
-  int VirtualMachine::closeDirInWorkingDirectory(DIR*& d)
+  bool VirtualMachine::getRealFileOrDirName(std::string& FileOrDirName, uint8_t* attr, uint32_t* fsize)
   {
-    if (d)
-      closedir(d);
-    d = (DIR *) 0;
-    return 0;
-  }
-
-  int VirtualMachine::getLastFileSize()
-  {
-    return lastFileSize;
-  }
-
-  int VirtualMachine::openFileInWorkingDirectory(std::FILE*& f,
-                                                 std::string& fileName_,
-                                                 const char *mode,
-                                                 bool createOnly_)
-  {
-    f = (std::FILE *) 0;
     try {
       std::string fullName;
-      if (fileName_.length() > 0) {
-        // convert file name to lower case, replace invalid characters with '_'
-        std::string baseName(fileName_);
-        stringToLowerCase(baseName);
-        for (size_t i = 0; i < baseName.length(); i++) {
-          const std::string&  s = baseName;
-          if (!((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9') ||
-                s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_' || s[i] == '/'))
-            baseName[i] = '_';
-        }
-        fullName = fileIOWorkingDirectory + baseName;
-      }
-      else {
-        if (fileNameCallback)
-          fileNameCallback(fileNameCallbackUserData, fullName);
-        if (fullName.length() == 0)
-          return -2;                    // error: invalid file name
-      }
+      std::string fullDir;
+      *fsize = 0;
+      *attr = 0;
+      fullDir = fileIOWorkingDirectory + fileIOWorkingSubDir;
+      if (!sanitizeFileOrDirName(FileOrDirName))
+        return false;
+      fullName = fullDir + FileOrDirName;
       // attempt to stat() file
 #ifndef WIN32
       struct stat   st;
       std::memset(&st, 0, sizeof(struct stat));
       int   err = stat(fullName.c_str(), &st);
-      if (err != 0 && !fileName_.empty()) {
+      if (err != 0) {
         // not found, try case insensitive file search
         std::string tmpName(fullName);
         tmpName[0] = tmpName.c_str()[0];    // unshare string
         DIR   *dir_;
-        dir_ = opendir(fileIOWorkingDirectory.c_str());
+        dir_ = opendir(fullDir.c_str());
         if (dir_) {
           do {
             struct dirent *ent_ = readdir(dir_);
             if (!ent_)
               break;
             bool        foundMatch = true;
-            size_t      offs = fileIOWorkingDirectory.length();
+            size_t      offs = fullDir.length();
             const char  *s1 = fullName.c_str() + offs;
             const char  *s2 = &(ent_->d_name[0]);
             size_t      i = 0;
@@ -1012,12 +994,170 @@ namespace Ep128Emu {
         if (err == 0)
           fullName = tmpName;
       }
-      lastFileSize = st.st_size;
+      if (err == 0)
+      {
+        FileOrDirName = fullName.substr(fullDir.length(),fullName.length()-fullDir.length());
+        *fsize = st.st_size;
+        if (S_ISDIR(st.st_mode))
+          *attr |= 0x10;
+        return true;
+      }
 #else
       struct _stat  st;
       int     err = fileStat(fullName.c_str(), &st);
-      lastFileSize = st.st_size;
+      if (err == 0)
+      {
+        *fsize = st.st_size;
+        if (S_ISDIR(st.st_mode))
+          *attr |= 0x10;
+        FileOrDirName = fullName.substr(fullDir.length(),fullName.length()-fullDir.length());
+        return true;
+      }
 #endif
+      }
+      catch (...) {
+      return false;
+    }
+  return false;
+  }
+
+  bool VirtualMachine::getFileOrDirStat(std::string& fileOrDirName, uint8_t* attr, uint32_t* fsize)
+  {
+    return getRealFileOrDirName(fileOrDirName, attr, fsize);
+  }
+
+  int VirtualMachine::setWorkingDirSubdir(std::string& subDirName)
+  {
+    uint8_t attr;
+    uint32_t fsize;
+    std::string prevSubdir(fileIOWorkingSubDir);
+    if (subDirName.length() == 0)
+    {
+      //empty dir name, remove current subdir
+      fileIOWorkingSubDir = "";
+      return 0;
+    }
+
+    // cd /___ Absolute path - remove current workdir
+    if (subDirName.c_str()[0] == '/')
+    {
+      fileIOWorkingSubDir = "";
+      if (subDirName.length() == 1)
+      {
+        subDirName = "";
+        return 0;
+      }
+      subDirName = subDirName.substr(1,subDirName.length()-1);
+    }
+    else if (subDirName.c_str()[0] == '.')
+    {
+      // cd .
+      if (subDirName.length() == 1)
+      {
+        if (fileIOWorkingSubDir.length() > 1)
+          subDirName = fileIOWorkingSubDir.substr(0,fileIOWorkingSubDir.length()-2);
+        else
+          subDirName = "";
+        return 0;
+      }
+      // cd ..
+      if (subDirName.c_str()[1] == '.')
+      {
+        if (fileIOWorkingSubDir.length() < 2)
+        {
+          subDirName = "";
+          return -1;
+        }
+
+        size_t slashPos = fileIOWorkingSubDir.rfind("/",fileIOWorkingSubDir.length()-2);
+        // No slash - return to root
+        if (slashPos >= fileIOWorkingSubDir.length() || slashPos == 0)
+        {
+          fileIOWorkingSubDir = "";
+          subDirName = fileIOWorkingSubDir;
+          return 0;
+        }
+        fileIOWorkingSubDir = fileIOWorkingSubDir.substr(0, slashPos);
+        subDirName = fileIOWorkingSubDir;
+        fileIOWorkingSubDir.append("/");
+        return 0;
+      }
+    }
+    if (getRealFileOrDirName(subDirName, &attr, &fsize))
+    {
+      if (attr & 0x10)
+      {
+        fileIOWorkingSubDir += subDirName;
+        subDirName = fileIOWorkingSubDir;
+        fileIOWorkingSubDir.append("/");
+        return 0;
+      }
+      else
+      {
+        fileIOWorkingSubDir = prevSubdir;
+        return -1;
+      }
+    }
+    else
+    {
+      fileIOWorkingSubDir = prevSubdir;
+      return -1;
+    }
+  }
+
+  int VirtualMachine::openDirInWorkingDirectory(DIR*& d,
+                                                 std::string& dirName_)
+  {
+    d = (DIR *) 0;
+    if ((d = opendir(std::string(fileIOWorkingDirectory + fileIOWorkingSubDir).c_str())) != NULL)
+      return 0;
+    else
+      return -1;
+  }
+
+  int VirtualMachine::closeDirInWorkingDirectory(DIR*& d)
+  {
+    if (d)
+      closedir(d);
+    d = (DIR *) 0;
+    return 0;
+  }
+
+  int VirtualMachine::getLastFileSize()
+  {
+    return lastFileSize;
+  }
+
+  int VirtualMachine::openFileInWorkingDirectory(std::FILE*& f,
+                                                 std::string& fileName_,
+                                                 const char *mode,
+                                                 bool createOnly_)
+  {
+    f = (std::FILE *) 0;
+    uint8_t attr;
+    uint32_t fsize;
+    std::string fullDir(fileIOWorkingDirectory + fileIOWorkingSubDir);
+    if (!sanitizeFileOrDirName(fileName_))
+    {
+      return -3;
+    }
+    if (!getRealFileOrDirName(fileName_, &attr, &fsize))
+    {
+      if (mode == (char *) 0 || mode[0] != 'w')
+        return -3;                    // error: cannot find file
+    }
+    try
+    {
+      std::string fullName = fullDir + fileName_;
+#ifndef WIN32
+      struct stat   st;
+      std::memset(&st, 0, sizeof(struct stat));
+      int   err = stat(fullName.c_str(), &st);
+#else
+      struct _stat  st;
+      int err = fileStat(fullName.c_str(), &st);
+#endif
+      lastFileSize = st.st_size;
       if (err != 0) {
         if (mode == (char *) 0 || mode[0] != 'w')
           return -3;                    // error: cannot find file

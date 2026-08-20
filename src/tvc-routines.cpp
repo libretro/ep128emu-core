@@ -1735,17 +1735,12 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     }*/
     // ensure null-terminated string
     inBuf[3+len] = 0;
-    std::string  dirName(reinterpret_cast< char const* >(currDir.str));
     std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
     bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
     if (!isCas)
       isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
     
-    fileName = dirName == "/" ? fileName : dirName + '/' + fileName;
-    printf("Opening file %s ...",fileName.c_str());
     int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
-    printf("result %d\n",res);
-    // todo: stat -- it requires fullpath, so maybe add it to vm.cpp?
     // fileName may have changed
     
     if(res == 0) {
@@ -1756,6 +1751,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
         for (int i=0; i<255 && fileName.c_str()[i]; i++) {
           outBuf[4+4+1+i] = fileName.c_str()[i];
         }
+        outBuf[4+4+1+outBuf[4+4]] = '\0';
         // CAS header skip
         if (isCas)
           std::fseek(routinesFile, long(0x80), SEEK_SET);
@@ -1810,11 +1806,8 @@ uint8_t tvcfunc_close_file(uint8_t* bufferStart) {
  */
 uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
     uint8_t* inBuf = bufferStart;
-    uint8_t* outBuf = bufferStart;
     if (tvcRomBufferIn)
       inBuf = tvcRomBufferIn;
-    if (tvcRomBufferOut)
-      outBuf = tvcRomBufferOut;
 
     uint16_t length = *(uint16_t *)&inBuf[4];
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
@@ -1869,7 +1862,6 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
     {
       memcpy(tvcRomBufferOut,&bufferStart[4],i+2);
     }
-    printf("read_file, wanted %d got %d\n", length, i);
     return 0;
 }
 
@@ -1921,7 +1913,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], 3);
     }
     return (uint8_t)res;*/
-    int i;
+    size_t i;
     for (i=0; i<length; i++)
     {
       int c = std::fgetc(routinesFile);
@@ -1930,7 +1922,6 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
       emuMem->writeRaw(dstAddress+i, c);
     }
     *(uint32_t *)&outBuf[4] = (uint32_t) i;
-    printf("read_file_dest, wanted %d got %d\n", length, i);
     return 0;
 }
 
@@ -2129,7 +2120,6 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       return 0x80 + FR_NO_PATH;
 
     if ((dirptr = readdir(routinesDirHandle)) != NULL) {
-      //printf("Dir entry: %s\n",dirptr->d_name);
       for (i=0; i<255 && dirptr->d_name[i]; i++) {
         bufferStart[4+1+i] = dirptr->d_name[i];
       }
@@ -2141,29 +2131,39 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
           bufferStart[4+256+1+4+j] = dirptr->d_name[j];
         }
       }
-#ifndef WIN32
-      if (dirptr->d_type == DT_DIR)
-        bufferStart[4+256] = 0x10;
+
+      std::string entName(reinterpret_cast< char const* >(dirptr->d_name));
+      uint8_t attr;
+      uint32_t fsize;
+      if (emuVm->getFileOrDirStat(entName,&attr,&fsize))
+      {
+        bufferStart[4+256] = attr;
+        *(uint32_t *)&bufferStart[4+256+1] = fsize;
+      }
       else
+      {
+        *(uint32_t *)&bufferStart[4+256+1] = 0;
+#ifndef WIN32
+        if (dirptr->d_type == DT_DIR)
+          bufferStart[4+256] = 0x10;
+        else
 #endif
         bufferStart[4+256] = 0x00;
-    } 
+      }
+    }
     else
     {
       bufferStart[4] = 0;
+      bufferStart[4+1] = 0;
     }
 
-  // TODO: file size
-  *(uint32_t *)&bufferStart[4+256+1] = 0;
-
-  if (tvcRomBufferOut)
-    memcpy(tvcRomBufferOut,&bufferStart[4],256+1+4+13);
+    if (tvcRomBufferOut)
+      memcpy(tvcRomBufferOut,&bufferStart[4],256+1+4+13);
 /*  if(res == FR_OK) {
         memcpy(&bufferStart[4], &TVC_ROM[0x1a00], sizeof(FILINFO)+1);
     }
     return (uint8_t)res;*/
-
-  return 0;
+    return 0;
 }
 
 uint8_t tvcfunc_file_seek(uint8_t *bufferStart) {
@@ -2228,7 +2228,6 @@ uint8_t tvcfunc_getcwd(uint8_t *bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], len+1);
     }
     return (uint8_t)res;*/
-    // Todo: check if dir exists at all
     outBuf[0] = currDir.len;
     for (int i=0; i<currDir.len; i++)
       outBuf[i+1] = currDir.str[i];
@@ -2246,7 +2245,7 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
     if(inBuf[0] == 0)
         return FR_INVALID_PARAMETER + 0x80;
 
-/*    if(bufferStart[0] != 0) {
+/*    if(                            bufferStart[0] != 0) {
         memcpy(&TVC_ROM[0x1900], &bufferStart[0], bufferStart[0]+1);
     } else {
         return FR_INVALID_PARAMETER;
@@ -2271,63 +2270,17 @@ uint8_t tvcfunc_chdir(uint8_t *bufferStart) {
     }
     return res;*/
 
-
-    // cd . and cd ..
-    // Note: niceties like "cd ../.." will not work.
-    if (inBuf[1] == '.')
+    inBuf[inBuf[0]+1] = '\0';
+    std::string dirName(reinterpret_cast< char const* >(&inBuf[1]));
+    if (emuVm->setWorkingDirSubdir(dirName) == 0)
     {
-      // cd . -- no-op
-      if (inBuf[0] == 1)
-        return 0;
-      // cd .. - move up
-      else if (inBuf[2] == '.')
-      {
-        for (int j=currDir.len-2; j>0; j--)
-        {
-          if (currDir.str[j] == '/')
-          {
-            currDir.len = j;
-            currDir.str[currDir.len] = 0;
-            printf("chdir 2a: %s\n",currDir.str);
-            return 0;
-          }
-        }
-        // If no upper level, just return to root
-        currDir.len = 1;
-        currDir.str[0] = '/';
-        currDir.str[currDir.len] = 0;
-        printf("chdir 2b: %s\n",currDir.str);
-        return 0;
-      }
-    }
-
-    // cd /something - abs path, replace
-    // same if there is no current dir or it is the root
-    if (inBuf[1] == '/' || currDir.len == 0 ||
-        (currDir.len == 1 && currDir.str[0] == '/'))
-    {
-      int newStart = (inBuf[1] == '/') ? 0 : 1;
-      currDir.str[newStart] = '/';
-
-      currDir.len = inBuf[0] + newStart;
-      for (int i=newStart; i<currDir.len; i++)
-        currDir.str[i] = inBuf[i+1-newStart];
-      currDir.str[currDir.len] = 0;
-      printf("chdir 1: %s\n",currDir.str);
+      currDir.len = dirName.length();
+      for (size_t i=0; i<dirName.length(); i++)
+        currDir.str[i] = dirName.c_str()[i];
+      currDir.str[currDir.len] = '\0';
       return 0;
     }
-
-    if (currDir.str[currDir.len-1] != '/')
-    {
-      currDir.str[currDir.len] = '/';
-      currDir.len++;
-    }
-    for (int i=0; i<inBuf[0]; i++)
-      currDir.str[currDir.len+i] = inBuf[i+1];
-    currDir.len += inBuf[0];
-    currDir.str[currDir.len] = 0;
-    printf("chdir 3: %s\n",currDir.str);
-    return 0;
+    return FR_NO_PATH + 0x80;
 }
 
 uint8_t tvcfunc_mkdir(uint8_t *bufferStart) {
@@ -2420,6 +2373,16 @@ uint8_t tvcfunc_rename(uint8_t *bufferStart) {
  * bufferStart[0x104]: file attributes (1 byte)
  */
 uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
+    uint8_t* inBuf = bufferStart;
+    uint8_t* outBuf = bufferStart;
+    if (tvcRomBufferIn)
+      inBuf = tvcRomBufferIn;
+    if (tvcRomBufferOut)
+      outBuf = tvcRomBufferOut;
+
+    if(inBuf[0] == 0)
+        return FR_INVALID_PARAMETER + 0x80;
+
 /*    TVC_ROM[0x1900] = bufferStart[0];
     if(bufferStart[0] != 0)
         memcpy(&TVC_ROM[0x1901], &bufferStart[1], bufferStart[0]);
@@ -2447,7 +2410,27 @@ uint8_t tvcfunc_getstat(uint8_t* bufferStart) {
         memcpy(&bufferStart[0], &TVC_ROM[0x1a00], sizeof(FILINFO));
     }
     return (uint8_t)res;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    uint8_t res = 0;
+    uint8_t attr;
+    uint32_t fsize;
+    // ensure null-terminated string
+    inBuf[1+inBuf[0]] = 0;
+    std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
+    if (emuVm->getFileOrDirStat(fileName, &attr, &fsize))
+      {
+        outBuf[0] = (uint8_t) fileName.length();
+        for (int i=0; i<255 && fileName.c_str()[i]; i++) {
+          outBuf[1+i] = fileName.c_str()[i];
+        }
+        outBuf[1+outBuf[0]] = '\0';
+        *(uint32_t *)&outBuf[0x100] = fsize;
+        outBuf[0x104] = attr;
+    }
+    else
+    {
+      res = 0x80 + FR_NO_FILE;
+    }
+    return (uint8_t)res;
 }
 
 

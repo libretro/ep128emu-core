@@ -30,6 +30,7 @@
    - State save/load support
    - Improve performance (also sid!)
    - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
+   - memsetraw / memmoveraw for cross-segment operation
 
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
