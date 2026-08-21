@@ -18,8 +18,6 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
-// TODO: mem map
-
 #include "ep128emu.hpp"
 #include "tvcmem.hpp"
 
@@ -177,7 +175,9 @@ namespace TVC64 {
 
   Memory::~Memory()
   {
+    // todo: why is this not to 0xff (and the same in EP)?
     for (int i = 0x00; i < 0xFC; i++) {
+      printf("Freeing segment %02x\n",i);
       if (segmentTable[i])
         delete[] segmentTable[i];
     }

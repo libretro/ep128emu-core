@@ -51,7 +51,6 @@
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
    - SID emulation finetune (still a bit different speed)
-   - Function multi execute
    - tvcfileio2 - file access via rst 30h - probably not needed
    - fix santa cap bitmap
    - remove nonstd init ram, move into demo source
@@ -245,8 +244,10 @@ namespace Ep128 {
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
         uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
+        uint16_t maxBufLen = 0x4000-(bufferAddr & 0x3fff);
         uint8_t* bufferStart = hostMem->memGet(bufferAddr);
         uint8_t* realParams = bufferStart;
+        TVC256::maxBufLen = maxBufLen;
 
         // When IOMEM is used (REG_USB_MSC_CMD calls), buffer is still there
         // but actual input/output uses different, fixed addresses.
@@ -263,18 +264,64 @@ namespace Ep128 {
           TVC256::tvcRomBufferOut = NULL;
         }
 
-        printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x\n",
+        printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                funcCode,bufferAddr,
-               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
+               realParams[6],realParams[7],realParams[8],realParams[9],
+               realParams[10],realParams[11],realParams[12],realParams[13]);
 
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
-        printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x\n",
+        if (useIOMEM)
+          realParams = TVC256::tvcRomBufferOut;
+        printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
-               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5]);
+               realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
+               realParams[6],realParams[7],realParams[8],realParams[9],
+               realParams[10],realParams[11],realParams[12],realParams[13]);
         functionResultDelay = true;
      }
   }
+  void SpriteExt::executeMultiFunction(uint8_t funcCount)
+  {
+    TVC256::registerScreenBaseAddr = namedPortValues[REG_SCREEN_SCREEN_BASE_ADDR];
+    TVC256::registerBitmapBaseAddr = namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR];
+    TVC256::registerScreenColorBaseAddr = namedPortValues[REG_SCREEN_SCREEN_COLOR_BASE_ADDR];
+    TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
+    TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
+
+    uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
+    uint8_t tmpBuffer[256];
+
+    for (uint8_t currFunc = 0; currFunc<funcCount; currFunc++)
+    {
+      uint8_t* bufferStart = hostMem->memGet(bufferAddr+1);
+      uint8_t funcCode = *(bufferStart-1);
+      uint8_t paramLen = TVC256::getFunctionParamSize(bufferStart, TVC256::tvc256k_funct_struct_array[funcCode].param_size);
+      memcpy(&tmpBuffer[0], bufferStart, paramLen);
+
+     if (TVC256::tvc256k_funct_struct_array[funcCode].func)
+     {
+        printf("Multi Func call: %d/%d %02X params at %04x len %02x\n",
+               currFunc+1,funcCount,funcCode,bufferAddr, paramLen);
+
+        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(&tmpBuffer[0]);
+        printf("Func res:  %02X\n", lastFunctionResult);
+        if (lastFunctionResult)
+        {
+          lastFunctionResult = currFunc;
+          break;
+        }
+        bufferAddr += paramLen+1;
+     }
+     else
+     {
+       lastFunctionResult = currFunc + 0x80;
+       break;
+     }
+    }
+  }
+
   uint8_t SpriteExt::readNamedPort(bool secondary)
   {
      uint8_t retval = 0xFF;
@@ -310,6 +357,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
          break;
        case REG_FUNCTION_RESULT:
          retval = lastFunctionResult;
+         break;
+       case REG_FUNCTION_MULTI_EXECUTE:
+         retval = lastMultiFunctionResult;
          break;
        default:
          // Video related ports are read instantly (lot of TODO here)
@@ -369,6 +419,11 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
          lastFunctionResult = 0xff;
          executeFunction(value, false);
+         break;
+       case REG_FUNCTION_MULTI_EXECUTE:
+         namedPortValues[REG_FUNCTION_MULTI_EXECUTE] = value;
+         lastMultiFunctionResult = 0xff;
+         executeMultiFunction(value);
          break;
        case REG_USB_MSC_CMD:
          namedPortValues[REG_USB_MSC_CMD] = 0; // function becomes immediately ready
@@ -435,6 +490,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             namedPortValues[portAddr] = value;
 
          if (portAddr >= REG_SID_BASE && portAddr <= REG_SID_LAST)
+            namedPortValues[portAddr] = value;
+
+         if (portAddr == REG_FUNCTION_PARAM_START)
             namedPortValues[portAddr] = value;
 
          // Update bits of combined registers separately
