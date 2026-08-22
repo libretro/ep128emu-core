@@ -177,7 +177,6 @@ namespace TVC64 {
   {
     // todo: why is this not to 0xff (and the same in EP)?
     for (int i = 0x00; i < 0xFC; i++) {
-      printf("Freeing segment %02x\n",i);
       if (segmentTable[i])
         delete[] segmentTable[i];
     }

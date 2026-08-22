@@ -264,21 +264,21 @@ namespace Ep128 {
           TVC256::tvcRomBufferOut = NULL;
         }
 
-        printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                funcCode,bufferAddr,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
 
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         if (useIOMEM)
           realParams = TVC256::tvcRomBufferOut;
-        printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
         functionResultDelay = true;
      }
   }
@@ -302,11 +302,11 @@ namespace Ep128 {
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        printf("Multi Func call: %d/%d %02X params at %04x len %02x\n",
-               currFunc+1,funcCount,funcCode,bufferAddr, paramLen);
+        /*printf("Multi Func call: %d/%d %02X params at %04x len %02x\n",
+               currFunc+1,funcCount,funcCode,bufferAddr, paramLen);*/
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(&tmpBuffer[0]);
-        printf("Func res:  %02X\n", lastFunctionResult);
+        //printf("Func res:  %02X\n", lastFunctionResult);
         if (lastFunctionResult)
         {
           lastFunctionResult = currFunc;
