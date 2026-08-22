@@ -38,6 +38,7 @@
    - Sprite interrupt - to be tested?
    - Screen height setting
    - Border color change?
+   - lim.cas copy line is not in the correct place (should depend on raster interrupt)
    
    TVC256++ drives:
    - USB drive handling (no functions disabled via tvcfileio)
@@ -50,7 +51,7 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation finetune (still a bit different speed)
+   - SID emulation fix for non-working files (yiearkf, saboteur2 etc.)
    - tvcfileio2 - file access via rst 30h - probably not needed
    - fix santa cap bitmap
    - remove nonstd init ram, move into demo source
@@ -92,7 +93,7 @@ namespace Ep128 {
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  3,254,
    0x03, 0x7f, 0x7f, 0x3f,   3, 0x87, 0x87,  0xF, 0xFF, 0,254,254, 254,254,254,254,
       0,    0,    0,    1,   0,    1,    0,    1, 254,254,254,254, 254,254,254,254,
-      0,    0, 0xff, 0xff,0xff,    0,    0,    0, 254,254,254,254, 254,254,254,254,
+      0,    0, 0xff, 0xff,0xff,    0,    0,    0, 255,255,255,254, 254,254,254,254,
    0xff, 0xff, 0xff, 0xff,0xff, 0xdf,    0,  254, 254,254,254,254, 254,254,254,254,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,254,254, 254,254,254,254
@@ -134,6 +135,9 @@ namespace Ep128 {
     namedPortValues[REG_FW_VERSION_MAJOR]        = REG_FW_VERSION_MAJOR_DEFAULT;
     namedPortValues[REG_FW_VERSION_MINOR]        = REG_FW_VERSION_MINOR_DEFAULT;
     namedPortValues[REG_MEMORY_PSRAM_SIZE_IN_MB] = REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT;
+    namedPortValues[REG_DRIVE_PSRAM_VALID]       = REG_DRIVE_PSRAM_VALID_DEFAULT;
+    namedPortValues[REG_DRIVE_FLASH_VALID]       = REG_DRIVE_FLASH_VALID_DEFAULT;
+    namedPortValues[REG_DRIVE_DSK_VALID]         = REG_DRIVE_DSK_VALID_DEFAULT;
     namedPortValues[REG_USB_INIT]                = REG_USB_INIT_DEFAULT;
 
     updateMouseSpeed(REG_USB_MOUSE_SPEED_DEFAULT);
