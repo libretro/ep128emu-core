@@ -424,24 +424,29 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
     if(SELECTED_DEVICE != 0) {
         return 130;
     }
+    bool displayProgressEnabled = (bool)bufStart[bufStart[0] + 1];
+    uint8_t *progress = &bufStart[0];
+    char sourceFolder[256] = "./";
+    if(bufStart[0] != 0) {
+        uint8_t len = bufStart[0];
+        memmove(sourceFolder, &bufStart[1], len);
+        sourceFolder[len] = 0;
+    }
+    *progress = 0;
 
     uint8_t screenColor = 15;
-    set_text_color(&screenColor);
-    clear_text_screen(NULL);
     uint8_t videoModeSave = videoMode;
-    videoMode = 1;
-    print_string_ascii((uint8_t *)"Caching dir: ");
-    int res;
-    if(bufStart[0] == 0) {
-        res = f_opendir(&routinesDirHandle, "./");
-        print_string_ascii((uint8_t *)"./\r\n");
-    } else {
-        uint8_t len = bufStart[0];
-        memmove(&bufStart[0], &bufStart[1], len);
-        bufStart[len] = 0;
 
-        res = f_opendir(&routinesDirHandle, (char *)bufStart);
-        print_string_ascii(bufStart);
+    if(displayProgressEnabled) {
+        set_text_color(&screenColor);
+        clear_text_screen(NULL);
+        videoMode = 1;
+        print_string_ascii((uint8_t *)"Caching dir: ");
+    }
+
+    int res = f_opendir(&routinesDirHandle, sourceFolder);
+    if(displayProgressEnabled) {
+        print_string_ascii((uint8_t *)sourceFolder);
         print_string_ascii((uint8_t *)"\r\n");
     }
 
@@ -451,12 +456,14 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
         res = f_readdir(&routinesDirHandle, &routinesFileInfo);
         if(res!=FR_OK) {
             f_closedir(&routinesDirHandle);
-            print_string_ascii((uint8_t *)"\nread direntry failed\r\n");
+            if(displayProgressEnabled)
+                print_string_ascii((uint8_t *)"\nread direntry failed\r\n");
             return res;
         } 
         if(routinesFileInfo.fname[0] == 0) {
             f_closedir(&routinesDirHandle);
-            print_string_ascii((uint8_t *)"\rScanning directory done\r\n");
+            if(displayProgressEnabled)
+                print_string_ascii((uint8_t *)"\rScanning directory done\r\n");
             break;
         }
         if((routinesFileInfo.fattrib & AM_DIR) != 0) {
@@ -464,91 +471,104 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
         }
         numOfFiles++;
         sizeSum += routinesFileInfo.fsize;
-        uint16_t posXY = 255*256;
-        set_xy((uint8_t *)&posXY);
-        print_hex_byte((uint8_t *)&numOfFiles);
-        print_character_screen_code((uint8_t *)" ");
-        print_hex_word((uint8_t *)&sizeSum + 2);
-        print_hex_word((uint8_t *)&sizeSum);
+        if(displayProgressEnabled) {
+            uint16_t posXY = 255*256;
+            set_xy((uint8_t *)&posXY);
+            print_hex_byte((uint8_t *)&numOfFiles);
+            print_character_screen_code((uint8_t *)" ");
+            print_hex_word((uint8_t *)&sizeSum + 2);
+            print_hex_word((uint8_t *)&sizeSum);
+        }
     }
     uint32_t mappedSize = MIN(MAX(512*1024, 2*sizeSum), psram_size());
     if(mappedSize < sizeSum) {
-        print_string_ascii((uint8_t *)"Not enough PSRAM space..\r\n");
+        if(displayProgressEnabled)
+            print_string_ascii((uint8_t *)"Not enough PSRAM space..\r\n");
         return 131;
     }
-     
-    print_string_ascii((uint8_t *)"Formatting PSRAM... ");
+    if(displayProgressEnabled)
+        print_string_ascii((uint8_t *)"Formatting PSRAM... ");
 
     uint8_t result = psram_drive_init((mappedSize - 1) / 4096 + 1);
     if( result != 0 ) {
-        print_string_ascii((uint8_t *)"FAILEDs\r\n");
-        print_hex_byte(&result);
+        if(displayProgressEnabled) {
+            print_string_ascii((uint8_t *)"FAILEDs\r\n");
+            print_hex_byte(&result);
+        }
         return 132;
-    } else {
+    } else if(displayProgressEnabled) {
         print_string_ascii((uint8_t *)"OK\r\n");
     }
 
-    if(bufStart[0] == 0) {
-        res = f_opendir(&routinesDirHandle, "./");
-    } else {
-        res = f_opendir(&routinesDirHandle, (char *)bufStart);
-    }
+    res = f_opendir(&routinesDirHandle, sourceFolder);
+
     if(res!=0) {
-        print_string_ascii((uint8_t *)"2nd opendir failed");
+        if(displayProgressEnabled)
+            print_string_ascii((uint8_t *)"2nd opendir failed");
         return res;
     }
 
-    print_string_ascii((uint8_t *)"Copying files...\r\n");
+    if(displayProgressEnabled)
+        print_string_ascii((uint8_t *)"Copying files...\r\n");
+
     int prevLen = 0;
     while(res == FR_OK) {
         res = f_readdir(&routinesDirHandle, &routinesFileInfo);
         if(res!=FR_OK) {
             f_closedir(&routinesDirHandle);
-            print_string_ascii((uint8_t *)"\r\nread direntry failed\r\n");
+            if(displayProgressEnabled)
+                print_string_ascii((uint8_t *)"\r\nread direntry failed\r\n");
             return res;
         } 
         if(routinesFileInfo.fname[0] == 0) {
             f_closedir(&routinesDirHandle);
-            print_string_ascii((uint8_t *)"\rCaching directory done. \r\n");
+            if(displayProgressEnabled) {
+                print_string_ascii((uint8_t *)"\rCaching directory done. \r\n");
+                videoMode = videoModeSave;
+            }
             TVC_ROM[0x1810] = 1;
             TVC_ROM[0x1824] = 1;
-            videoMode = videoModeSave;
             break;
         }
         if((routinesFileInfo.fattrib & AM_DIR) != 0) {
             continue;
         }
 
-        uint16_t posXY = 255*256;
-        set_xy((uint8_t *)&posXY);
-        print_string_ascii((uint8_t *)(routinesFileInfo.fname));
-        int len = strlen(routinesFileInfo.fname);
-        int posX = screenTextPosX;
-        if(len<prevLen) {
-            for(int i=0; i<prevLen - len; i++) {
-                print_char_scr_code(' ');
-            }
-            screenTextPosX = posX;
+        if(displayProgressEnabled) {
+            uint16_t posXY = 255*256;
+            set_xy((uint8_t *)&posXY);
+            print_string_ascii((uint8_t *)(routinesFileInfo.fname));
         }
+        int len = strlen(routinesFileInfo.fname);
+        if(displayProgressEnabled) {
+            int posX = screenTextPosX;
+            if(len<prevLen) {
+                for(int i=0; i<prevLen - len; i++) {
+                    print_char_scr_code(' ');
+                }
+                screenTextPosX = posX;
+            }
+        }
+
         prevLen = len;
         char temp[256];
-        strcat(temp, "./");
-        if(bufStart[0] !=0 ) {
-            strcpy(temp, (char *)bufStart);
-            if(bufStart[len-1] != '/')
-                strcat(temp, "/");
-        }
+        strcpy(temp, sourceFolder);
+        if(temp[strlen(temp) - 1] != '/')
+            strcat(temp, "/");
+
         strcat(temp, routinesFileInfo.fname);
 
         res = f_open(&routinesFile, temp, FA_READ);
         if(res != FR_OK) {
-            print_string_ascii((uint8_t *)" failed to open");
+            if(displayProgressEnabled)
+                print_string_ascii((uint8_t *)" failed to open");
             continue;
         }
         str_tolower((char *)routinesFileInfo.fname);
         res = lfs_file_open(&lfs_psram, &routinesLFSFile, (char *)routinesFileInfo.fname, LFS_O_CREAT | LFS_O_WRONLY);
         if(res<0) {
-            print_string_ascii((uint8_t *)" failed to create");
+            if(displayProgressEnabled)
+                print_string_ascii((uint8_t *)" failed to create");
             continue;
         }
         unsigned int remainingSize = routinesFileInfo.fsize;
@@ -557,12 +577,14 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
             unsigned int bytesToRead = MIN(sizeof(transferBuffer), remainingSize);
             res = f_read(&routinesFile, transferBuffer, bytesToRead, &bytesRead);
             if(res != FR_OK) {
-                print_string_ascii((uint8_t *)" failed to read");
+                if(displayProgressEnabled)
+                    print_string_ascii((uint8_t *)" failed to read");
                 break;
             }
             res = lfs_file_write(&lfs_psram, &routinesLFSFile, transferBuffer, bytesRead);
             if(res < 0) {
-                print_string_ascii((uint8_t *)" failed to write");
+                if(displayProgressEnabled)
+                    print_string_ascii((uint8_t *)" failed to write");
                 break;
             }
             res = FR_OK;
@@ -571,6 +593,7 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
         }
         f_close(&routinesFile);
         lfs_file_close(&lfs_psram, &routinesLFSFile);
+        (*progress)++;
     }
     return res;
 */
@@ -1005,7 +1028,7 @@ uint8_t zx7Decompress(uint8_t *bufStart) {
     // long startTime = time_us_64();
     uint32_t decompressSize = decompress((unsigned char *)sourceAddress, (unsigned char *)destAddress);
 
-    *(uint32_t *)&bufStart[9] = decompressSize;
+    *(uint32_t *)&bufStart[6] = decompressSize;
 
     // uint64_t endTime = time_us_64();
     // uint32_t elapsedTime = (uint32_t)(endTime - startTime);
@@ -1114,6 +1137,21 @@ void draw_line_impl(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint8_t colo
     }
 }
 
+void draw_horizontal_line_impl(int16_t x1, int16_t x2, int16_t y, uint8_t color) {
+    if(x1 % 2) {
+        set_dotc_impl(x1, y, color);
+        x1++;
+    }
+    if((x2 % 2) == 0) {
+        set_dotc_impl(x2, y, color);
+        x2--;
+    }
+    if(x2>x1) {
+/*        memset(&TVC_RAM[functionBitmapBaseAddr + y * 128 + (x1 >> 1)], (color<<4) + color, (x2-x1 + 1) >> 1);*/
+    emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr + y * 128 + (x1 >> 1), (color<<4) + color, (x2-x1 + 1) >> 1);
+    }
+}
+
 uint8_t draw_line(uint8_t *bufStart) {
     int16_t x1 = *(int16_t *)&bufStart[0];
     int16_t y1 = *(int16_t *)&bufStart[2];
@@ -1139,9 +1177,11 @@ uint8_t draw_rectangle(uint8_t *bufStart) {
             (registerBitmapBaseAddr & 0x03) * 0x8000 : 
             (registerFunctionBitmapBase & 0x1f) * 0x8000;
     
-    draw_line_impl(x, y, x+w, y, penColor);
+    // draw_line_impl(x, y, x+w, y, penColor);
+    draw_horizontal_line_impl(x, x+w, y, penColor);
     draw_line_impl(x+w, y, x+w, y+h, penColor);
-    draw_line_impl(x+w, y+h, x, y+h, penColor);
+    // draw_line_impl(x+w, y+h, x, y+h, penColor);
+    draw_horizontal_line_impl(x, x+w, y+h, penColor);
     draw_line_impl(x, y+h, x, y, penColor);
     
     return 0;
@@ -1158,7 +1198,7 @@ uint8_t fill_rectangle(uint8_t *bufStart) {
             (registerFunctionBitmapBase & 0x1f) * 0x8000;
 
     for(uint8_t i=y; i<y+h; i++) {
-        draw_line_impl(x, i, x+w, i, penColor);
+        draw_horizontal_line_impl(x, x+w, i, penColor);
     }
     
     return 0;
@@ -1322,8 +1362,10 @@ void fill_ellipse_pixels(int16_t xc, int16_t yc, uint8_t x, uint8_t y, uint8_t c
     int16_t rightX = (xc + x < 256) ? (xc + x) : 255;
     int16_t topY = (yc >= y) ? (yc - y) : 0;
     int16_t bottomY = (yc + y < screenMaxY) ? (yc + y) : (screenMaxY - 1);
-    draw_line_impl(leftX, topY, rightX, topY, color);
-    draw_line_impl(leftX, bottomY, rightX, bottomY, color);
+    // draw_line_impl(leftX, topY, rightX, topY, color);
+    // draw_line_impl(leftX, bottomY, rightX, bottomY, color);
+    draw_horizontal_line_impl(leftX, rightX, topY, color);
+    draw_horizontal_line_impl(leftX, rightX, bottomY, color);
 }
 
 
@@ -1588,6 +1630,7 @@ uint8_t delete_psram_drive(__unused uint8_t *bufStart) {
         memset(psram_array, 0xff, len);
         psram_drive_initialized = false;
         free_psram_start = 0;
+        //TVC_ROM[0x1824] = 0;
     }
     
     return 0;
@@ -1744,6 +1787,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     // ensure null-terminated string
     inBuf[3+len] = 0;
     std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
+    printf("file open %s\n",fileName.c_str());
     int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
     
     if(res == 0) {
@@ -2166,7 +2210,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       {
         bufferStart[4+256] = attr;
         *(uint32_t *)&bufferStart[4+256+1] = fsize;
-        printf("read_dir OK: %s\n", entName.c_str());
+        //printf("read_dir OK: %s\n", entName.c_str());
       }
       else
       {
@@ -2552,6 +2596,9 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
             size = (*bufStart) + 1;
             size += bufStart[size] + 1;
             break;
+        case 0x86:
+            size = (*bufStart) + 2;
+            break;
     }
     return size;
 }
@@ -2579,12 +2626,12 @@ void init_routines() {
     setStructArrayElement(12, memory_move_full,              9);
     setStructArrayElement(13, memory_move_from_slow,         9);
     setStructArrayElement(14, memory_move_to_slow,           9);
-    setStructArrayElement(15, copy_dir_to_psram,             0x81);      // 15
+    setStructArrayElement(15, copy_dir_to_psram,             0x86);      // 15
     setStructArrayElement(16, replace_pixel_color,           8);
     setStructArrayElement(17, memory_move_chunks_from_block, 12);
     setStructArrayElement(18, memory_move_chunks,            12);
     setStructArrayElement(19, mirror_sprite_phase,           6);
-//    setStructArrayElement(20, zx7Decompress,                 6);      // 20
+//    setStructArrayElement(20, zx7Decompress,                 10);      // 20
     setStructArrayElement(21, get_pen_color,                 0);
     setStructArrayElement(22, set_pen_color,                 1);
     setStructArrayElement(23, get_dot_color,                 2);
