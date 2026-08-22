@@ -1788,7 +1788,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     inBuf[3+len] = 0;
     std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
     printf("file open %s\n",fileName.c_str());
-    int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
+    int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"rb",false);
     
     if(res == 0) {
 
@@ -1834,6 +1834,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     else
     {
       res = 0x80 + FR_NO_FILE;
+      printf("file open failed\n");
     }
     return (uint8_t)res;
 }
@@ -1933,6 +1934,11 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
         tvcRomBufferOut[2+i] = (uint8_t) c;
       else if (maxBufLen > 4+2+i)
         bufferStart[4+2+i] = (uint8_t) c;
+      else
+      {
+        printf("Read buf overflow!\n");
+        break;
+      }
     }
     *(uint16_t *)&bufferStart[4] = (uint16_t) i;
     if (tvcRomBufferOut)
