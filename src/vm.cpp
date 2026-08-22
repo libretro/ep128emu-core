@@ -1033,7 +1033,7 @@ namespace Ep128Emu {
     }
 
     // cd /___ Absolute path - remove current workdir
-    if (subDirName.c_str()[0] == '/')
+    if (subDirName.c_str()[0] == '/' || subDirName.c_str()[0] == '\\')
     {
       fileIOWorkingSubDir = "";
       if (subDirName.length() == 1)
@@ -1063,7 +1063,11 @@ namespace Ep128Emu {
           return -1;
         }
 
+#ifndef WIN32
         size_t slashPos = fileIOWorkingSubDir.rfind("/",fileIOWorkingSubDir.length()-2);
+#else
+        size_t slashPos = fileIOWorkingSubDir.rfind("\\",fileIOWorkingSubDir.length()-2);
+#endif
         // No slash - return to root
         if (slashPos >= fileIOWorkingSubDir.length() || slashPos == 0)
         {
@@ -1073,7 +1077,11 @@ namespace Ep128Emu {
         }
         fileIOWorkingSubDir = fileIOWorkingSubDir.substr(0, slashPos);
         subDirName = fileIOWorkingSubDir;
+#ifndef WIN32
         fileIOWorkingSubDir.append("/");
+#else
+        fileIOWorkingSubDir.append("\\");
+#endif
         return 0;
       }
     }
@@ -1083,7 +1091,11 @@ namespace Ep128Emu {
       {
         fileIOWorkingSubDir += subDirName;
         subDirName = fileIOWorkingSubDir;
+#ifndef WIN32
         fileIOWorkingSubDir.append("/");
+#else
+        fileIOWorkingSubDir.append("\\");
+#endif
         return 0;
       }
       else

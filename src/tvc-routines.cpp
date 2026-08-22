@@ -1801,7 +1801,11 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
         *(uint32_t *)&outBuf[4] = isCas ? (uint32_t) (emuVm->getLastFileSize() - 0x80) : (uint32_t) (emuVm->getLastFileSize());
 
         // Remove the full path from the result
+#ifndef WIN32
         size_t baseNamePos = fileName.rfind("/",fileName.length());
+#else
+        size_t baseNamePos = fileName.rfind("\\",fileName.length());
+#endif
         if (baseNamePos >= fileName.length())
         {
           outBuf[4+4] = (uint8_t) fileName.length();
