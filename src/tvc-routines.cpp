@@ -1792,9 +1792,9 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     
     if(res == 0) {
 
-        bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
+        bool isCas = (fileName.compare(fileName.length()-4, 4, ".cas") == 0) ? true : false;
         if (!isCas)
-          isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
+          isCas = (fileName.compare(fileName.length()-4, 4, ".CAS") == 0) ? true : false;
 
         // On success, store the file handle pointer back to bufferStart
         *(uint32_t *)&outBuf[0] = 1;
@@ -1951,8 +1951,6 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
     uint8_t* outBuf = bufferStart;
     if (tvcRomBufferIn)
       inBuf = tvcRomBufferIn;
-    if (tvcRomBufferOut)
-      outBuf = tvcRomBufferOut;
 
     uint32_t length = (*(uint32_t *)&inBuf[4]) & 0x00ffffff;
     uint32_t dstAddress = (*(uint32_t *)&inBuf[4+3]) & 0x00ffffff;
@@ -2002,7 +2000,9 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         break;
       emuMem->writeRaw(dstAddress+i, c);
     }
-    *(uint32_t *)&outBuf[4] = (uint32_t) i;
+    *(uint32_t *)&bufferStart[4] = (uint32_t) i;
+    if (tvcRomBufferOut)
+      *(uint32_t *)&tvcRomBufferOut[0] = (uint32_t) i;
     return 0;
 }
 
