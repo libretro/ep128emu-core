@@ -196,15 +196,15 @@ namespace TVC64 {
 
   inline void Memory::writeRaw(uint32_t addr, uint8_t value)
   {
-    uint8_t segment = uint8_t(addr >> 14);
-    if (!segmentROMTable[segment])
+    uint8_t segment = uint8_t((addr&0x3FFFFF) >> 14);
+    if (segmentTable[segment] && !segmentROMTable[segment])
       segmentTable[segment][addr & 0x3FFF] = value;
   }
 
   inline void Memory::memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value)
   {
-    if (len > 0xFFFFFFFF - startAddr)
-      len = 0xFFFFFFFF - startAddr;
+    if (len > 0x3FFFFF - startAddr)
+      len = 0x3FFFFF - startAddr;
     // Note: memsetRaw is not expected to be used for sdext, as it is not mapped to raw address space
     uint8_t startSegment = uint8_t(startAddr >> 14);
     uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
@@ -219,25 +219,79 @@ namespace TVC64 {
 
   inline void Memory::memmoveRaw(uint32_t dstAddr, uint32_t startAddr, uint16_t len)
   {
-    if (len > 0xFFFFFFFF - startAddr)
-      len = 0xFFFFFFFF - startAddr;
-    if (len > 0xFFFFFFFF - dstAddr)
-      len = 0xFFFFFFFF - dstAddr;
+    // Limit to the 4MiB total address space
+    if (len > 0x3FFFFF - startAddr)
+      len = 0x3FFFFF - startAddr;
+    if (len > 0x3FFFFF - dstAddr)
+      len = 0x3FFFFF - dstAddr;
     // Note: memmoveRaw is not expected to be used for sdext, as it is not mapped to raw address space
     uint8_t startSegment = uint8_t(startAddr >> 14);
     uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
     uint8_t startSegmentD = uint8_t(dstAddr >> 14);
     uint8_t endSegmentD   = uint8_t((dstAddr+len-1) >> 14);
-    if (startSegment == endSegment &&
-        startSegment == startSegmentD &&
-        startSegment == endSegmentD)
+    //printf("memmove  : %08x -> %08x %04x\n",startAddr,dstAddr,len);
+
+    if (dstAddr == startAddr || len == 0)
+      return;
+
+    if (dstAddr < startAddr)
     {
-      uint16_t memmoveSrcAddr = startAddr & 0x3FFF;
-      uint16_t memmoveDstAddr = dstAddr   & 0x3FFF;
-      std::memmove(segmentTable[startSegment]+memmoveSrcAddr,segmentTable[startSegment]+memmoveDstAddr,len);
+      while(len > 0)
+      {
+        uint16_t thisMoveLen = len;
+        uint16_t memmoveSrcAddr = startAddr & 0x3FFF;
+        uint16_t memmoveDstAddr = dstAddr   & 0x3FFF;
+
+        startSegment = uint8_t(startAddr >> 14);
+        startSegmentD = uint8_t(dstAddr >> 14);
+        if (startSegment != endSegment)
+        {
+          thisMoveLen = 0x4000 - memmoveSrcAddr;
+        }
+        endSegmentD = uint8_t((dstAddr+thisMoveLen-1) >> 14);
+        if (endSegmentD != startSegmentD)
+        {
+          thisMoveLen = 0x4000 - memmoveDstAddr;
+        }
+        //printf("submove 1: %02x::%04x -> %02x::%04x %04x\n",startSegment,memmoveSrcAddr,startSegmentD,memmoveDstAddr,thisMoveLen);
+        if (memmoveDstAddr + thisMoveLen > 0x4000 || memmoveSrcAddr + thisMoveLen > 0x4000)
+          printf("__________oversized move 2 \n");
+        else
+          std::memmove(segmentTable[startSegmentD]+memmoveDstAddr,segmentTable[startSegment]+memmoveSrcAddr,thisMoveLen);
+        startAddr += thisMoveLen;
+        dstAddr += thisMoveLen;
+        len -= thisMoveLen;
+      }
     }
-    // reverse order if required
-    // if (dstAddr > startAddr && dstAddr < startAddr + len)
+    else
+    {
+      while(len > 0)
+      {
+        uint16_t thisMoveLen = len;
+        uint16_t memmoveSrcEndAddr = (startAddr+len-1) & 0x3FFF;
+        uint16_t memmoveDstEndAddr = (dstAddr  +len-1) & 0x3FFF;
+
+        endSegment   = uint8_t((startAddr+len-1) >> 14);
+        if (startSegment != endSegment)
+        {
+          thisMoveLen = memmoveSrcEndAddr+1;
+        }
+        endSegmentD   = uint8_t((dstAddr+len-1            ) >> 14);
+        startSegmentD = uint8_t((dstAddr+len-1-thisMoveLen) >> 14);
+        if (endSegmentD != startSegmentD)
+        {
+          thisMoveLen = memmoveDstEndAddr+1;
+        }
+        //printf("submove 2: %02x::%04x -> %02x::%04x %04x/%04x\n",endSegment,memmoveSrcEndAddr,endSegmentD,memmoveDstEndAddr,thisMoveLen,len);
+        if (memmoveDstEndAddr+1 < thisMoveLen || memmoveSrcEndAddr+1 < thisMoveLen)
+        {
+          printf("__________oversized move 3 \n");
+        }
+        else
+          std::memmove(segmentTable[endSegmentD]+memmoveDstEndAddr+1-thisMoveLen,segmentTable[endSegment]+memmoveSrcEndAddr+1-thisMoveLen,thisMoveLen);
+        len -= thisMoveLen;
+      }
+    }
   }
 
   inline void Memory::writeROM(uint32_t addr, uint8_t value)

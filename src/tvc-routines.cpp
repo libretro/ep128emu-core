@@ -45,6 +45,7 @@ TVCString dirBuffer;
 TVCString currDir;
 uint8_t* tvcRomBufferIn  = NULL;
 uint8_t* tvcRomBufferOut = NULL;
+uint16_t maxBufLen;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -160,6 +161,7 @@ uint8_t print_hex_word(uint8_t* bufferStart) {
 }
 
 uint8_t print_string_screen_code(uint8_t* bufferStart) {
+    // TODO: obey maxBufLen
     while(*bufferStart) {
         print_character_screen_code((uint8_t *)(bufferStart));
         bufferStart++;
@@ -172,6 +174,7 @@ uint8_t accents[] =
          0xeb, 0xf1, 0xe2, 0xf9, 0xf7, 0xe3, 0xf8, 0xf3, 0xf2}; // capital
         // á,    é,    í,    ó,    ö,    ő,    ú,    ü,    ű
 uint8_t print_string_ascii(uint8_t* bufferStart) {
+    // TODO: obey maxBufLen
     uint8_t *str = bufferStart;
     while(*str) {
         if((*str >= 'A') && (*str <= (']') ) ) {
@@ -1705,7 +1708,10 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     if (tvcRomBufferIn)
       inBuf = tvcRomBufferIn;
     if (tvcRomBufferOut)
+    {
       outBuf = tvcRomBufferOut;
+      maxBufLen = 1536;
+    }
 
 /*    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
     TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting*/
@@ -1713,6 +1719,8 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     if(len == 0) {
         return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
     }
+    if (len + 2 > maxBufLen)
+      printf("WARN: too long param for segment, lenght %02x vs. max %04x\n", len+2, maxBufLen);
 /*    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
     memcpy(&TVC_ROM[0x1902], &bufferStart[2], (uint16_t)len + 1);
     FRESULT res = 0;
@@ -1736,22 +1744,37 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     // ensure null-terminated string
     inBuf[3+len] = 0;
     std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
-    bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
-    if (!isCas)
-      isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
-    
     int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"r",false);
-    // fileName may have changed
     
     if(res == 0) {
+
+        bool isCas = fileName.compare(fileName.length()-4, 4, ".cas");
+        if (!isCas)
+          isCas = fileName.compare(fileName.length()-4, 4, ".CAS");
+
         // On success, store the file handle pointer back to bufferStart
         *(uint32_t *)&outBuf[0] = 1;
         *(uint32_t *)&outBuf[4] = isCas ? (uint32_t) (emuVm->getLastFileSize() - 0x80) : (uint32_t) (emuVm->getLastFileSize());
-        outBuf[4+4] = (uint8_t) fileName.length();
-        for (int i=0; i<255 && fileName.c_str()[i]; i++) {
-          outBuf[4+4+1+i] = fileName.c_str()[i];
+
+        // Remove the full path from the result
+        size_t baseNamePos = fileName.rfind("/",fileName.length());
+        if (baseNamePos >= fileName.length())
+        {
+          outBuf[4+4] = (uint8_t) fileName.length();
+          baseNamePos = 0;
         }
-        outBuf[4+4+1+outBuf[4+4]] = '\0';
+        else
+        {
+          baseNamePos++;
+          outBuf[4+4] = (uint8_t) (fileName.length() - baseNamePos);
+        }
+        for (int i=baseNamePos; i<baseNamePos+255 && fileName.c_str()[i] && (i-baseNamePos+4+4+1) < maxBufLen; i++) {
+          outBuf[4+4+1+i-baseNamePos] = fileName.c_str()[i];
+        }
+        if (maxBufLen > 4+4+1+outBuf[4+4])
+          outBuf[4+4+1+outBuf[4+4]] = '\0';
+        else
+          outBuf[maxBufLen] = '\0';
         // CAS header skip
         if (isCas)
           std::fseek(routinesFile, long(0x80), SEEK_SET);
@@ -1810,6 +1833,9 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
       inBuf = tvcRomBufferIn;
 
     uint16_t length = *(uint16_t *)&inBuf[4];
+    if (length > 1534)
+      length = 1534;
+
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = *(uint16_t *)&bufferStart[4];
     
@@ -1855,13 +1881,14 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
       int c = std::fgetc(routinesFile);
       if (c == EOF)
         break;
-      bufferStart[4+2+i] = (uint8_t) c;
+      if (tvcRomBufferOut)
+        tvcRomBufferOut[2+i] = (uint8_t) c;
+      else if (maxBufLen > 4+2+i)
+        bufferStart[4+2+i] = (uint8_t) c;
     }
     *(uint16_t *)&bufferStart[4] = (uint16_t) i;
     if (tvcRomBufferOut)
-    {
-      memcpy(tvcRomBufferOut,&bufferStart[4],i+2);
-    }
+      *(uint16_t *)&tvcRomBufferOut[0] = (uint16_t) i;
     return 0;
 }
 
@@ -2139,6 +2166,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       {
         bufferStart[4+256] = attr;
         *(uint32_t *)&bufferStart[4+256+1] = fsize;
+        printf("read_dir OK: %s\n", entName.c_str());
       }
       else
       {
@@ -2500,7 +2528,7 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
 }
 
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
-/*    if((paramSize & 0x80) == 0)
+    if((paramSize & 0x80) == 0)
         return paramSize;
     uint size = 1;
     switch (paramSize) {
@@ -2525,8 +2553,7 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
             size += bufStart[size] + 1;
             break;
     }
-    return size;*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return size;
 }
 
 tvc_function_struct_t tvc256k_funct_struct_array[256];
