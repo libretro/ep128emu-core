@@ -2530,7 +2530,7 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
     if((paramSize & 0x80) == 0)
         return paramSize;
-    uint size = 1;
+    uint8_t size = 1;
     switch (paramSize) {
         case 0x80:  // C style, 0 terminated string
             while(*bufStart++)
