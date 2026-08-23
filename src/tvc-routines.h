@@ -56,6 +56,7 @@ extern TVCString currDir;
 extern uint8_t* tvcRomBufferIn;
 extern uint8_t* tvcRomBufferOut;
 extern uint16_t maxBufLen;
+extern uint8_t* bufferNextSegment;
 
 uint8_t clear_text_screen(uint8_t* bufferStart);
 uint8_t clear_bitmap_screen(uint8_t* bufferStart);

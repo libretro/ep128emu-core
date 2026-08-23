@@ -87,6 +87,7 @@ namespace TVC64 {
     inline void write(uint16_t addr, uint8_t value);
     inline void writeRaw(uint32_t addr, uint8_t value);
     inline void writeROM(uint32_t addr, uint8_t value);
+    inline uint8_t* memGetRaw(uint32_t addr);
     // set memory paging:
     //   bits 0 to 7:   port 02h:
     //          b0, b1:   unused
@@ -306,6 +307,15 @@ namespace TVC64 {
     uint8_t page = uint8_t(addr >> 13);
     if (pageAddressTableR[page])
       return &(pageAddressTableR[page][addr]);
+    return nullptr;
+  }
+
+  inline uint8_t* Memory::memGetRaw(uint32_t addr)
+  {
+    addr &= 0x3FFFFF;
+    uint8_t segment = uint8_t(addr >> 14);
+    if (segmentTable[segment])
+      return &(segmentTable[segment][addr & 0x3FFF]);
     return nullptr;
   }
 

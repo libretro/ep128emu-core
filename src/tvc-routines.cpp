@@ -46,6 +46,7 @@ TVCString currDir;
 uint8_t* tvcRomBufferIn  = NULL;
 uint8_t* tvcRomBufferOut = NULL;
 uint16_t maxBufLen;
+uint8_t* bufferNextSegment;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -1932,13 +1933,10 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
         break;
       if (tvcRomBufferOut)
         tvcRomBufferOut[2+i] = (uint8_t) c;
-      else if (maxBufLen > 4+2+i)
+      if (4+2+i < maxBufLen)
         bufferStart[4+2+i] = (uint8_t) c;
-      else
-      {
-        printf("Read buf overflow!\n");
-        break;
-      }
+      else if (bufferNextSegment)
+        bufferNextSegment[4+2+i-maxBufLen] = (uint8_t) c;
     }
     *(uint16_t *)&bufferStart[4] = (uint16_t) i;
     if (tvcRomBufferOut)
@@ -1960,6 +1958,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
       dstAddress += FASTRAMBASE;
 
     dstAddress &= 0x007FFFFF;
+    printf("read_file_dest dstAddr %06x\n",dstAddress);
 
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
@@ -2209,8 +2208,9 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       // Short name
       if (i>12) {
         for (int j=0; j<12; j++) {
-          bufferStart[4+256+1+4+j] = dirptr->d_name[j];
+          bufferStart[4+256+1+4+1+j] = dirptr->d_name[j];
         }
+        bufferStart[4+256+1+4+1] = 12;
       }
 
       std::string entName(reinterpret_cast< char const* >(dirptr->d_name));
@@ -2220,7 +2220,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       {
         bufferStart[4+256] = attr;
         *(uint32_t *)&bufferStart[4+256+1] = fsize;
-        //printf("read_dir OK: %s\n", entName.c_str());
+        printf("read_dir OK: %s\n", entName.c_str());
       }
       else
       {
