@@ -1999,9 +1999,17 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         break;
       emuMem->writeRaw(dstAddress+i, c);
     }
-    *(uint32_t *)&bufferStart[4] = (uint32_t) i;
+    uint16_t readBytesLow = i & 0xFFFF;
+    uint8_t readBytesHigh = (uint8_t)((i>>16) & 0xFF);
+    *(uint16_t *)&bufferStart[4] = readBytesLow;
+    bufferStart[6] = readBytesHigh;
+    //*(uint32_t *)&bufferStart[4] = (uint32_t) i;
     if (tvcRomBufferOut)
-      *(uint32_t *)&tvcRomBufferOut[0] = (uint32_t) i;
+    {
+      *(uint16_t *)&tvcRomBufferOut[0] = readBytesLow;
+      tvcRomBufferOut[2] = readBytesHigh;
+    }
+      //*(uint32_t *)&tvcRomBufferOut[0] = (uint32_t) i;
     return 0;
 }
 
