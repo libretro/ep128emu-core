@@ -23,7 +23,7 @@
 #include <stdbool.h>
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
-#define abs(x) ((x) < 0 ? (x) : (-(x)))
+#define abs(x) ((x) > 0 ? (x) : (-(x)))
 #define __unused
 #define FASTRAMBASE ((TVC256_FASTRAM_START_SEGMENT)<<14)
 #define SLOWRAMBASE ((TVC256_SLOWRAM_START_SEGMENT)<<14)
@@ -46,6 +46,7 @@ TVCString currDir;
 uint8_t* tvcRomBufferIn  = NULL;
 uint8_t* tvcRomBufferOut = NULL;
 uint16_t maxBufLen;
+uint8_t* bufferNextSegment;
 
 //uint8_t TVC_RAM[];
 //uint8_t TVC_ROM[];
@@ -907,14 +908,14 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
 }
 
 uint8_t reverse8BitOrder(uint8_t b) {
-    b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-    b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-    b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+    b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
+    b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
+    b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
     return b;
 }
 
 uint8_t reverseNibbles(uint8_t b) {
-    b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+    b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
     return b;
 }
 
@@ -1053,13 +1054,13 @@ void set_dotc_impl(uint8_t x, uint8_t y, uint8_t color) {
     uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
     offset += FASTRAMBASE;
 
-    if(x & 1) {
+    if(!(x & (uint8_t)1)) {
         // odd pixel, color is in lower 4 bits
-        emuMem->writeRaw(offset, emuMem->readRaw(offset) & 0xf0 | color);
+        emuMem->writeRaw(offset, (emuMem->readRaw(offset) & 0xf0) | color);
     } else {
         // even pixel, color is in higher 4 bits
         //TVC_RAM[offset] = (TVC_RAM[offset] & 0x0f) | (color << 4);
-        emuMem->writeRaw(offset, emuMem->readRaw(offset) & 0x0f | color << 4);
+        emuMem->writeRaw(offset, (emuMem->readRaw(offset) & 0x0f) | (color << 4));
     }
 }
 
@@ -1119,7 +1120,7 @@ void draw_line_impl(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint8_t colo
     while (true) {
         // draw pixel at (x1, y1) with the given color
         if((x1>=0) && (x1<256) && (y1>=0) && (y1<screenMaxY)) {
-            set_dotc_impl(x1, y1, color);
+            set_dotc_impl((uint8_t)x1, (uint8_t)y1, color);
         }
 
         if ((x1 == x2) && (y1 == y2))
@@ -1139,11 +1140,11 @@ void draw_line_impl(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint8_t colo
 
 void draw_horizontal_line_impl(int16_t x1, int16_t x2, int16_t y, uint8_t color) {
     if(x1 % 2) {
-        set_dotc_impl(x1, y, color);
+        set_dotc_impl((uint8_t)x1, (uint8_t)y, color);
         x1++;
     }
     if((x2 % 2) == 0) {
-        set_dotc_impl(x2, y, color);
+        set_dotc_impl((uint8_t)x2, (uint8_t)y, color);
         x2--;
     }
     if(x2>x1) {
@@ -1177,13 +1178,12 @@ uint8_t draw_rectangle(uint8_t *bufStart) {
             (registerBitmapBaseAddr & 0x03) * 0x8000 : 
             (registerFunctionBitmapBase & 0x1f) * 0x8000;
     
-    // draw_line_impl(x, y, x+w, y, penColor);
-    draw_horizontal_line_impl(x, x+w, y, penColor);
+     draw_line_impl(x, y, x+w, y, penColor);
+    //draw_horizontal_line_impl(x, (int16_t)(x+w), y, penColor);
     draw_line_impl(x+w, y, x+w, y+h, penColor);
-    // draw_line_impl(x+w, y+h, x, y+h, penColor);
-    draw_horizontal_line_impl(x, x+w, y+h, penColor);
+     draw_line_impl(x+w, y+h, x, y+h, penColor);
+    //draw_horizontal_line_impl(x, x+w, y+h, penColor);
     draw_line_impl(x, y+h, x, y, penColor);
-    
     return 0;
 }
 
@@ -1198,7 +1198,8 @@ uint8_t fill_rectangle(uint8_t *bufStart) {
             (registerFunctionBitmapBase & 0x1f) * 0x8000;
 
     for(uint8_t i=y; i<y+h; i++) {
-        draw_horizontal_line_impl(x, x+w, i, penColor);
+        //draw_horizontal_line_impl(x, x+w, i, penColor);
+        draw_line_impl(x,i,x+w,i,penColor);
     }
     
     return 0;
@@ -1269,28 +1270,28 @@ uint8_t scanline_flood_fill(uint8_t *bufStart) {
 
         // Elindulunk balra, amíg a cél színt találjuk
         int leftX = x;
-        while ((leftX >= 0) && (get_dot_color_impl(leftX, y) == target_color)) {
+        while ((leftX >= 0) && (get_dot_color_impl((uint8_t)leftX, y) == target_color)) {
             leftX--;
         }
         leftX++; // Visszalépés az utolsó érvényes pixelre
 
         // Elindulunk jobbra, amíg a cél színt találjuk
         int rightX = x;
-        while ((rightX < 256) && (get_dot_color_impl(rightX, y) == target_color)) {
+        while ((rightX < 256) && (get_dot_color_impl((uint8_t)rightX, y) == target_color)) {
             rightX++;
         }
         rightX--; // Visszalépés az utolsó érvényes pixelre
 
         // A megtalált vízszintes vonalszakasz kiszínezése
         for (int i = leftX; i <= rightX; i++) {
-            set_dotc_impl(i, y, new_color);
+            set_dotc_impl((uint8_t)i, (uint8_t)y, new_color);
         }
 
         // Felső sor ellenőrzése (y - 1)
         if (y > 0) {
             bool in_segment = false;
             for (int i = leftX; i <= rightX; i++) {
-                if (get_dot_color_impl(i, y - 1) == target_color) {
+                if (get_dot_color_impl((uint8_t)i, (uint8_t)y - 1) == target_color) {
                     if (!in_segment) {
                         // Ha megtelt a verem (extrém eset), menet közben növeljük a méretét
                         if (stack_pointer >= stack_capacity) {
@@ -1309,7 +1310,7 @@ uint8_t scanline_flood_fill(uint8_t *bufStart) {
         if (y < screenMaxY) {
             bool in_segment = false;
             for (int i = leftX; i <= rightX; i++) {
-                if (get_dot_color_impl(i, y + 1) == target_color) {
+                if (get_dot_color_impl((uint8_t)i, (uint8_t)y + 1) == target_color) {
                     if (!in_segment) {
                         if (stack_pointer >= stack_capacity) {
                             return 2;
@@ -1932,13 +1933,10 @@ uint8_t tvcfunc_read_file(uint8_t* bufferStart) {
         break;
       if (tvcRomBufferOut)
         tvcRomBufferOut[2+i] = (uint8_t) c;
-      else if (maxBufLen > 4+2+i)
+      if (4+2+i < maxBufLen)
         bufferStart[4+2+i] = (uint8_t) c;
-      else
-      {
-        printf("Read buf overflow!\n");
-        break;
-      }
+      else if (bufferNextSegment)
+        bufferNextSegment[4+2+i-maxBufLen] = (uint8_t) c;
     }
     *(uint16_t *)&bufferStart[4] = (uint16_t) i;
     if (tvcRomBufferOut)
@@ -1960,6 +1958,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
       dstAddress += FASTRAMBASE;
 
     dstAddress &= 0x007FFFFF;
+    printf("read_file_dest dstAddr %06x\n",dstAddress);
 
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
@@ -2000,9 +1999,17 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
         break;
       emuMem->writeRaw(dstAddress+i, c);
     }
-    *(uint32_t *)&bufferStart[4] = (uint32_t) i;
+    uint16_t readBytesLow = i & 0xFFFF;
+    uint8_t readBytesHigh = (uint8_t)((i>>16) & 0xFF);
+    *(uint16_t *)&bufferStart[4] = readBytesLow;
+    bufferStart[6] = readBytesHigh;
+    //*(uint32_t *)&bufferStart[4] = (uint32_t) i;
     if (tvcRomBufferOut)
-      *(uint32_t *)&tvcRomBufferOut[0] = (uint32_t) i;
+    {
+      *(uint16_t *)&tvcRomBufferOut[0] = readBytesLow;
+      tvcRomBufferOut[2] = readBytesHigh;
+    }
+      //*(uint32_t *)&tvcRomBufferOut[0] = (uint32_t) i;
     return 0;
 }
 
@@ -2209,8 +2216,9 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       // Short name
       if (i>12) {
         for (int j=0; j<12; j++) {
-          bufferStart[4+256+1+4+j] = dirptr->d_name[j];
+          bufferStart[4+256+1+4+1+j] = dirptr->d_name[j];
         }
+        bufferStart[4+256+1+4+1] = 12;
       }
 
       std::string entName(reinterpret_cast< char const* >(dirptr->d_name));
@@ -2220,7 +2228,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       {
         bufferStart[4+256] = attr;
         *(uint32_t *)&bufferStart[4+256+1] = fsize;
-        //printf("read_dir OK: %s\n", entName.c_str());
+        printf("read_dir OK: %s\n", entName.c_str());
       }
       else
       {

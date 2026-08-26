@@ -244,11 +244,44 @@ namespace Ep128 {
      TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
      TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
 
+     functionResultDelay = true;
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
-        uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
-        uint16_t maxBufLen = 0x4000-(bufferAddr & 0x3fff);
-        uint8_t* bufferStart = hostMem->memGet(bufferAddr);
+        uint32_t bufferAddr = /*0x8000 + */namedPortValues[REG_FUNCTION_PARAM_START]*128;
+        bufferAddr &= 0x3FFF;
+        uint16_t maxBufLen = 0x4000-(uint16_t)bufferAddr;
+
+        uint8_t bufferPage = 0;
+        // Memory pointer should point to fastram that is mapped to U2/U3, even if actual paging is different
+        if (namedPortValues[REG_FUNCTION_PARAM_START] < 128)
+        {
+          if (namedPortValues[REG_MEMORY_P2] < 0x10)
+            bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P2];
+          else if (namedPortValues[REG_MEMORY_P2] == 0x10)
+            bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P2_LOW];
+          else
+          {
+            lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+            return;
+          }
+        }
+        else
+        {
+          if (namedPortValues[REG_MEMORY_P3] < 0x10)
+            bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P3];
+          else if (namedPortValues[REG_MEMORY_P3] == 0x11)
+            bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P3_LOW];
+          else
+          {
+            lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+            return;
+          }
+        }
+
+        bufferAddr += bufferPage<<14;
+        //uint8_t* bufferStart = hostMem->memGet(bufferAddr);
+        uint8_t* bufferStart = hostMem->memGetRaw(bufferAddr);
+        uint8_t* bufferNextSegment = hostMem->memGetRaw((bufferAddr&0x3fc000) + 0x4000);
         uint8_t* realParams = bufferStart;
         TVC256::maxBufLen = maxBufLen;
 
@@ -259,30 +292,36 @@ namespace Ep128 {
         {
           TVC256::tvcRomBufferIn  = hostMem->memGet(0xD900);
           TVC256::tvcRomBufferOut = hostMem->memGet(0xDA00);
+          TVC256::bufferNextSegment = nullptr;
           realParams = TVC256::tvcRomBufferIn;
+          bufferAddr = 0x1900;
         }
         else
         {
           TVC256::tvcRomBufferIn  = NULL;
           TVC256::tvcRomBufferOut = NULL;
+          TVC256::bufferNextSegment = bufferNextSegment;
         }
 
-        /*printf("Func call: %02X params at %04x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        printf("Func call: %02X params at %06x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                funcCode,bufferAddr,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);*/
+               realParams[10],realParams[11],realParams[12],realParams[13]);
 
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         if (useIOMEM)
           realParams = TVC256::tvcRomBufferOut;
-        /*printf("Func res:  %02X          return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        printf("Func res:  %02X            return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);*/
-        functionResultDelay = true;
+               realParams[10],realParams[11],realParams[12],realParams[13]);
+     }
+     else
+     {
+       lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
      }
   }
   void SpriteExt::executeMultiFunction(uint8_t funcCount)
@@ -411,12 +450,18 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
        break;
        case REG_MEMORY_P2:
        case REG_MEMORY_P3:
-       case REG_MEMORY_MAP_8M_P2_LOW:
        case REG_MEMORY_MAP_8M_P2_HIGH:
-       case REG_MEMORY_MAP_8M_P3_LOW:
        case REG_MEMORY_MAP_8M_P3_HIGH:
        case REG_MEMORY_ROM_PAGE:
          namedPortValues[portAddr] = value;
+         break;
+       case REG_MEMORY_MAP_8M_P2_LOW:
+         namedPortValues[portAddr] = value;
+         namedPortValues[REG_MEMORY_P2] = 0x10;
+         break;
+       case REG_MEMORY_MAP_8M_P3_LOW:
+         namedPortValues[portAddr] = value;
+         namedPortValues[REG_MEMORY_P3] = 0x11;
          break;
        case REG_FUNCTION_EXECUTE:
          namedPortValues[REG_FUNCTION_EXECUTE] = value;
