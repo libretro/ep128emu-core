@@ -1788,7 +1788,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     // ensure null-terminated string
     inBuf[3+len] = 0;
     std::string fileName(reinterpret_cast< char const* >(&inBuf[3]));
-    printf("file open %s\n",fileName.c_str());
+    //printf("file open %s\n",fileName.c_str());
     int res = emuVm->openFileInWorkingDirectory(routinesFile, fileName,"rb",false);
     
     if(res == 0) {
@@ -1835,7 +1835,7 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
     else
     {
       res = 0x80 + FR_NO_FILE;
-      printf("file open failed\n");
+      //printf("file open failed\n");
     }
     return (uint8_t)res;
 }
@@ -1958,7 +1958,7 @@ uint8_t tvcfunc_read_file_dest(uint8_t* bufferStart) {
       dstAddress += FASTRAMBASE;
 
     dstAddress &= 0x007FFFFF;
-    printf("read_file_dest dstAddr %06x\n",dstAddress);
+    //printf("read_file_dest dstAddr %06x\n",dstAddress);
 
 /*    *(uint32_t *)&TVC_ROM[0x1900] = *(uint32_t *)&bufferStart[0];
     *(uint32_t *)&TVC_ROM[0x1904] = (*(uint32_t *)&bufferStart[4]) & 0x00ffffff;
@@ -2228,7 +2228,7 @@ uint8_t tvcfunc_read_dir(uint8_t* bufferStart) {
       {
         bufferStart[4+256] = attr;
         *(uint32_t *)&bufferStart[4+256+1] = fsize;
-        printf("read_dir OK: %s\n", entName.c_str());
+        //printf("read_dir OK: %s\n", entName.c_str());
       }
       else
       {

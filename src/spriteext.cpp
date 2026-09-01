@@ -50,10 +50,7 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation fix for non-working files (yiearkf, saboteur2 etc.)
    - tvcfileio2 - file access via rst 30h - probably not needed
-   - fix santa cap bitmap
-   - remove nonstd init ram, move into demo source
 
 */
 
@@ -303,21 +300,21 @@ namespace Ep128 {
           TVC256::bufferNextSegment = bufferNextSegment;
         }
 
-        printf("Func call: %02X params at %06x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func call: %02X params at %06x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                funcCode,bufferAddr,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
 
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         if (useIOMEM)
           realParams = TVC256::tvcRomBufferOut;
-        printf("Func res:  %02X            return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func res:  %02X            return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
      }
      else
      {
