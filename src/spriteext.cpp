@@ -50,10 +50,7 @@
    TVC256++ others:
    - Delay for slow RAM paging
    - Extend slow RAM to the real 8 MB instead of 2
-   - SID emulation fix for non-working files (yiearkf, saboteur2 etc.)
    - tvcfileio2 - file access via rst 30h - probably not needed
-   - fix santa cap bitmap
-   - remove nonstd init ram, move into demo source
 
 */
 
@@ -303,21 +300,21 @@ namespace Ep128 {
           TVC256::bufferNextSegment = bufferNextSegment;
         }
 
-        printf("Func call: %02X params at %06x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func call: %02X params at %06x, val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                funcCode,bufferAddr,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
 
 
         lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         if (useIOMEM)
           realParams = TVC256::tvcRomBufferOut;
-        printf("Func res:  %02X            return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        /*printf("Func res:  %02X            return val %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                lastFunctionResult,
                realParams[0],realParams[1],realParams[2],realParams[3],realParams[4],realParams[5],
                realParams[6],realParams[7],realParams[8],realParams[9],
-               realParams[10],realParams[11],realParams[12],realParams[13]);
+               realParams[10],realParams[11],realParams[12],realParams[13]);*/
      }
      else
      {
@@ -710,22 +707,22 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         uint32_t baseAddr = 
               ((TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_SCREEN_BITMAP_BASE_ADDR]*2)<<14) + 
               (curLine - scrollY - SPRITEEXT_FIRST_LINE) * 128 + currSlot*4;
-        buf[ 0] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0x0F)     ), buf[ 0], &backgr_active_pixels,  0);
-        buf[ 1] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0x0F)     ), buf[ 1], &backgr_active_pixels,  1);
-        buf[ 2] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 2], &backgr_active_pixels,  2);
-        buf[ 3] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 3], &backgr_active_pixels,  3);
-        buf[ 4] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 4], &backgr_active_pixels,  4);
-        buf[ 5] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 5], &backgr_active_pixels,  5);
-        buf[ 6] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 6], &backgr_active_pixels,  6);
-        buf[ 7] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 7], &backgr_active_pixels,  7);
-        buf[ 8] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 8], &backgr_active_pixels,  8);
-        buf[ 9] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0x0F)     ), buf[ 9], &backgr_active_pixels,  9);
-        buf[10] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[10], &backgr_active_pixels, 10);
-        buf[11] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[11], &backgr_active_pixels, 11);
-        buf[12] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0x0F)     ), buf[12], &backgr_active_pixels, 12);
-        buf[13] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0x0F)     ), buf[13], &backgr_active_pixels, 13);
-        buf[14] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[14], &backgr_active_pixels, 14);
-        buf[15] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[15], &backgr_active_pixels, 15);
+        buf[ 0] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 0], &backgr_active_pixels,  0);
+        buf[ 1] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0xF0) >> 4), buf[ 1], &backgr_active_pixels,  1);
+        buf[ 2] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0x0F)     ), buf[ 2], &backgr_active_pixels,  2);
+        buf[ 3] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr)     & 0x0F)     ), buf[ 3], &backgr_active_pixels,  3);
+        buf[ 4] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 4], &backgr_active_pixels,  4);
+        buf[ 5] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0xF0) >> 4), buf[ 5], &backgr_active_pixels,  5);
+        buf[ 6] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 6], &backgr_active_pixels,  6);
+        buf[ 7] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 1) & 0x0F)     ), buf[ 7], &backgr_active_pixels,  7);
+        buf[ 8] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[ 8], &backgr_active_pixels,  8);
+        buf[ 9] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0xF0) >> 4), buf[ 9], &backgr_active_pixels,  9);
+        buf[10] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0x0F)     ), buf[10], &backgr_active_pixels, 10);
+        buf[11] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 2) & 0x0F)     ), buf[11], &backgr_active_pixels, 11);
+        buf[12] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[12], &backgr_active_pixels, 12);
+        buf[13] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0xF0) >> 4), buf[13], &backgr_active_pixels, 13);
+        buf[14] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0x0F)     ), buf[14], &backgr_active_pixels, 14);
+        buf[15] = i4ToTVCRGB_coll(((hostMem->readRaw(baseAddr + 3) & 0x0F)     ), buf[15], &backgr_active_pixels, 15);
      }
      // 2-color char mode: char value points to font definition, if bit is set then use color map
      else if (namedPortValues[REG_SCREEN_VIDEOMODE] == REG_SCREEN_VIDEOMODE_CHAR2)
