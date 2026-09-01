@@ -1053,10 +1053,9 @@ void set_dotc_impl(uint8_t x, uint8_t y, uint8_t color) {
     // draw pixel at (x, y) with the given color
     uint32_t offset = functionBitmapBaseAddr + y * 128 + (x >> 1);
     offset += FASTRAMBASE;
-
-    // TODO: why must this be reversed compared to the original, to work right??
-    if(!(x & (uint8_t)1)) {
+    if(x & 1) {
         // odd pixel, color is in lower 4 bits
+        //TVC_RAM[offset] = (TVC_RAM[offset] & 0xf0) | color;
         emuMem->writeRaw(offset, (emuMem->readRaw(offset) & 0xf0) | color);
     } else {
         // even pixel, color is in higher 4 bits
