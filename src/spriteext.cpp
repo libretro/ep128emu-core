@@ -214,7 +214,7 @@ namespace Ep128 {
     TVC256::currDir.len = 1;
     TVC256::currDir.str[0]   = '/';
     TVC256::currDir.str[1]   = 0;
-    TVC256::currDir.str[255] = 0;
+    TVC256::currDir.str[254] = 0;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -256,6 +256,8 @@ namespace Ep128 {
             bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P2];
           else if (namedPortValues[REG_MEMORY_P2] == 0x10)
             bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P2_LOW];
+          else if (namedPortValues[REG_MEMORY_P2] == 0xFF)
+            bufferPage = 0xFA; // original U2 - this results in error in real HW
           else
           {
             lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
@@ -268,6 +270,8 @@ namespace Ep128 {
             bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P3];
           else if (namedPortValues[REG_MEMORY_P3] == 0x11)
             bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P3_LOW];
+          else if (namedPortValues[REG_MEMORY_P3] == 0xFF)
+            bufferPage = 0xFB; // original U3 - this results in error in real HW
           else
           {
             lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
