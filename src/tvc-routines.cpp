@@ -21,6 +21,7 @@
 //#include "hardware/clocks.h"
 //#include "lfs.h"
 #include <stdbool.h>
+#include <math.h>
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define abs(x) ((x) > 0 ? (x) : (-(x)))
@@ -2589,6 +2590,347 @@ uint8_t tvcfunc_unmount_dsk(__unused uint8_t *bufferStart) {
     return 0xEF;
 }
 
+tvc_function_struct_t tvc256k_funct_struct_array[256];
+
+void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
+    tvc256k_funct_struct_array[idx] = (tvc_function_struct_t){.func = funct, .param_size = sizeOfParam};
+}
+
+operation_stack_element_t operation_stack[16];
+uint8_t opst_pos = 0;
+
+operation_stack_element_t* pop_opstack() {
+    if(opst_pos!=0) {
+        return &operation_stack[--opst_pos];
+    } else {
+        return NULL;
+    }
+}
+
+operation_stack_element_t *get_next_opstack_element() {
+    return &operation_stack[opst_pos];
+}
+
+uint8_t *math_expr_poi;
+float mathConstValues[] = {
+    [CONST_2PI - 0x80] = M_PI*2,
+    [CONST_PI - 0x80] = M_PI,
+    [CONST_PI2 - 0x80] = M_PI_2,
+    [CONST_0_001 - 0x80] = 0.001f,
+    [CONST_0_01 - 0x80]  = 0.01f,
+    [CONST_0_1 - 0x80]   = 0.1f,
+    [CONST_1 - 0x80]     = 1.0f,
+    [CONST_10 - 0x80]    = 10.0f,
+    [CONST_100 - 0x80]   = 100.0f,
+    [CONST_1000 - 0x80]  = 1000.0f,
+};
+
+uint8_t math_type_sizes[256];
+
+bool parse_next_param(operation_stack_element_t *paramValue) {
+    int32_t shift = 0;
+    int8_t pw;
+    uint8_t *p;
+    double d;
+    switch (*math_expr_poi) {
+        case FINISH:
+        case ADD:
+        case SUB:
+        case MUL:
+        case DIV:
+        case MAX:
+        case MIN:
+        case SQRT:
+        case ABS:
+        case SIN:
+        case COS:
+        case TAN:
+        case TOINT:
+        case TOFLOAT:
+        case ROUND:
+            paramValue->type = (OP_OR_PTYPES)*math_expr_poi;
+            paramValue->value.vali = 0;
+            shift = (*math_expr_poi == 0)?0:1;
+            break;
+        case UINT8:
+            paramValue->type = UINT8;
+            paramValue->value.vali = *(math_expr_poi+1);
+            shift = 2;
+            break;
+        case INT16:
+            paramValue->type = INT16;
+            paramValue->value.vali = *(int16_t *)(math_expr_poi + 1);
+            shift = 3;
+            break;
+        case INT32:
+            paramValue->type = INT32;
+            paramValue->value.vali = *(int32_t *)(math_expr_poi + 1);
+            shift = 5;
+            break;
+        case TVCFLOAT:
+            paramValue->type = FLOAT;
+            d = 0.0;
+            p = math_expr_poi+1;
+            for(int i=0; i<5; i++, p++) {
+                d = (d/10.0) + (*p & 0x0f);
+                d = (d/10.0) + ((*p & 0xf0)>>4);
+            }
+            if(*p & 0x80)
+                d = -1.0 * d;
+            
+            pw = (*p & 0x7f) - 0x40;
+            for(int i=0; i<abs(pw); i++) {
+                if(pw>0) {
+                    d *= 10.0;
+                } else {
+                    d /= 10.0;
+                }
+            }
+            
+            paramValue->value.valf = (float)d;
+            shift = 7;
+            break;
+        case FLOAT:
+            paramValue->type = FLOAT;
+            paramValue->value.valf = *(float *)(math_expr_poi + 1);
+            shift = sizeof(float) + 1;
+            break;
+        case CONST_2PI:
+        case CONST_PI:
+        case CONST_PI2:
+        case CONST_0_001:
+        case CONST_0_01:
+        case CONST_0_1:
+        case CONST_1:
+        case CONST_10:
+        case CONST_100:
+        case CONST_1000:
+            paramValue->type = FLOAT;
+            paramValue->value.valf = mathConstValues[*math_expr_poi - 0x80];
+            shift = 1;
+            break;
+        default:
+            shift = -1;
+    }
+    math_expr_poi+=shift;
+    return shift!=-1;
+}
+
+int8_t evaluate_math_impl() {
+    operation_stack_element_t *nextItem;
+    operation_stack_element_t *val1;
+    operation_stack_element_t *val2;
+    do {
+        nextItem = get_next_opstack_element();
+        if(!parse_next_param(nextItem))
+            return -1;
+
+        uint8_t type = nextItem->type;
+        if(nextItem->type == FINISH) {
+            return 0;
+        }
+        
+        if((type >=ABS) && (type < UINT8)) {    // 1 operand operation is selected
+            val1 = pop_opstack();
+            if(val1 == NULL) {
+                return -2;
+            }
+            switch(type) {
+                case ABS:
+                    if(val1->type == FLOAT) {
+                        val1->value.valf = val1->value.valf >= 0 ? val1->value.valf : -val1->value.valf;
+                    } else {
+                        val1->value.vali = abs(val1->value.vali);
+                    }
+                    break;
+                case SQRT:
+                    val1->value.valf = sqrtf( val1->type == FLOAT ? 
+                                                val1->value.valf : 
+                                                val1->value.vali );
+                    val1->type = FLOAT;
+                    break;
+                case SIN:
+                    if(val1->type!=FLOAT)
+                        return -3;
+                    val1->value.valf = sinf(val1->value.valf);
+                    break;
+                case COS:
+                    if(val1->type!=FLOAT)
+                        return -4;
+                    val1->value.valf = cosf(val1->value.valf);
+                    break;
+                case TAN:
+                    if(val1->type!=FLOAT)
+                        return -5;
+                    val1->value.valf = tanf(val1->value.valf);
+                    break;
+                case TOINT:
+                    if(val1->type!=FLOAT)
+                        return -6;
+                    val1->value.vali = (int)val1->value.valf;
+                    val1->type = INT32;
+                    break;
+                case TOFLOAT:
+                    if(val1->type==FLOAT)
+                        return -7;
+                    val1->value.valf = (float)val1->value.vali;
+                    val1->type = FLOAT;
+                    break;
+                case ROUND:
+                    if(val1->type!=FLOAT)
+                        break;
+                    val1->value.vali = (int)roundf(val1->value.valf);
+                    val1->type = INT32;
+                    break;
+                default:
+                    return -8;
+            }
+            opst_pos++; // push back val1
+        } else if (type<ABS) {
+            val2 = pop_opstack();
+            val1 = pop_opstack();
+            if((val1 == NULL) || (val2 == NULL)) {
+                return -9;
+            }
+            
+            switch(type) {
+                case ADD:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = (val1->type == FLOAT ? val1->value.valf :  (float)val1->value.vali) + 
+                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT;
+                        val1->value.valf = result;
+                    } else {
+                        int32_t result = (int32_t)val1->value.vali + (int32_t)val2->value.vali;
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                        val1->value.vali = result;
+                    }
+                    break;
+                case SUB:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) -
+                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT;
+                        val1->value.valf = result;
+                    } else {
+                        int32_t result = (int32_t)val1->value.vali - (int32_t)val2->value.vali;
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                        val1->value.vali = result;
+                    }
+                    break;
+                case MUL:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) *
+                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT;
+                        val1->value.valf = result;
+                    } else {
+                        int32_t result = (int32_t)val1->value.vali * (int32_t)val2->value.vali;
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                        val1->value.vali = result;
+                    }
+                    break;
+                case DIV:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) /
+                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT;
+                        val1->value.valf = result;
+                    } else {
+                        val1->value.vali = (int32_t)val1->value.vali / (int32_t)val2->value.vali;
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                    }
+                    break;
+                case MIN:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = fminf((val1->type == FLOAT ? val1->value.valf : val1->value.vali),
+                                             (val2->type == FLOAT ? val2->value.valf : val2->value.vali));
+
+                        val1->value.valf = result;
+                        val1->type = FLOAT;
+                    } else {
+                        int32_t result = MIN((uint32_t)val1->value.vali,(uint32_t)val2->value.vali);
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                        val1->value.vali = result;
+                    }
+                    break;
+                case MAX:
+                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
+                        float result = fmaxf((val1->type == FLOAT ? val1->value.valf:val1->value.vali),
+                                             (val2->type == FLOAT ? val2->value.valf:val2->value.vali));
+
+                        val1->value.valf = result;
+                        val1->type = FLOAT;
+                    } else {
+                        int32_t result = MAX((uint32_t)val1->value.vali, (uint32_t)val2->value.vali);
+                        if((val1->type == INT32) || (val2->type == INT32)) {
+                            val1->type = INT32;
+                        } else if((val1->type == INT16) || (val2->type == INT16)) {
+                            val1->type = INT16;
+                        }
+                        val1->value.vali = result;
+                    }
+                    break;
+                default:
+                    return -10;
+            }
+            opst_pos++; // push back val
+        } else if(((type>=UINT8) && (type<=FLOAT)) ||
+                  ((type>=CONST_2PI) && (type<=CONST_0_001))) {
+            opst_pos++; // push parsed item 
+        }
+    } while(true);
+}
+
+uint8_t evaluate_math_expression(uint8_t* bufStart) {
+    math_expr_poi = bufStart;
+    opst_pos = 0;
+
+    int8_t retVal = evaluate_math_impl();
+    if((retVal<0)||(opst_pos<1)) {
+        return -retVal;
+    } else {
+        uint8_t type = operation_stack[--opst_pos].type;
+        *bufStart = type;
+        switch(type) {
+            case UINT8:
+                *(bufStart + 1) = (uint8_t)operation_stack[0].value.vali;
+                break;
+            case INT16:
+                *(int16_t *)(bufStart + 1) = (uint16_t)operation_stack[0].value.vali;
+                break;
+            case INT32:
+                *(int32_t *)(bufStart + 1) = operation_stack[0].value.vali;
+                break;
+            case FLOAT:
+                *(float *)(bufStart + 1) = operation_stack[0].value.valf;
+                break;
+        }
+    }
+
+    return 0;
+}
+
 uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
     if((paramSize & 0x80) == 0)
         return paramSize;
@@ -2617,16 +2959,23 @@ uint8_t getFunctionParamSize(uint8_t *bufStart, uint8_t paramSize) {
         case 0x86:
             size = (*bufStart) + 2;
             break;
+        case 0x87: // math expression size, min 5
+            uint8_t *p = bufStart;
+            while(*p) {
+                uint8_t s = 0;
+                if(*p <= CONST_1000)
+                    s = math_type_sizes[*p];
+                if(s==0)
+                    break;
+                size += s;
+                p += s;
+            }
+            if(size<5)
+                size = 5;
+            break;
     }
     return size;
 }
-
-tvc_function_struct_t tvc256k_funct_struct_array[256];
-
-void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
-    tvc256k_funct_struct_array[idx] = (tvc_function_struct_t){.func = funct, .param_size = sizeOfParam};
-}
-
 
 void init_routines() {
     setStructArrayElement( 0, clear_text_screen,             0);
@@ -2667,6 +3016,7 @@ void init_routines() {
     setStructArrayElement(34, create_psram_drive,            2);
     setStructArrayElement(35, get_first_usable_psram_pos,    0);
     setStructArrayElement(36, delete_psram_drive,            0);
+    setStructArrayElement(37, evaluate_math_expression,      0x87);
 
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);
@@ -2689,5 +3039,37 @@ void init_routines() {
     setStructArrayElement(128+MSC_UMOUNT_DSK,   tvcfunc_unmount_dsk,     0);
 
     init_bitmap_byte_masks();
+
+    math_type_sizes[FINISH] = 1;
+    math_type_sizes[ADD] = 1;
+    math_type_sizes[SUB] = 1;
+    math_type_sizes[MUL] = 1;
+    math_type_sizes[DIV] = 1;
+    math_type_sizes[MAX] = 1;
+    math_type_sizes[MIN] = 1;
+    math_type_sizes[ABS] = 1;
+    math_type_sizes[SQRT] = 1;
+    math_type_sizes[SIN] = 1;
+    math_type_sizes[COS] = 1;
+    math_type_sizes[TAN] = 1;
+    math_type_sizes[TOINT] = 1;
+    math_type_sizes[TOFLOAT] = 1;
+    math_type_sizes[ROUND] = 1;
+    math_type_sizes[UINT8] = 2;
+    math_type_sizes[INT16] = 3;
+    math_type_sizes[INT32] = 5;
+    math_type_sizes[TVCFLOAT] = 7;
+    math_type_sizes[FLOAT] = 5;
+    math_type_sizes[CONST_2PI] = 1;
+    math_type_sizes[CONST_PI] = 1;
+    math_type_sizes[CONST_PI2] = 1;
+    math_type_sizes[CONST_0_001] = 1;
+    math_type_sizes[CONST_0_01] = 1;
+    math_type_sizes[CONST_0_1] = 1;
+    math_type_sizes[CONST_1] = 1;
+    math_type_sizes[CONST_10] = 1;
+    math_type_sizes[CONST_100] = 1;
+    math_type_sizes[CONST_1000] = 1;
+
 }
 }
