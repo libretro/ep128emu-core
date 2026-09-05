@@ -41,6 +41,52 @@ typedef struct {
     uint8_t str[255];
 } TVCString;
 
+typedef enum {
+    FINISH = 0,
+    // operations, 2 ops
+    ADD,
+    SUB,
+    MUL,
+    DIV,
+    MAX,
+    MIN,
+    // operations, 1 op
+    ABS,
+    SQRT,
+    SIN,
+    COS,
+    TAN,
+    TOINT,
+    TOFLOAT,
+    ROUND,
+    // data types
+    UINT8 = 0x10,
+    INT16,
+    INT32,
+    TVCFLOAT,
+    FLOAT,
+    CONST_2PI = 0x80,
+    CONST_PI,
+    CONST_PI2,
+    CONST_0_001,
+    CONST_0_01,
+    CONST_0_1,
+    CONST_1,
+    CONST_10,
+    CONST_100,
+    CONST_1000
+} OP_OR_PTYPES;
+
+typedef union value {
+    int32_t vali;
+    float valf;
+} values_t;
+
+typedef struct{
+    OP_OR_PTYPES type;
+    values_t value;
+} operation_stack_element_t;
+
 namespace TVC256 {
 
 extern uint8_t registerScreenBaseAddr;
