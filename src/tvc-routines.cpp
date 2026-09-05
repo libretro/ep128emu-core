@@ -2652,23 +2652,23 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
             paramValue->value.vali = 0;
             shift = (*math_expr_poi == 0)?0:1;
             break;
-        case UINT8:
-            paramValue->type = UINT8;
+        case UINT8__:
+            paramValue->type = UINT8__;
             paramValue->value.vali = *(math_expr_poi+1);
             shift = 2;
             break;
-        case INT16:
-            paramValue->type = INT16;
+        case INT16__:
+            paramValue->type = INT16__;
             paramValue->value.vali = *(int16_t *)(math_expr_poi + 1);
             shift = 3;
             break;
-        case INT32:
-            paramValue->type = INT32;
+        case INT32__:
+            paramValue->type = INT32__;
             paramValue->value.vali = *(int32_t *)(math_expr_poi + 1);
             shift = 5;
             break;
         case TVCFLOAT:
-            paramValue->type = FLOAT;
+            paramValue->type = FLOAT__;
             d = 0.0;
             p = math_expr_poi+1;
             for(int i=0; i<5; i++, p++) {
@@ -2690,8 +2690,8 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
             paramValue->value.valf = (float)d;
             shift = 7;
             break;
-        case FLOAT:
-            paramValue->type = FLOAT;
+        case FLOAT__:
+            paramValue->type = FLOAT__;
             paramValue->value.valf = *(float *)(math_expr_poi + 1);
             shift = sizeof(float) + 1;
             break;
@@ -2705,7 +2705,7 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
         case CONST_10:
         case CONST_100:
         case CONST_1000:
-            paramValue->type = FLOAT;
+            paramValue->type = FLOAT__;
             paramValue->value.valf = mathConstValues[*math_expr_poi - 0x80];
             shift = 1;
             break;
@@ -2730,57 +2730,57 @@ int8_t evaluate_math_impl() {
             return 0;
         }
         
-        if((type >=ABS) && (type < UINT8)) {    // 1 operand operation is selected
+        if((type >=ABS) && (type < UINT8__)) {    // 1 operand operation is selected
             val1 = pop_opstack();
             if(val1 == NULL) {
                 return -2;
             }
             switch(type) {
                 case ABS:
-                    if(val1->type == FLOAT) {
+                    if(val1->type == FLOAT__) {
                         val1->value.valf = val1->value.valf >= 0 ? val1->value.valf : -val1->value.valf;
                     } else {
                         val1->value.vali = abs(val1->value.vali);
                     }
                     break;
                 case SQRT:
-                    val1->value.valf = sqrtf( val1->type == FLOAT ? 
+                    val1->value.valf = sqrtf( val1->type == FLOAT__ ? 
                                                 val1->value.valf : 
                                                 val1->value.vali );
-                    val1->type = FLOAT;
+                    val1->type = FLOAT__;
                     break;
                 case SIN:
-                    if(val1->type!=FLOAT)
+                    if(val1->type!=FLOAT__)
                         return -3;
                     val1->value.valf = sinf(val1->value.valf);
                     break;
                 case COS:
-                    if(val1->type!=FLOAT)
+                    if(val1->type!=FLOAT__)
                         return -4;
                     val1->value.valf = cosf(val1->value.valf);
                     break;
                 case TAN:
-                    if(val1->type!=FLOAT)
+                    if(val1->type!=FLOAT__)
                         return -5;
                     val1->value.valf = tanf(val1->value.valf);
                     break;
                 case TOINT:
-                    if(val1->type!=FLOAT)
+                    if(val1->type!=FLOAT__)
                         return -6;
                     val1->value.vali = (int)val1->value.valf;
-                    val1->type = INT32;
+                    val1->type = INT32__;
                     break;
                 case TOFLOAT:
-                    if(val1->type==FLOAT)
+                    if(val1->type==FLOAT__)
                         return -7;
                     val1->value.valf = (float)val1->value.vali;
-                    val1->type = FLOAT;
+                    val1->type = FLOAT__;
                     break;
                 case ROUND:
-                    if(val1->type!=FLOAT)
+                    if(val1->type!=FLOAT__)
                         break;
                     val1->value.vali = (int)roundf(val1->value.valf);
-                    val1->type = INT32;
+                    val1->type = INT32__;
                     break;
                 default:
                     return -8;
@@ -2795,98 +2795,98 @@ int8_t evaluate_math_impl() {
             
             switch(type) {
                 case ADD:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = (val1->type == FLOAT ? val1->value.valf :  (float)val1->value.vali) + 
-                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT;
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = (val1->type == FLOAT__ ? val1->value.valf :  (float)val1->value.vali) + 
+                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT__;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali + (int32_t)val2->value.vali;
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case SUB:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) -
-                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT;
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) -
+                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT__;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali - (int32_t)val2->value.vali;
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case MUL:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) *
-                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT;
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) *
+                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT__;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali * (int32_t)val2->value.vali;
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case DIV:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = (val1->type == FLOAT ? val1->value.valf  : (float)val1->value.vali) /
-                                        (val2->type == FLOAT ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT;
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) /
+                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = FLOAT__;
                         val1->value.valf = result;
                     } else {
                         val1->value.vali = (int32_t)val1->value.vali / (int32_t)val2->value.vali;
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                     }
                     break;
                 case MIN:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = fminf((val1->type == FLOAT ? val1->value.valf : val1->value.vali),
-                                             (val2->type == FLOAT ? val2->value.valf : val2->value.vali));
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = fminf((val1->type == FLOAT__ ? val1->value.valf : val1->value.vali),
+                                             (val2->type == FLOAT__ ? val2->value.valf : val2->value.vali));
 
                         val1->value.valf = result;
-                        val1->type = FLOAT;
+                        val1->type = FLOAT__;
                     } else {
                         int32_t result = MIN((uint32_t)val1->value.vali,(uint32_t)val2->value.vali);
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case MAX:
-                    if((val1->type == FLOAT) || (val2->type == FLOAT)) {
-                        float result = fmaxf((val1->type == FLOAT ? val1->value.valf:val1->value.vali),
-                                             (val2->type == FLOAT ? val2->value.valf:val2->value.vali));
+                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
+                        float result = fmaxf((val1->type == FLOAT__ ? val1->value.valf:val1->value.vali),
+                                             (val2->type == FLOAT__ ? val2->value.valf:val2->value.vali));
 
                         val1->value.valf = result;
-                        val1->type = FLOAT;
+                        val1->type = FLOAT__;
                     } else {
                         int32_t result = MAX((uint32_t)val1->value.vali, (uint32_t)val2->value.vali);
-                        if((val1->type == INT32) || (val2->type == INT32)) {
-                            val1->type = INT32;
-                        } else if((val1->type == INT16) || (val2->type == INT16)) {
-                            val1->type = INT16;
+                        if((val1->type == INT32__) || (val2->type == INT32__)) {
+                            val1->type = INT32__;
+                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
+                            val1->type = INT16__;
                         }
                         val1->value.vali = result;
                     }
@@ -2895,7 +2895,7 @@ int8_t evaluate_math_impl() {
                     return -10;
             }
             opst_pos++; // push back val
-        } else if(((type>=UINT8) && (type<=FLOAT)) ||
+        } else if(((type>=UINT8__) && (type<=FLOAT__)) ||
                   ((type>=CONST_2PI) && (type<=CONST_0_001))) {
             opst_pos++; // push parsed item 
         }
@@ -2913,16 +2913,16 @@ uint8_t evaluate_math_expression(uint8_t* bufStart) {
         uint8_t type = operation_stack[--opst_pos].type;
         *bufStart = type;
         switch(type) {
-            case UINT8:
+            case UINT8__:
                 *(bufStart + 1) = (uint8_t)operation_stack[0].value.vali;
                 break;
-            case INT16:
+            case INT16__:
                 *(int16_t *)(bufStart + 1) = (uint16_t)operation_stack[0].value.vali;
                 break;
-            case INT32:
+            case INT32__:
                 *(int32_t *)(bufStart + 1) = operation_stack[0].value.vali;
                 break;
-            case FLOAT:
+            case FLOAT__:
                 *(float *)(bufStart + 1) = operation_stack[0].value.valf;
                 break;
         }
@@ -3055,11 +3055,11 @@ void init_routines() {
     math_type_sizes[TOINT] = 1;
     math_type_sizes[TOFLOAT] = 1;
     math_type_sizes[ROUND] = 1;
-    math_type_sizes[UINT8] = 2;
-    math_type_sizes[INT16] = 3;
-    math_type_sizes[INT32] = 5;
+    math_type_sizes[UINT8__] = 2;
+    math_type_sizes[INT16__] = 3;
+    math_type_sizes[INT32__] = 5;
     math_type_sizes[TVCFLOAT] = 7;
-    math_type_sizes[FLOAT] = 5;
+    math_type_sizes[FLOAT__] = 5;
     math_type_sizes[CONST_2PI] = 1;
     math_type_sizes[CONST_PI] = 1;
     math_type_sizes[CONST_PI2] = 1;
