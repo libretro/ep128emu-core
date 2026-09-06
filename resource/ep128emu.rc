@@ -2,8 +2,8 @@
 #include <winver.h>
 
 VS_VERSION_INFO VERSIONINFO
-  FILEVERSION     2, 0, 12, 2
-  PRODUCTVERSION  2, 0, 12, 2
+  FILEVERSION     2, 0, 12, 3
+  PRODUCTVERSION  2, 0, 12, 3
   FILEFLAGSMASK   0
   FILEFLAGS       0
   FILEOS          VOS__WINDOWS32
@@ -14,15 +14,15 @@ BEGIN
   BEGIN
     BLOCK "040904E4"
     BEGIN
-      VALUE "Comments", "Home page: https://github.com/istvan-v/ep128emu/"
+      VALUE "Comments", "Home page: https://github.com/libretro/ep128emu-core/"
       VALUE "CompanyName", "Istvan Varga"
       VALUE "FileDescription", "ep128emu - Enterprise 64/128, Spectrum 48/128, CPC 464/664/6128 and Videoton TVC emulator"
-      VALUE "FileVersion", "2.0.12.2"
+      VALUE "FileVersion", "2.0.12.3"
       VALUE "InternalName", "ep128emu"
-      VALUE "LegalCopyright", "Copyright (C) 2003-2017, GPL v2 or later"
+      VALUE "LegalCopyright", "Copyright (C) 2003-2026, GPL v2 or later"
       VALUE "OriginalFilename", "ep128emu"
       VALUE "ProductName", "Ep128Emu"
-      VALUE "ProductVersion", "2.0.12.2"
+      VALUE "ProductVersion", "2.0.12.3"
     END
   END
   BLOCK "VarFileInfo"
