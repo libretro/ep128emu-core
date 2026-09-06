@@ -52,6 +52,7 @@ typedef enum {
     MIN,
     // operations, 1 op
     ABS,
+    SQR,
     SQRT,
     SIN,
     COS,

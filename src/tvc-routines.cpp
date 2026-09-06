@@ -2640,6 +2640,7 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
         case DIV:
         case MAX:
         case MIN:
+        case SQR:
         case SQRT:
         case ABS:
         case SIN:
@@ -2741,6 +2742,13 @@ int8_t evaluate_math_impl() {
                         val1->value.valf = val1->value.valf >= 0 ? val1->value.valf : -val1->value.valf;
                     } else {
                         val1->value.vali = abs(val1->value.vali);
+                    }
+                    break;
+                case SQR:
+                    if(val1->type == FLOAT__) {
+                        val1->value.valf = val1->value.valf * val1->value.valf;
+                    } else {
+                        val1->value.vali = val1->value.vali * val1->value.vali;
                     }
                     break;
                 case SQRT:
@@ -3048,6 +3056,7 @@ void init_routines() {
     math_type_sizes[MAX] = 1;
     math_type_sizes[MIN] = 1;
     math_type_sizes[ABS] = 1;
+    math_type_sizes[SQR] = 1;
     math_type_sizes[SQRT] = 1;
     math_type_sizes[SIN] = 1;
     math_type_sizes[COS] = 1;
