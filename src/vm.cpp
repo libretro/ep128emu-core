@@ -926,7 +926,7 @@ namespace Ep128Emu {
       for (size_t i = 0; i < baseName.length(); i++) {
         const std::string&  s = baseName;
         if (!((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9') ||
-              s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_' || s[i] == '/'))
+              s[i] == '.' || s[i] == '+' || s[i] == '-' || s[i] == '_' || s[i] == '/' || s[i] == '*'))
           baseName[i] = '_';
       }
       FileOrDirName = baseName;
@@ -947,10 +947,14 @@ namespace Ep128Emu {
         return false;
       fullName = fullDir + FileOrDirName;
       // attempt to stat() file
-#ifndef WIN32
+#ifdef WIN32
+      struct _stat  st;
+      int     err = fileStat(fullName.c_str(), &st);
+#else
       struct stat   st;
       std::memset(&st, 0, sizeof(struct stat));
       int   err = stat(fullName.c_str(), &st);
+#endif
       if (err != 0) {
         // not found, try case insensitive file search
         std::string tmpName(fullName);
@@ -969,18 +973,41 @@ namespace Ep128Emu {
             size_t      i = 0;
             while (!(s1[i] == '\0' && s2[i] == '\0')) {
               if (s1[i] != s2[i]) {
+                // simple * wildcard at the end of the file name - match, copy the rest
+                // TODO: limit this only for TVC256++? but it is convenient also with tvcfileio
+                if ( s1[i] == '*') {
+                  tmpName.erase(offs+i);
+                  tmpName.append(&s2[i]);
+                  break;
+                }
                 if (!(s2[i] >= 'A' && s2[i] <= 'Z' &&
                       s1[i] == (s2[i] + ('a' - 'A')))) {
                   foundMatch = false;
                   break;
                 }
               }
+              // omitted ".cas" extension
+              // TODO: limit this only for TVC256++? but it is convenient also with tvcfileio
+              if (s1[i+1] == '\0' && s2[i+1] == '.' &&
+                       (s2[i+2] == 'c' || s2[i+2] == 'C') &&
+                       (s2[i+3] == 'a' || s2[i+3] == 'A') &&
+                       (s2[i+4] == 's' || s2[i+4] == 'S') &&
+                       s2[i+5] == '\0')
+              {
+                tmpName.erase(offs+i);
+                tmpName.append(&s2[i]);
+                break;
+              }
               tmpName[offs + i] = s2[i];
               i++;
             }
             if (foundMatch) {
+#ifdef WIN32
+              err = fileStat(tmpName.c_str(), &st);
+#else
               std::memset(&st, 0, sizeof(struct stat));
               err = stat(tmpName.c_str(), &st);
+#endif
             }
           } while (err != 0);
           closedir(dir_);
@@ -988,6 +1015,7 @@ namespace Ep128Emu {
         if (err == 0)
           fullName = tmpName;
       }
+
       if (err == 0)
       {
         FileOrDirName = fullName.substr(fullDir.length(),fullName.length()-fullDir.length());
@@ -996,18 +1024,6 @@ namespace Ep128Emu {
           *attr |= 0x10;
         return true;
       }
-#else
-      struct _stat  st;
-      int     err = fileStat(fullName.c_str(), &st);
-      if (err == 0)
-      {
-        *fsize = st.st_size;
-        if (S_ISDIR(st.st_mode))
-          *attr |= 0x10;
-        FileOrDirName = fullName.substr(fullDir.length(),fullName.length()-fullDir.length());
-        return true;
-      }
-#endif
       }
       catch (...) {
       return false;

@@ -38,14 +38,13 @@
    - Screen height setting
    - Border color change?
    - lim.cas copy line is not in the correct place (should depend on raster interrupt)
+   - screen record does not work
    
    TVC256++ drives:
-   - USB drive handling (no functions disabled via tvcfileio)
-   - Flash mem drive handling (readonly)
-   - PSRAM drive handling (no directories)
-   - Multi file, multi dir handling
    - Write, create, delete functions
+   - Multi file, multi dir handling
    - autostart
+   - Distinguish USB drive (no functions disabled), flash mem drive (readonly), PSRAM drive (no directories)
    
    TVC256++ others:
    - Delay for slow RAM paging
