@@ -38,14 +38,13 @@
    - Screen height setting
    - Border color change?
    - lim.cas copy line is not in the correct place (should depend on raster interrupt)
+   - screen record does not work
    
    TVC256++ drives:
-   - USB drive handling (no functions disabled via tvcfileio)
-   - Flash mem drive handling (readonly)
-   - PSRAM drive handling (no directories)
-   - Multi file, multi dir handling
    - Write, create, delete functions
+   - Multi file, multi dir handling
    - autostart
+   - Distinguish USB drive (no functions disabled), flash mem drive (readonly), PSRAM drive (no directories)
    
    TVC256++ others:
    - Delay for slow RAM paging
@@ -93,6 +92,25 @@ namespace Ep128 {
    0xff, 0xff, 0xff, 0xff,0xff, 0xdf,    0,  254, 254,254,254,254, 254,254,254,254,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,254,254, 254,254,254,254
+};
+  // Parameter count for the respective command
+  static const uint8_t namedPortParamCount_2dfx[256] = {
+      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
+      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
+      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
+      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
+      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
+      1,    1,    1,    0,   2,    2,    2,    2,   0,255,255,  5,   7,  4,  4,  7,
+      1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
+      8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
+      8,    8,    8,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
+      4,    0,    8,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
+    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
+    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
+    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
+    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
+      1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
+      8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
 };
 
 

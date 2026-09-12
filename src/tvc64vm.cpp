@@ -363,15 +363,8 @@ namespace TVC64 {
       return;
     }
     // Actual file I/O is not possible without a file being open
-    if (
-#ifdef SPRITEEXT_ENABLED
-        ((!vm.spriteExtEnabled &&  (n >= 3 && n <= 11)) ||
-         ( vm.spriteExtEnabled && ((n >= 3 && n <= 5) || (n==15))))
-#else
-       (n >= 3 && n <= 11)
-#endif
-        && !fileIOFile) {
-      R.AF.B.h = (n == 15) ? 0xE0 : 0xE9;          // file not open
+    if (n >= 3 && n <= 9 && !fileIOFile) {
+      R.AF.B.h = 0xE9;          // file not open
       if (n == 5) {
         R.BC.B.l = 0xFF;
       }
@@ -381,13 +374,6 @@ namespace TVC64 {
       }
       return;
     }
-    // If sprite extension is enabled, use tvc256++ compatible variants
-    // of the non-standard CAS functions
-#ifdef SPRITEEXT_ENABLED
-    if (vm.spriteExtEnabled && n > 6)
-      n += 100;
-#endif
-
     switch (n) {
     case 0:                             // initialization
       closeFile();
@@ -488,8 +474,7 @@ namespace TVC64 {
       else
         R.AF.B.h = 0x00;
       break;
-    case 7:                             // fileSeekEnd
-    case 10:                            // same as 7, but "in" direction - this function does not care
+    case 7:                             // get file size
       R.BC.W = 0x0000;
       R.DE.W = 0x0000;
       R.AF.B.h = 0xE5;          // invalid file position
@@ -509,20 +494,14 @@ namespace TVC64 {
         }
       }
       break;
-    case 8:                             // fileSeekCur
-    case 9:                             // fileSeekSet - absolute, floppy version
-    case 11:                            // same as 9, but "in" direction - this function does not care
+    case 8:                             // get file position
+    case 9:                             // set file position
       {
         long    filePos = long(R.DE.W) | (long(R.BC.W) << 16);
         R.DE.W = 0xFFFF;
         R.BC.W = 0xFFFF;
         R.AF.B.h = 0xE5;        // invalid file position
-        if (n == 8) {
-          fileIOWriteFlag = false;
-          if (std::fseek(fileIOFile, filePos, SEEK_CUR) < 0)
-            break;
-        }
-        else {
+        if (n == 9) {
           if (!(filePos >= 0L && filePos <= 0x01FFFFFFL))
             break;
           fileIOWriteFlag = false;
@@ -537,62 +516,6 @@ namespace TVC64 {
         }
       }
       break;
-    // Open dir (which was selected by chdir earlier)
-#ifdef ENABLE_SPRITEEXT
-    case 108:
-      {
-/*        fileIODir = (DIR *) 0;
-        struct dirent *dirptr = 0;
-        if ((fileIODir = opendir("/tmp")) != NULL) {
-          while ((dirptr = readdir(fileIODir)) != NULL) {
-            printf("Dir entry: %s\n",dirptr->d_name);
-          }
-          R.AF.B.h = 0x00;
-        } else {
-          R.AF.B.h = 0xF0;
-        }*/
-      }
-      return;
-      break;
-    case 110:  // readdir
-      // Actual dir I/O is not possible without a dir being open
-      {
-      }
-      break;
-    case 109:  // getpwd
-      {
-        uint16_t bufPtr = R.DE.W;
-        unsigned char slash = '/';
-        vm.writeMemory(bufPtr  ,     1, true);
-        vm.writeMemory(bufPtr+1, slash, true);
-        R.AF.B.h = 0;
-      }
-      break;
-    case 107:  // closedir
-    case 111:  // chdir
-    case 112:  // mkdir
-    case 113:  // delete
-    case 114:  // rename
-    case 115:  // seek (abs)
-      {
-        // is pointer understood in Z80 mem or in fastram???
-        uint16_t posAddr = uint16_t(R.DE.W);
-        long    filePos  = long(vm.readMemory(posAddr, true)) +
-                           long(vm.readMemory(posAddr + 1, true) <<  8) +
-                           long(vm.readMemory(posAddr + 2, true) << 16) +
-                           long(vm.readMemory(posAddr + 3, true) << 24);
-        R.DE.W = 0xFFFF;
-        R.BC.W = 0xFFFF;
-        R.AF.B.h = 0xE1;        // invalid file position
-        if (!(filePos >= 0L && filePos <= 0x01FFFFFFL))
-          break;
-        fileIOWriteFlag = false;
-        if (std::fseek(fileIOFile, filePos, SEEK_SET) < 0)
-          break;
-        R.AF.B.h = 0x00;
-      }
-      break;
-#endif
     default:
       R.AF.B.h = 0xFF;          // invalid function
       break;
@@ -849,12 +772,12 @@ namespace TVC64 {
     case 0x32:
     case 0x34:
     case 0x36:
-      if (vm.spriteExtEnabled)
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
          retval = vm.spriteext.io_port_values[addr-0x30];
       break;
     case 0x31:
     case 0x35:
-      if (vm.spriteExtEnabled) {
+      if (vm.spriteExtModel == SPRITEEXT_TVC256) {
          if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_DX)
          {
            vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
@@ -1094,12 +1017,12 @@ namespace TVC64 {
     case 0x34:
     case 0x36:
       // Register select or register increment change: just record the write
-      if (vm.spriteExtEnabled)
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
         vm.spriteext.io_port_values[addr-0x30] = value;
       break;
     case 0x31:
     case 0x35:
-      if (vm.spriteExtEnabled) {
+      if (vm.spriteExtModel == SPRITEEXT_TVC256) {
       if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
         vm.memory.spriteext_p2_reg = value;
       else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
@@ -1315,7 +1238,7 @@ namespace TVC64 {
     case 0x34:
     case 0x35:
     case 0x36:
-      if (vm.spriteExtEnabled)
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
          retval = vm.spriteext.io_port_values[addr-0x30];
       break;
 #endif
