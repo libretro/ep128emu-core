@@ -9,6 +9,7 @@ import sys, os
 win64CrossCompile = int(ARGUMENTS.get('win64', 0))
 mingwCrossCompile = win64CrossCompile or int(ARGUMENTS.get('win32', 0))
 enableDevtoolIntegration = int(ARGUMENTS.get('devtool', 0))
+wineMinGWCrossCompile = enableDevtoolIntegration or int(ARGUMENTS.get('wine', 0))
 
 linux32CrossCompile = int(ARGUMENTS.get('linux32', 0))
 # on Linux, statically linked SDL version >= 1.2.10 that was not built
@@ -220,7 +221,7 @@ if mingwCrossCompile:
     # Devtool compatible setup requires reproduction of the exact ancient
     # mingw32 setup, invoking it through wine. All other options can use
     # sane defaults.
-    if enableDevtoolIntegration:
+    if wineMinGWCrossCompile:
         toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
         ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw32/bin/ar.exe'
         ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
@@ -276,7 +277,7 @@ configurePackage(ep128emuGUIEnvironment, 'PortAudio')
 
 ep128emuGLGUIEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 disableOpenGL = 1
-if not enableDevtoolIntegration and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
+if not wineMinGWCrossCompile and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
     configure = ep128emuGLGUIEnvironment.Configure()
     if configure.CheckCHeader('GL/gl.h'):
         disableOpenGL = 0
@@ -554,7 +555,7 @@ else:
     ep128emuSources += ['gui/debugger.cpp', 'gui/monitor.cpp', 'gui/main.cpp']
 
 if mingwCrossCompile:
-    if enableDevtoolIntegration:
+    if wineMinGWCrossCompile:
         ep128emuResourceObject = ep128emuEnvironment.Command(
             'resource/resource.o',
             ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
@@ -588,7 +589,7 @@ tapeeditEnvironment.Prepend(LIBS = ['ep128emu'])
 tapeeditSources = fluidCompile(['tapeutil/tapeedit.fl'])
 tapeeditSources += ['tapeutil/tapeio.cpp']
 if mingwCrossCompile:
-    if enableDevtoolIntegration:
+    if wineMinGWCrossCompile:
         tapeeditResourceObject = tapeeditEnvironment.Command(
             'resource/te_resrc.o',
             ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
