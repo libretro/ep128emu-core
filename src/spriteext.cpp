@@ -38,7 +38,6 @@
    - Screen height setting
    - Border color change?
    - lim.cas copy line is not in the correct place (should depend on raster interrupt)
-   - screen record does not work
    
    TVC256++ drives:
    - Write, create, delete functions
