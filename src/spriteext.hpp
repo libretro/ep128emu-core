@@ -45,6 +45,8 @@ namespace Ep128 {
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
+    uint8_t selected2dfxPort;
+    uint8_t sent2dfxParameters;
     uint8_t lastFunctionResult;
     uint8_t lastMultiFunctionResult;
     bool functionResultDelay;
@@ -97,6 +99,11 @@ namespace Ep128 {
     void setMemRef(TVC64::Memory *m);
     void setVmRef(Ep128Emu::VirtualMachine *vm);
     const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
+
+    uint8_t read2dfxPort(uint8_t portIndex);
+    void   write2dfxPort(uint8_t portIndex, uint8_t value);
+    uint8_t read2dfxPortDebug(uint8_t portIndex);
+    void   write2dfxPortDebug(uint8_t portIndex, uint8_t value);
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const
     {
       return (segment == spriteExtSegment);

@@ -722,7 +722,7 @@ namespace TVC64 {
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
     uint8_t   retval = 0xFF;
-    addr = addr & 0x7F;
+    addr = addr & 0xFF;
     switch (addr) {
     // 0x00-0x0F: unused (write only)
     case 0x10:                          // extension 0: floppy drive controller
@@ -890,6 +890,13 @@ namespace TVC64 {
     case 0x7F:
       retval = vm.crtc.readRegister(vm.crtcRegisterSelected);
       break;
+#ifdef ENABLE_SPRITEEXT
+    case 0xF8:
+    case 0xF9:
+      if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+         retval = vm.spriteext.read2dfxPort(addr);
+      break;
+#endif // ENABLE_SPRITEEXT
     }
     return retval;
   }
@@ -898,7 +905,7 @@ namespace TVC64 {
                                     uint16_t addr, uint8_t value)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    addr = addr & 0x7F;
+    addr = addr & 0xFF;
     switch (addr) {
     case 0x00:                          // border color
       vm.videoRenderer.setColor(4, value);
@@ -1178,6 +1185,14 @@ namespace TVC64 {
     case 0x7F:
       vm.ioPorts.writeDebug(addr & 0x71, value);
       break;
+#ifdef ENABLE_SPRITEEXT
+    case 0xF8:
+    case 0xF9:
+      if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+         vm.spriteext.write2dfxPort(addr, value);
+      break;
+#endif // ENABLE_SPRITEEXT
+
     }
   }
 
@@ -1582,16 +1597,21 @@ namespace TVC64 {
       callbacks[i].nxt = (TVC64VMCallback *) 0;
     }
     // register I/O callbacks
+#ifdef ENABLE_SPRITEEXT
+    ioPorts.setReadCallback(
+        0x0000, 0x00FF, &ioPortReadCallback, (void *) this, 0x0000);
+    ioPorts.setDebugReadCallback(
+        0x0100, 0x01FF, &ioPortDebugReadCallback, (void *) this, 0x0000);
+    ioPorts.setWriteCallback(
+        0x0000, 0x00FF, &ioPortWriteCallback, (void *) this, 0x0000);
+#else
     ioPorts.setReadCallback(
         0x0000, 0x007F, &ioPortReadCallback, (void *) this, 0x0000);
     ioPorts.setDebugReadCallback(
         0x0000, 0x007F, &ioPortDebugReadCallback, (void *) this, 0x0000);
-#ifdef ENABLE_SPRITEEXT
-    ioPorts.setDebugReadCallback(
-        0x0100, 0x01FF, &ioPortDebugReadCallback, (void *) this, 0x0000);
-#endif
     ioPorts.setWriteCallback(
         0x0000, 0x007F, &ioPortWriteCallback, (void *) this, 0x0000);
+#endif
     crtc.setHSyncStateChangeCallback(&hSyncStateChangeCallback, (void *) this);
     crtc.setVSyncStateChangeCallback(&vSyncStateChangeCallback, (void *) this);
     wd177x.setIsWD1773(true);

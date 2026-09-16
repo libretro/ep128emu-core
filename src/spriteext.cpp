@@ -1077,6 +1077,38 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     return &buf_[0];
   }
 
+  void SpriteExt::write2dfxPort(uint8_t portIndex, uint8_t value)
+  {
+    if (portIndex == TWODFX_COMMAND_PORT)
+    {
+      selected2dfxPort = value;
+      sent2dfxParameters = 0;
+    }
+    else if (portIndex == TWODFX_PARAMETER_PORT)
+    {
+      sent2dfxParameters++;
+    }
+  }
+
+  uint8_t SpriteExt::read2dfxPort(uint8_t portIndex)
+  {
+    if (portIndex == TWODFX_COMMAND_PORT)
+      return 0xEE;
+    
+  }
+  uint8_t SpriteExt::read2dfxPortDebug(uint8_t portIndex)
+  {
+     if (namedPortMasks[portIndex] == 0xfe)
+       return 0xFF;
+     return namedPortValues[portIndex];
+  }
+
+  void SpriteExt::write2dfxPortDebug(uint8_t portIndex, uint8_t value)
+  {
+
+  }
+
+
   // --------------------------------------------------------------------------
 
   class ChunkType_SpriteExtSnapshot : public Ep128Emu::File::ChunkTypeHandler {
