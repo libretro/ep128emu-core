@@ -1083,17 +1083,45 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     {
       selected2dfxPort = value;
       sent2dfxParameters = 0;
+      if (namedPortParamCount_2dfx[selected2dfxPort] == 255)
+      {
+        printf("2DFX func err: %02x - unused port selected\n",
+               selected2dfxPort);
+        return;
+      }
     }
     else if (portIndex == TWODFX_PARAMETER_PORT)
     {
+      if (namedPortParamCount_2dfx[selected2dfxPort] == 255)
+      {
+        printf("2DFX func err: %02x - param for unused port\n",
+               selected2dfxPort);
+        return;
+      }
+      if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
+      {
+        printf("2DFX func err: %02x - param overflow ( > %d)\n",
+               selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort]);
+        return;
+      }
+
+      stored2dfxParameters[sent2dfxParameters] = value;
       sent2dfxParameters++;
+    }
+    if (sent2dfxParameters == namedPortParamCount_2dfx[selected2dfxPort])
+    {
+      printf("2DFX func call: %02x (%d) - %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+             selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort],
+             stored2dfxParameters[0], stored2dfxParameters[1], stored2dfxParameters[2], 
+             stored2dfxParameters[3], stored2dfxParameters[4], stored2dfxParameters[5],
+             stored2dfxParameters[6], stored2dfxParameters[7], stored2dfxParameters[8] );
     }
   }
 
   uint8_t SpriteExt::read2dfxPort(uint8_t portIndex)
   {
     if (portIndex == TWODFX_COMMAND_PORT)
-      return 0xEE;
+      return 0xFF & (~(1 << TWODFX_STATUS_BIT_2DFX_PRESENT));
     
   }
   uint8_t SpriteExt::read2dfxPortDebug(uint8_t portIndex)

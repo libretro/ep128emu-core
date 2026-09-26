@@ -47,6 +47,7 @@ namespace Ep128 {
     uint8_t namedPortValues[256];
     uint8_t selected2dfxPort;
     uint8_t sent2dfxParameters;
+    uint8_t stored2dfxParameters[16];
     uint8_t lastFunctionResult;
     uint8_t lastMultiFunctionResult;
     bool functionResultDelay;
@@ -77,6 +78,7 @@ namespace Ep128 {
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
+    
 
    public:
     uint8_t io_port_values[16];
