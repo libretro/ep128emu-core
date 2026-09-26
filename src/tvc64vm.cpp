@@ -656,16 +656,31 @@ namespace TVC64 {
 #ifdef ENABLE_SPRITEEXT
     size_t newnBytes = nBytes;
     // writing irqState directly is ugly
-    const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
-    if (vm.getIsDisplayEnabled())
-      vm.display.drawLine(newBuf, newnBytes);
-    if (vm.videoCapture)
-      vm.videoCapture->horizontalSync(newBuf, newnBytes);
-#else
+    if (vm.spriteExtModel == SPRITEEXT_TVC256)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else
+    {
+#endif // ENABLE_SPRITEEXT
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(buf, nBytes);
     if (vm.videoCapture)
       vm.videoCapture->horizontalSync(buf, nBytes);
+#ifdef ENABLE_SPRITEEXT
+    }
 #endif // ENABLE_SPRITEEXT
   }
 

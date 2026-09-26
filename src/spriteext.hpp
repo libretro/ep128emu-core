@@ -47,7 +47,7 @@ namespace Ep128 {
     uint8_t namedPortValues[256];
     uint8_t selected2dfxPort;
     uint8_t sent2dfxParameters;
-    uint8_t stored2dfxParameters[16];
+    uint8_t named2dfxPortValues[256*9];
     uint8_t lastFunctionResult;
     uint8_t lastMultiFunctionResult;
     bool functionResultDelay;
@@ -79,6 +79,7 @@ namespace Ep128 {
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
     
+    void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot);
 
    public:
     uint8_t io_port_values[16];
@@ -106,6 +107,8 @@ namespace Ep128 {
     void   write2dfxPort(uint8_t portIndex, uint8_t value);
     uint8_t read2dfxPortDebug(uint8_t portIndex);
     void   write2dfxPortDebug(uint8_t portIndex, uint8_t value);
+    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
+
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const
     {
       return (segment == spriteExtSegment);

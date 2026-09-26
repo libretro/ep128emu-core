@@ -65,6 +65,7 @@
 #include "tvcmem.hpp"
 #include "ide.hpp"
 #include "tvc-routines.h"
+#include "2dfx_builtin_logo.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -232,6 +233,8 @@ namespace Ep128 {
     TVC256::currDir.str[0]   = '/';
     TVC256::currDir.str[1]   = 0;
     TVC256::currDir.str[254] = 0;
+
+    std::memset(&named2dfxPortValues[0], 0x00, 256*9);
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -1105,16 +1108,31 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         return;
       }
 
-      stored2dfxParameters[sent2dfxParameters] = value;
+      named2dfxPortValues[selected2dfxPort*9 + sent2dfxParameters] = value;
       sent2dfxParameters++;
     }
     if (sent2dfxParameters == namedPortParamCount_2dfx[selected2dfxPort])
     {
       printf("2DFX func call: %02x (%d) - %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
              selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort],
-             stored2dfxParameters[0], stored2dfxParameters[1], stored2dfxParameters[2], 
-             stored2dfxParameters[3], stored2dfxParameters[4], stored2dfxParameters[5],
-             stored2dfxParameters[6], stored2dfxParameters[7], stored2dfxParameters[8] );
+             named2dfxPortValues[selected2dfxPort*9 + 0], named2dfxPortValues[selected2dfxPort*9 + 1],
+             named2dfxPortValues[selected2dfxPort*9 + 2], named2dfxPortValues[selected2dfxPort*9 + 3],
+             named2dfxPortValues[selected2dfxPort*9 + 4], named2dfxPortValues[selected2dfxPort*9 + 5],
+             named2dfxPortValues[selected2dfxPort*9 + 6], named2dfxPortValues[selected2dfxPort*9 + 7],
+             named2dfxPortValues[selected2dfxPort*9 + 8]);
+
+     switch (selected2dfxPort)
+     {
+       case TWODFX_SHOW_BUILTIN_LOGO:
+         named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9] = 255;
+         break;
+
+       case TWODFX_HIDE_BUILTIN_LOGO:
+         named2dfxPortValues[selected2dfxPort*9] = 0;
+         break;
+       default:
+        break;
+     }
     }
   }
 
@@ -1122,7 +1140,8 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   {
     if (portIndex == TWODFX_COMMAND_PORT)
       return 0xFF & (~(1 << TWODFX_STATUS_BIT_2DFX_PRESENT));
-    
+    else
+      return 0xFF;
   }
   uint8_t SpriteExt::read2dfxPortDebug(uint8_t portIndex)
   {
@@ -1134,6 +1153,224 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   void SpriteExt::write2dfxPortDebug(uint8_t portIndex, uint8_t value)
   {
 
+  }
+
+  static uint8_t logoConv2dfx(uint8_t val, uint8_t transparent_val)
+  {
+    if (val == 0)
+      return transparent_val;
+    return val == 1 ? 0xFF : 0xCC;
+  }
+
+  // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
+  void SpriteExt::updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot)
+  {
+     uint8_t * buf = &overlayBuffer[0];
+     for (size_t i=0; i<16; i++)
+     {
+        overlayBuffer[i] = 0x0;
+     }
+
+     if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9] &&
+         curLine >= SPRITEEXT_FIRST_LINE &&
+         curLine - SPRITEEXT_FIRST_LINE < TWO_DFX_BUILTIN_LOGO_H &&
+         currSlot >= (1) &&
+         currSlot < (1+13))
+     {
+        uint16_t baseAddr = (curLine - SPRITEEXT_FIRST_LINE) * TWO_DFX_BUILTIN_LOGO_ROW_BYTES + (currSlot-1)*4;
+        if (baseAddr <= TWO_DFX_BUILTIN_LOGO_PACKED_BYTES)
+        {
+          buf[ 0] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x03)      ), buf[ 0]);
+          buf[ 1] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x0C) >> 2 ), buf[ 1]);
+          buf[ 2] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x30) >> 4 ), buf[ 2]);
+          buf[ 3] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0xC0) >> 6 ), buf[ 3]);
+          buf[ 4] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x03)      ), buf[ 4]);
+          buf[ 5] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x0C) >> 2 ), buf[ 5]);
+          buf[ 6] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x30) >> 4 ), buf[ 6]);
+          buf[ 7] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0xC0) >> 6 ), buf[ 7]);
+          buf[ 8] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x03)      ), buf[ 8]);
+          buf[ 9] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x0C) >> 2 ), buf[ 9]);
+          buf[10] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x30) >> 4 ), buf[10]);
+          buf[11] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0xC0) >> 6 ), buf[11]);
+          buf[12] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x03)      ), buf[12]);
+          buf[13] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x0C) >> 2 ), buf[13]);
+          buf[14] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x30) >> 4 ), buf[14]);
+          buf[15] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0xC0) >> 6 ), buf[15]);
+        }
+     }
+
+     buf = &buf_[outPos];
+     for (size_t i=0; i<16; i++)
+     {
+       buf[i] = overlayBuffer[i] != 0 ? overlayBuffer[i] : buf[i];
+     }
+  }
+
+
+  const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState)
+  {
+
+    const unsigned char *bufp = buf;
+    const uint8_t *endp = buf + *nBytes;
+    size_t outPos = 0;
+    size_t currSlotPlus = 0;
+
+    if (vsyncCnt>0)
+      curLine = 0;
+    else 
+      curLine++;
+
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE)
+      return buf;
+   // todo: screen height limit
+   // Note: line pixels are according to PAL (768).
+    do {
+      switch (bufp[0]) {
+      // Several modes do not occur in content area (or at all in case of TVC), those can be just copied
+      case 0x00:                        // 16 pixel blank coded on 1 byte
+        do {
+            buf_[outPos] = 0x00;
+          bufp = bufp + 1;
+          outPos++;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x00);
+        break;
+      case 0x01:                        // 1x16 pixel, 256 colors coded on 2 bytes -- border
+        do {
+           std::memcpy(&(buf_[outPos]), bufp, 2);
+          bufp = bufp + 2;
+          outPos += 2;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x01);
+        break;
+      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes -- not used for TVC
+        do {
+           std::memcpy(&(buf_[outPos]), bufp, 3);
+          bufp = bufp + 3;
+          outPos += 3;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x02);
+        break;
+      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
+        do {
+           std::memcpy(&(buf_[outPos]), bufp, 4);
+
+          bufp = bufp + 4;
+          outPos += 4;
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x03);
+        break;
+      // To simplify the overlay logic, convert all content modes to a new mode 0x09 which can cover 
+      // all resolution with 256 colors (16 would be enough for TVC, but let's not complicate it)
+      // This way, overlay pixel calculation logic can be done only once for all modes.
+      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
+        do {
+            currSlotPlus++;
+            buf_[outPos] = 0x09;
+            buf_[outPos +  1] = bufp[1];
+            buf_[outPos +  2] = bufp[1];
+            buf_[outPos +  3] = bufp[1];
+            buf_[outPos +  4] = bufp[1];
+            buf_[outPos +  5] = bufp[2];
+            buf_[outPos +  6] = bufp[2];
+            buf_[outPos +  7] = bufp[2];
+            buf_[outPos +  8] = bufp[2];
+            buf_[outPos +  9] = bufp[3];
+            buf_[outPos + 10] = bufp[3];
+            buf_[outPos + 11] = bufp[3];
+            buf_[outPos + 12] = bufp[3];
+            buf_[outPos + 13] = bufp[4];
+            buf_[outPos + 14] = bufp[4];
+            buf_[outPos + 15] = bufp[4];
+            buf_[outPos + 16] = bufp[4];
+            
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            bufp    +=  5;
+            outPos  += 17;
+            *nBytes += 12;
+
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x04);
+        break;
+      case 0x06:                        // 2*8*2 pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
+        do {
+            currSlotPlus++;
+            unsigned char c0 = bufp[1];
+            unsigned char c1 = bufp[2];
+            unsigned char b = bufp[3];
+            buf_[outPos] = 0x09;
+            buf_[outPos+1] = (b & 0x80) ? c1 : c0;
+            buf_[outPos+2] = (b & 0x40) ? c1 : c0;
+            buf_[outPos+3] = (b & 0x20) ? c1 : c0;
+            buf_[outPos+4] = (b & 0x10) ? c1 : c0;
+            buf_[outPos+5] = (b & 0x08) ? c1 : c0;
+            buf_[outPos+6] = (b & 0x04) ? c1 : c0;
+            buf_[outPos+7] = (b & 0x02) ? c1 : c0;
+            buf_[outPos+8] = (b & 0x01) ? c1 : c0;
+            c0 = bufp[4];
+            c1 = bufp[5];
+            b = bufp[6];
+            buf_[outPos+ 9] = (b & 0x80) ? c1 : c0;
+            buf_[outPos+10] = (b & 0x40) ? c1 : c0;
+            buf_[outPos+11] = (b & 0x20) ? c1 : c0;
+            buf_[outPos+12] = (b & 0x10) ? c1 : c0;
+            buf_[outPos+13] = (b & 0x08) ? c1 : c0;
+            buf_[outPos+14] = (b & 0x04) ? c1 : c0;
+            buf_[outPos+15] = (b & 0x02) ? c1 : c0;
+            buf_[outPos+16] = (b & 0x01) ? c1 : c0;
+
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            bufp    +=  7;
+            outPos  += 17;
+            *nBytes += 10;
+
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x06);
+        break;
+      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC 4 color mode
+        do {
+            currSlotPlus++;
+            buf_[outPos] = 0x09;
+            buf_[outPos +  1] = bufp[1];
+            buf_[outPos +  2] = bufp[1];
+            buf_[outPos +  3] = bufp[2];
+            buf_[outPos +  4] = bufp[2];
+            buf_[outPos +  5] = bufp[3];
+            buf_[outPos +  6] = bufp[3];
+            buf_[outPos +  7] = bufp[4];
+            buf_[outPos +  8] = bufp[4];
+            buf_[outPos +  9] = bufp[5];
+            buf_[outPos + 10] = bufp[5];
+            buf_[outPos + 11] = bufp[6];
+            buf_[outPos + 12] = bufp[6];
+            buf_[outPos + 13] = bufp[7];
+            buf_[outPos + 14] = bufp[7];
+            buf_[outPos + 15] = bufp[8];
+            buf_[outPos + 16] = bufp[8];
+            
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            bufp    +=  9;
+            outPos  += 17;
+            *nBytes +=  8;
+
+          if (bufp >= endp)
+            break;
+        } while (bufp[0] == 0x08);
+        break;
+      default:                          // invalid flag byte
+        do {
+          buf_[outPos++] = 0x00;
+        } while (outPos < sizeof(buf_));
+        break;
+      }
+    } while (bufp < endp && outPos < *nBytes);
+    return &buf_[0];
   }
 
 
