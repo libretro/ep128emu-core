@@ -50,6 +50,9 @@
    - Extend slow RAM to the real 8 MB instead of 2
    - tvcfileio2 - file access via rst 30h - probably not needed
 
+   2DFX TVC:
+   - decrease resolution (ignore 2nd pixels) if not in graphics 2
+   - display of non-basic-safe area
 */
 
 #include "ep128emu.hpp"
@@ -66,6 +69,7 @@
 #include "ide.hpp"
 #include "tvc-routines.h"
 #include "2dfx_builtin_logo.h"
+#include "twodfx_api.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -1162,6 +1166,36 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     return val == 1 ? 0xFF : 0xCC;
   }
 
+  static uint8_t logoBitOffs2dfx(uint16_t baseAddr, uint8_t bitOffs)
+  {
+    switch(bitOffs) {
+    case 0:
+      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x03);
+    case 1:
+      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x0C) >> 2;
+    case 2:
+      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x30) >> 4;
+    default:
+      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0xC0) >> 6;
+
+    }
+  }
+
+  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint8_t *x, uint8_t *y, uint8_t *bitOffset)
+  {
+    if (screenX + TWODFX_TVC_BASIC_SAFE_MIN_X < twodfxX || screenX + TWODFX_TVC_BASIC_SAFE_MIN_X >= twodfxX + *x)
+      return false;
+    if (screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y < twodfxY || screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y >= twodfxY + *y)
+      return false;
+
+    *x = screenX + TWODFX_TVC_BASIC_SAFE_MIN_X - twodfxX;
+    *y = screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y - twodfxY;
+    div_t logoOffs = div(*x, 4);
+    *bitOffset = logoOffs.rem;
+    *x = logoOffs.quot;
+    return true;
+  }
+
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
   void SpriteExt::updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot)
   {
@@ -1171,31 +1205,31 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         overlayBuffer[i] = 0x0;
      }
 
-     if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9] &&
-         curLine >= SPRITEEXT_FIRST_LINE &&
-         curLine - SPRITEEXT_FIRST_LINE < TWO_DFX_BUILTIN_LOGO_H &&
-         currSlot >= (1) &&
-         currSlot < (1+13))
+     // Show / hide builtin logo
+     if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9])
      {
-        uint16_t baseAddr = (curLine - SPRITEEXT_FIRST_LINE) * TWO_DFX_BUILTIN_LOGO_ROW_BYTES + (currSlot-1)*4;
-        if (baseAddr <= TWO_DFX_BUILTIN_LOGO_PACKED_BYTES)
+        uint8_t actualX = TWO_DFX_BUILTIN_LOGO_W;
+        uint8_t actualY = TWO_DFX_BUILTIN_LOGO_H;
+        uint8_t bitOffs = 4;
+
+        int firstPixel, lastPixel;
+        firstPixel = named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X);
+        if (firstPixel < 0) firstPixel = 0;
+        lastPixel = (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X );
+        if (lastPixel > 15) lastPixel = 15;
+
+        if (coordConv2dfx(
+              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
+              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
+              currSlot * 16 + firstPixel, curLine,
+              &actualX,&actualY, &bitOffs))
         {
-          buf[ 0] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x03)      ), buf[ 0]);
-          buf[ 1] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x0C) >> 2 ), buf[ 1]);
-          buf[ 2] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0x30) >> 4 ), buf[ 2]);
-          buf[ 3] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr]     & 0xC0) >> 6 ), buf[ 3]);
-          buf[ 4] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x03)      ), buf[ 4]);
-          buf[ 5] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x0C) >> 2 ), buf[ 5]);
-          buf[ 6] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0x30) >> 4 ), buf[ 6]);
-          buf[ 7] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 1] & 0xC0) >> 6 ), buf[ 7]);
-          buf[ 8] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x03)      ), buf[ 8]);
-          buf[ 9] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x0C) >> 2 ), buf[ 9]);
-          buf[10] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0x30) >> 4 ), buf[10]);
-          buf[11] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 2] & 0xC0) >> 6 ), buf[11]);
-          buf[12] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x03)      ), buf[12]);
-          buf[13] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x0C) >> 2 ), buf[13]);
-          buf[14] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0x30) >> 4 ), buf[14]);
-          buf[15] = logoConv2dfx(((two_dfx_builtin_logo_2bpp[baseAddr + 3] & 0xC0) >> 6 ), buf[15]);
+          uint16_t baseAddr = actualY * TWO_DFX_BUILTIN_LOGO_ROW_BYTES + actualX;
+          for (int i = firstPixel; i <= lastPixel ; i++)
+          {
+            buf[i] = logoConv2dfx(logoBitOffs2dfx(baseAddr, bitOffs), buf[i]);
+            if (++bitOffs > 3) {bitOffs = 0; baseAddr++;}
+          }
         }
      }
 
@@ -1205,7 +1239,6 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
        buf[i] = overlayBuffer[i] != 0 ? overlayBuffer[i] : buf[i];
      }
   }
-
 
   const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState)
   {
