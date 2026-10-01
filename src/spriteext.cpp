@@ -126,6 +126,7 @@ namespace Ep128 {
       spriteExtSegment(0xFFFFFFFFU),
       spriteExtAddress(0xFFFFFFFFU),
       curLine(0),
+      curLineOrig(0),
       scrollX(0),
       scrollY(0),
       scrollBorderX(false),
@@ -702,7 +703,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      backgr_active_pixels = 0;
 
      // Scroll border top/bottom
-     if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || SPRITEEXT_LAST_LINE - curLine < 8))
+     if (scrollBorderY && (curLine - SPRITEEXT_FIRST_LINE < 8 || namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE - curLine < 8))
      {
         for (size_t i=0; i<16; i++)
         {
@@ -910,12 +911,25 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
     size_t currSlotPlus = 0;
+    size_t curLineOffset = 0;
+    if (namedPortValues[REG_SCREEN_MAXY] < REG_SCREEN_MAXY_DEFAULT)
+    {
+      curLineOffset = (REG_SCREEN_MAXY_DEFAULT - namedPortValues[REG_SCREEN_MAXY]) >> 1;
+    }
 
     if (vsyncCnt>0)
+    {
       curLine = 0;
-    else 
-      curLine++;
-    if (curLine == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE))
+      curLineOrig = 0;
+    }
+    else
+    {
+      curLineOrig++;
+      if (curLineOrig >= curLineOffset)
+        curLine = curLineOrig - curLineOffset;
+    }
+
+    if (curLine == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE + curLineOffset))
     {
        if ((namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] & namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ]) ||
            (namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] & namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH]) ||
@@ -931,7 +945,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
           *irqState |= 1<<3;
        }
     }
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE || !anyGfxEnabled)
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE + curLineOffset || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE + curLineOffset || !anyGfxEnabled)
       return buf;
    // todo: screen height limit
    // Note: line pixels are according to PAL (768).
@@ -1253,7 +1267,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     else 
       curLine++;
 
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > SPRITEEXT_LAST_LINE)
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
       return buf;
    // todo: screen height limit
    // Note: line pixels are according to PAL (768).

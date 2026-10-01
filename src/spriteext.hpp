@@ -66,6 +66,7 @@ namespace Ep128 {
     void updateLineWithGfx(size_t outPos, uint8_t currSlot);
     void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum);
     size_t curLine;
+    size_t curLineOrig;
     size_t scrollX;
     size_t scrollY;
     bool scrollBorderX;
