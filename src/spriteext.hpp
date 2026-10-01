@@ -45,6 +45,9 @@ namespace Ep128 {
     uint32_t  spriteExtSegment;
     uint32_t  spriteExtAddress;
     uint8_t namedPortValues[256];
+    uint8_t selected2dfxPort;
+    uint8_t sent2dfxParameters;
+    uint8_t named2dfxPortValues[256*9];
     uint8_t lastFunctionResult;
     uint8_t lastMultiFunctionResult;
     bool functionResultDelay;
@@ -63,6 +66,7 @@ namespace Ep128 {
     void updateLineWithGfx(size_t outPos, uint8_t currSlot);
     void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum);
     size_t curLine;
+    size_t curLineOrig;
     size_t scrollX;
     size_t scrollY;
     bool scrollBorderX;
@@ -75,6 +79,8 @@ namespace Ep128 {
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
+    
+    void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot);
 
    public:
     uint8_t io_port_values[16];
@@ -97,6 +103,13 @@ namespace Ep128 {
     void setMemRef(TVC64::Memory *m);
     void setVmRef(Ep128Emu::VirtualMachine *vm);
     const uint8_t *combineLine(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
+
+    uint8_t read2dfxPort(uint8_t portIndex);
+    void   write2dfxPort(uint8_t portIndex, uint8_t value);
+    uint8_t read2dfxPortDebug(uint8_t portIndex);
+    void   write2dfxPortDebug(uint8_t portIndex, uint8_t value);
+    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
+
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const
     {
       return (segment == spriteExtSegment);

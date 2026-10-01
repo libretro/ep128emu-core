@@ -514,6 +514,7 @@ namespace Ep128Emu {
         outBuf[13] = outBuf[12] = *(inBuf++);
         outBuf[15] = outBuf[14] = *(inBuf++);
         break;
+      case 0x09:
       case 0x10:
         outBuf[0]  = *(inBuf++);
         outBuf[1]  = *(inBuf++);
@@ -1301,6 +1302,7 @@ namespace Ep128Emu {
             uPtr[3] = uint8_t((p0 >> 11) & 0xFFU);
           }
           break;
+        case 0x09:
         case 0x10:
           {
             uint32_t  p0 = colormap[*(bufp++)];
