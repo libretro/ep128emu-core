@@ -929,7 +929,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         curLine = curLineOrig - curLineOffset;
     }
 
-    if (curLine == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE + curLineOffset))
+    if (curLineOrig == (uint8_t) (namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE))
     {
        if ((namedPortValues[REG_SPRITE_BG_COLLISION_LOW ] & namedPortValues[REG_SPRITE_BG_IRQMASK_LOW ]) ||
            (namedPortValues[REG_SPRITE_BG_COLLISION_HIGH] & namedPortValues[REG_SPRITE_BG_IRQMASK_HIGH]) ||
@@ -945,9 +945,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
           *irqState |= 1<<3;
        }
     }
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE + curLineOffset || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE + curLineOffset || !anyGfxEnabled)
+    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE || !anyGfxEnabled)
       return buf;
-   // todo: screen height limit
+
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
