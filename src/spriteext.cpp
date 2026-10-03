@@ -70,6 +70,7 @@
 #include "tvc-routines.h"
 #include "2dfx_builtin_logo.h"
 #include "twodfx_api.h"
+#include "2dfx_main.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -107,7 +108,7 @@ namespace Ep128 {
       1,    1,    1,    0,   2,    2,    2,    2,   0,255,255,  5,   7,  4,  4,  7,
       1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
       8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
-      8,    8,    8,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
+      5,    5,    5,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
       4,    0,    8,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
     255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
     255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
@@ -130,7 +131,8 @@ namespace Ep128 {
       scrollX(0),
       scrollY(0),
       scrollBorderX(false),
-      scrollBorderY(false)
+      scrollBorderY(false),
+      uploadRemaining(0)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -164,6 +166,7 @@ namespace Ep128 {
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
     TVC256::init_routines();
+    TWODFX::build_source_conversion_luts();
     this->reset(1);
   }
 
@@ -1119,7 +1122,33 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
                selected2dfxPort);
         return;
       }
-      if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
+      if (uploadRemaining > 0)
+      {
+        uint32_t targetAddr = named2dfxPortValues[selected2dfxPort*9 + 0] + 
+                        256 * named2dfxPortValues[selected2dfxPort*9 + 1] +
+                  256 * 256 * named2dfxPortValues[selected2dfxPort*9 + 2];
+        targetAddr += named2dfxPortValues[selected2dfxPort*9 + 3] +
+                256 * named2dfxPortValues[selected2dfxPort*9 + 4] -
+                      uploadRemaining;
+        // Limit to 2 MB
+        targetAddr &= 0x1fffff;
+        targetAddr += (TVC256_SLOWRAM_START_SEGMENT)<<14;
+        if (selected2dfxPort == TWODFX_UPLOAD_RAW)
+        {
+          hostMem->writeRaw(targetAddr,value);  
+        }
+        else if (selected2dfxPort == TWODFX_UPLOAD_TVC)
+        {
+          hostMem->writeRaw(targetAddr,TWODFX::tvc_to_sprite_lut[value]);
+        }
+        else if (selected2dfxPort == TWODFX_UPLOAD_NICK)
+        {
+          hostMem->writeRaw(targetAddr,TWODFX::nick_to_sprite_lut[value]);
+        }
+        uploadRemaining--;
+        return;
+      }
+      else if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
       {
         printf("2DFX func err: %02x - param overflow ( > %d)\n",
                selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort]);
@@ -1139,6 +1168,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
              named2dfxPortValues[selected2dfxPort*9 + 6], named2dfxPortValues[selected2dfxPort*9 + 7],
              named2dfxPortValues[selected2dfxPort*9 + 8]);
 
+     uploadRemaining = 0;
      switch (selected2dfxPort)
      {
        case TWODFX_SHOW_BUILTIN_LOGO:
@@ -1147,6 +1177,11 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
 
        case TWODFX_HIDE_BUILTIN_LOGO:
          named2dfxPortValues[selected2dfxPort*9] = 0;
+         break;
+       case TWODFX_UPLOAD_RAW:
+       case TWODFX_UPLOAD_TVC:
+       case TWODFX_UPLOAD_NICK:
+         uploadRemaining = named2dfxPortValues[selected2dfxPort*9 + 3] + 256 * named2dfxPortValues[selected2dfxPort*9 + 4];
          break;
        default:
         break;

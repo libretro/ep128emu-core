@@ -2103,6 +2103,7 @@ namespace TVC64 {
         spriteExtEnabled = true;
         spriteExtModel = (uint8_t) model;
         spriteext.reset(2);
+        memory.spriteExtModel = spriteExtModel;
     }
   }
 #endif

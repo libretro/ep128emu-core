@@ -79,6 +79,7 @@ namespace Ep128 {
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
+    uint16_t uploadRemaining;
     
     void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot);
 

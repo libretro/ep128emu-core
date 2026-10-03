@@ -107,6 +107,7 @@ namespace TVC64 {
       dummyMemory((uint8_t *) 0)
 #ifdef ENABLE_SPRITEEXT
       ,
+      spriteExtModel(0),
       spriteext_p2_reg(REG_MEMORY_P2_DEFAULT),
       spriteext_p3_reg(REG_MEMORY_P3_DEFAULT),
       psram_p2_reg(REG_MEMORY_MAP_8M_P2_LOW_DEFAULT),
@@ -330,7 +331,7 @@ namespace TVC64 {
       allocateSegment(i, false);
 
 #ifdef ENABLE_SPRITEEXT
-    // Fixed memory configuration for TVC256++ : 
+    // Fixed memory configuration for TVC256++, reused for 2dfx : 
     //    256 kB fast RAM (0xE8..0xF7)
     //    2 MB PSRAM      (0x68..0xE7) -- should be 8 MB, maybe later if it is really required
     for (uint8_t i = TVC256_SLOWRAM_START_SEGMENT; i < 0xF8; i++)
@@ -433,11 +434,13 @@ namespace TVC64 {
     case 0x18:
       pageTable[0] = 0xFB;              // U3
 #ifdef ENABLE_SPRITEEXT
-      if (spriteext_p3_reg <= SPRITEEXT_MEM_PAGE_MAX)
-         pageTable[0] = TVC256_FASTRAM_START_SEGMENT + spriteext_p3_reg;
-      else if (spriteext_p3_reg == SPRITEEXT_MEM_PAGE_PSRAM_P3)
-         pageTable[0] = TVC256_SLOWRAM_START_SEGMENT + psram_p3_reg;
-      // Any other setting such as 0xFF - fall back, keep builtin U3
+      if (spriteExtModel == SPRITEEXT_TVC256) {
+        if (spriteext_p3_reg <= SPRITEEXT_MEM_PAGE_MAX)
+           pageTable[0] = TVC256_FASTRAM_START_SEGMENT + spriteext_p3_reg;
+        else if (spriteext_p3_reg == SPRITEEXT_MEM_PAGE_PSRAM_P3)
+           pageTable[0] = TVC256_SLOWRAM_START_SEGMENT + psram_p3_reg;
+        // Any other setting such as 0xFF - fall back, keep builtin U3
+      }
 #endif
       break;
     }
@@ -451,11 +454,13 @@ namespace TVC64 {
     {
       pageTable[2] = 0xFA;              // U2
 #ifdef ENABLE_SPRITEEXT
-      if (spriteext_p2_reg <= SPRITEEXT_MEM_PAGE_MAX)
-         pageTable[2] = TVC256_FASTRAM_START_SEGMENT + spriteext_p2_reg;
-      else if (spriteext_p2_reg == SPRITEEXT_MEM_PAGE_PSRAM_P2)
-         pageTable[2] = TVC256_SLOWRAM_START_SEGMENT + psram_p2_reg;
-      // Any other setting such as 0xFF - fall back, keep builtin U2
+      if (spriteExtModel == SPRITEEXT_TVC256) {
+        if (spriteext_p2_reg <= SPRITEEXT_MEM_PAGE_MAX)
+           pageTable[2] = TVC256_FASTRAM_START_SEGMENT + spriteext_p2_reg;
+        else if (spriteext_p2_reg == SPRITEEXT_MEM_PAGE_PSRAM_P2)
+           pageTable[2] = TVC256_SLOWRAM_START_SEGMENT + psram_p2_reg;
+        // Any other setting such as 0xFF - fall back, keep builtin U2
+      }
 #endif
     }
     switch (n & 0x00C0) {
@@ -468,11 +473,13 @@ namespace TVC64 {
     case 0x80:
       pageTable[3] = 0xFB;              // U3
 #ifdef ENABLE_SPRITEEXT
-      if (spriteext_p3_reg <= SPRITEEXT_MEM_PAGE_MAX)
-         pageTable[3] = TVC256_FASTRAM_START_SEGMENT + spriteext_p3_reg;
-      else if (spriteext_p3_reg == SPRITEEXT_MEM_PAGE_PSRAM_P3)
-         pageTable[3] = TVC256_SLOWRAM_START_SEGMENT + psram_p3_reg;
-      // Any other setting such as 0xFF - fall back, keep builtin U3
+      if (spriteExtModel == SPRITEEXT_TVC256) {
+        if (spriteext_p3_reg <= SPRITEEXT_MEM_PAGE_MAX)
+           pageTable[3] = TVC256_FASTRAM_START_SEGMENT + spriteext_p3_reg;
+        else if (spriteext_p3_reg == SPRITEEXT_MEM_PAGE_PSRAM_P3)
+           pageTable[3] = TVC256_SLOWRAM_START_SEGMENT + psram_p3_reg;
+        // Any other setting such as 0xFF - fall back, keep builtin U3
+      }
 #endif
       break;
     case 0xC0:
