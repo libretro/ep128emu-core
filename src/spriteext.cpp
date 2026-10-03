@@ -52,7 +52,7 @@
 
    2DFX TVC:
    - decrease resolution (ignore 2nd pixels) if not in graphics 2
-   - display of non-basic-safe area
+   - finalize Y offset
 */
 
 #include "ep128emu.hpp"
@@ -1195,14 +1195,14 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     }
   }
 
-  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint8_t *x, uint8_t *y, uint8_t *bitOffset)
+  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint16_t *x, uint16_t *y, uint8_t *bitOffset)
   {
-    if (screenX + TWODFX_TVC_BASIC_SAFE_MIN_X < twodfxX || screenX + TWODFX_TVC_BASIC_SAFE_MIN_X >= twodfxX + *x)
+    if (screenX < twodfxX || screenX >= twodfxX + *x)
       return false;
     if (screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y < twodfxY || screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y >= twodfxY + *y)
       return false;
 
-    *x = screenX + TWODFX_TVC_BASIC_SAFE_MIN_X - twodfxX;
+    *x = screenX - twodfxX;
     *y = screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y - twodfxY;
     div_t logoOffs = div(*x, 4);
     *bitOffset = logoOffs.rem;
@@ -1222,19 +1222,21 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      // Show / hide builtin logo
      if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9])
      {
-        uint8_t actualX = TWO_DFX_BUILTIN_LOGO_W;
-        uint8_t actualY = TWO_DFX_BUILTIN_LOGO_H;
+        uint16_t actualX = TWO_DFX_BUILTIN_LOGO_W;
+        uint16_t actualY = TWO_DFX_BUILTIN_LOGO_H;
         uint8_t bitOffs = 4;
 
         int firstPixel, lastPixel;
-        firstPixel = named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X);
+        firstPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
+                       named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16);
         if (firstPixel < 0) firstPixel = 0;
-        lastPixel = (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X );
+        lastPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
+                     (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16);
         if (lastPixel > 15) lastPixel = 15;
 
         if (coordConv2dfx(
-              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
-              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
+              ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
+               (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x01)       * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
               currSlot * 16 + firstPixel, curLine,
               &actualX,&actualY, &bitOffs))
         {
@@ -1260,16 +1262,16 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     const unsigned char *bufp = buf;
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
-    size_t currSlotPlus = 0;
+    size_t currSlotPlus = 0; // this is absolute slot in case of 2dfx, not only the visible area
 
     if (vsyncCnt>0)
       curLine = 0;
     else 
       curLine++;
 
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
+    // todo: screen height shortcuts
+    if (!(*nBytes))
       return buf;
-   // todo: screen height limit
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
@@ -1279,6 +1281,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos] = 0x00;
           bufp = bufp + 1;
           outPos++;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x00);
@@ -1288,6 +1291,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
            std::memcpy(&(buf_[outPos]), bufp, 2);
           bufp = bufp + 2;
           outPos += 2;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x01);
@@ -1297,6 +1301,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
            std::memcpy(&(buf_[outPos]), bufp, 3);
           bufp = bufp + 3;
           outPos += 3;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x02);
@@ -1304,9 +1309,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
       case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
         do {
            std::memcpy(&(buf_[outPos]), bufp, 4);
-
           bufp = bufp + 4;
           outPos += 4;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x03);
