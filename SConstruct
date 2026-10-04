@@ -454,7 +454,7 @@ if enableSDExt:
 
 spriteextSources = []
 if enableSpriteExt:
-    spriteextSources = ['src/spriteext.cpp', 'deps/tvc-routines.cpp', 'deps/zx7Compress.c' 'deps/2dfx_main.cpp']
+    spriteextSources = ['src/spriteext.cpp', 'deps/tvc-routines.cpp', 'deps/zx7Compress.cpp','deps/2dfx_main.cpp']
 
 ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/dave.cpp
