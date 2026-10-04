@@ -12,13 +12,13 @@
 
 #define FALSE 0
 #define TRUE 1
-
+namespace TWODFX {
 FILE *ifp;
 FILE *ofp;
 char *input_name;
 char *output_name;
-unsigned char *input_data;
-unsigned char *output_data;
+uint32_t input_data;
+uint32_t output_data;
 size_t input_index;
 size_t output_index;
 size_t input_size;
@@ -30,7 +30,7 @@ int backtrack;
 int last_byte;
 
 int read_byte() {
-    if (input_index == partial_counter) {
+    /*if (input_index == partial_counter) {
         input_index = 0;
         partial_counter = fread(input_data, sizeof(char), BUFFER_SIZE, ifp);
         input_size += partial_counter;
@@ -38,8 +38,8 @@ int read_byte() {
             fprintf(stderr, (input_size ? "Error: Truncated input file %s\n" : "Error: Empty input file %s\n"), input_name);
             exit(1);
         }
-    }
-    last_byte = input_data[input_index++];
+    }*/
+    last_byte = emuMem->readRaw(input_index++);
     return last_byte;
 }
 
@@ -219,4 +219,5 @@ int main(int argc, char *argv[]) {
     printf("File decompressed from %lu to %lu bytes!\n", (unsigned long)input_size, (unsigned long)output_size);
 
     return 0;
+}
 }
