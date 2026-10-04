@@ -83,13 +83,19 @@ uint8_t clear_text_screen(__unused uint8_t* bufferStart) {
     return 0;
 }
 
-// Fills the bitmap screen area with the transparent pattern
+
 uint32_t functionBitmapBaseAddr = 0; 
+
+void setFunctionBitmapBaseAddr() {
+    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
+            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
+            (registerFunctionBitmapBase & 0x03) * 0x8000;
+}
+
+// Fills the bitmap screen area with the transparent pattern
 uint8_t clear_bitmap_screen(__unused uint8_t* bufferStart) {
     (void) bufferStart;
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (uint32_t)(registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (uint32_t)(registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
     //memset(&TVC_RAM[functionBitmapBaseAddr], 0x88, 128 * screenMaxY);
     emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr, 128*screenMaxY, 0x88);
     return 0;
@@ -599,132 +605,6 @@ uint8_t copy_dir_to_psram(uint8_t *bufStart) {
     }
     return res;
 */
-    /*
-    psram_direntry_t *current_psram_direntry = (psram_direntry_t *)psram_array;
-    current_psram_direntry->fName[0] = 0;
-    
-    uint32_t pos = PSRAM_FS_CONTENT_START;
-    FRESULT res;
-    DIR dirHandle;
-    FILINFO fileInfo;
-    FIL f;
-    uint8_t screenColor = 15;
-    set_text_color(&screenColor);
-    clear_text_screen(NULL);
-    uint8_t videoModeSave = videoMode;
-    videoMode = 1;
-    print_string_ascii((uint8_t *)"caching dir: ");
-    if(bufStart[0] == 0) {
-        res = f_opendir(&dirHandle, "./");
-        print_string_ascii((uint8_t *)"./\n");
-    } else {
-        uint8_t len = bufStart[0];
-        memmove(&bufStart[1], &bufStart[0], len);
-        bufStart[len] = 0;
-
-        res = f_opendir(&dirHandle, (char *)bufStart);
-        print_string_ascii(bufStart);
-        print_string_ascii((uint8_t *)"\n");
-    }
-
-    bool firstFile = true;
-    while(res == FR_OK) {
-        // usb_printf("cache: psram_de: %p, pos is %06x\n", current_psram_direntry, pos);main_loop_task();sleep_ms(50);
-        if(firstFile) {
-            firstFile = false;
-        }
-        res = f_readdir(&dirHandle, &fileInfo);
-        if(res!=FR_OK) {
-            f_closedir(&dirHandle);
-            print_string_ascii((uint8_t *)"read direntry failed\n");
-            return res;
-        } 
-        if(fileInfo.fname[0] == 0) {
-            f_closedir(&dirHandle);
-            print_string_ascii((uint8_t *)"caching directory done\n");
-            videoMode = videoModeSave;
-            TVC_ROM[0x1810] = 1;
-            TVC_ROM[0x1824] = 1;
-            break;
-        }
-        if((fileInfo.fattrib & AM_DIR) != 0) {
-            continue;
-        }
-        if(strlen(fileInfo.fname)>12) {
-            strncpy((char *)current_psram_direntry->fName, fileInfo.altname, 13);
-            print_string_ascii((uint8_t *)fileInfo.altname);
-        } else {
-            strncpy((char *)current_psram_direntry->fName, fileInfo.fname, 13);
-            print_string_ascii((uint8_t *)fileInfo.fname);
-        }
-        print_char_scr_code((uint8_t) ':');
-        if((pos+fileInfo.fsize) < psram_size()) {
-            current_psram_direntry->fSize = (uint32_t)fileInfo.fsize; // smaller than 4GB for sure
-            current_psram_direntry->startPos = pos;
-            uint8_t fNameBuf[256];
-            fNameBuf[0] = 0;
-            if(bufStart[0] == 0) {
-                strcpy((char *)fNameBuf, "./");
-            } else {
-                strcpy((char *)fNameBuf, (char *)bufStart+1);
-                strcat((char *)fNameBuf, "/");
-            }
-            strcat((char *)fNameBuf, fileInfo.fname);
-            res = f_open(&f, (char *)fNameBuf, FA_READ);
-            if(res != FR_OK) {
-                f_closedir(&dirHandle);
-                TVC_ROM[0x1824] = 0;
-                return res;
-            }
-            if(fileInfo.fsize>65535) {
-                print_hex_word((uint8_t *)&fileInfo.fsize + 2);
-                print_hex_word((uint8_t *)&fileInfo.fsize);
-            } else {
-                print_hex_word( (uint8_t *)&fileInfo.fsize );
-            }
-            print_string_ascii((uint8_t *)"...        \r");
-            UINT br = 0;
-            uint32_t all_read = 0;
-            do {
-                // res = f_read(&f, &TVC_ROM[0x1900], MIN(fileInfo.fsize - all_read, 0x0700), &br);
-                res = f_read(&f, &psram_array[pos + all_read], MIN(fileInfo.fsize - all_read, 0x0800), &br);
-                if(res==FR_OK) {
-                    // print_hex_word((uint8_t *)&all_read);
-                    // print_string_ascii((uint8_t *)"\r");
-                    // memcpy(&psram_array[pos + all_read], &TVC_ROM[0x1900], br);
-                    all_read += br;
-                }
-            } while((res == FR_OK) && (all_read != fileInfo.fsize) && (br!=0));
-            if(res != FR_OK) {
-                f_close(&f);
-                f_closedir(&dirHandle);
-                TVC_ROM[0x1810] = 0;
-                TVC_ROM[0x1824] = 0;
-                return res;
-            } else if(br == 0) {
-                // print_string_ascii((uint8_t *)"0 bytes read");
-                f_close(&f);
-                f_closedir(&dirHandle);
-                TVC_ROM[0x1810] = 0;
-                TVC_ROM[0x1824] = 0;
-                return res;
-            }
-            f_close(&f);
-            pos += fileInfo.fsize;
-            current_psram_direntry++;
-            current_psram_direntry->fName[0] = 0;
-
-        } else {
-            // print_string_ascii((uint8_t *)"doesn't fit!\n");
-            continue;
-        }
-    }
-    psram_drive_initialized = true;
-    // checkSum = 0;
-    // for(int i=0; i<0x1800; i++)
-    //     checkSum+=TVC_ROM[i];
-    // usb_printf("cache: chkSum is %d\n", checkSum);main_loop_task();sleep_ms(50);
-    */
 }
 
 /**
@@ -852,24 +732,24 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
  *  count(2)        : number of chunks to be moved, must be less than 65536
  *  increment(2)    : increment to be added to source and destination addresses after each chunk is moved.
  */
-uint8_t memory_move_chunks(uint8_t *bufStart) {
-    uint32_t destination = *(uint32_t *)&bufStart[0] & 0x00ffffff;
-    uint32_t source = *(uint32_t *)&bufStart[3] & 0x00ffffff;
-    uint16_t chunkSize = *(uint16_t *)&bufStart[6];
-    uint16_t count = *(uint16_t *)&bufStart[8];
-    uint16_t increment = *(uint16_t *)&bufStart[10];
+uint8_t memory_move_chunks(uint32_t destination, 
+                           uint32_t source, 
+                           uint16_t chunkSize, 
+                           uint16_t count, 
+                           uint16_t incrementDestination, 
+                           uint16_t incrementSource) {
     bool sourceInPSRAM = (source & 0x00800000) != 0;
     source &= 0x007fffff;
-    if((chunkSize == 0) || (increment == 0) || (count == 0)) {
+    if((chunkSize == 0) || ((incrementSource == 0) && (incrementDestination == 0)) || (count == 0)) {
         return 1;
     }
-    if(destination + chunkSize + (count-1)*increment > 256*1024) {
+    if(destination + chunkSize + (count-1)*incrementDestination > 256*1024) {
         return 2;
     }
-    if(sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
+    if(sourceInPSRAM && ((source + chunkSize + (count-1)*incrementSource) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 3;
     }
-    if(!sourceInPSRAM && ((source + chunkSize + (count-1)*increment) > 256*1024)) {
+    if(!sourceInPSRAM && ((source + chunkSize + (count-1)*incrementSource) > 256*1024)) {
         return 3;
     }
 
@@ -880,32 +760,51 @@ uint8_t memory_move_chunks(uint8_t *bufStart) {
         for(uint16_t i=0; i<count; i++) {
             //memcpy(&TVC_RAM[destination], &psram_array[source], chunkSize);
             emuMem->memmoveRaw(destination, source, chunkSize);
-            destination += increment;
-            source += increment;
+            destination += incrementDestination;
+            source += incrementSource;
         }
     } else {
         // source is in fast RAM
         source += FASTRAMBASE;
-        if((destination < source + chunkSize + (count - 1) * increment) && (destination > source)) {
+        if((destination < source + chunkSize + (count - 1) * incrementDestination) && (destination > source)) {
             // destination is within the source blocks, copy backwards to handle overlap
-            destination += (count - 1) * increment;
-            source += (count - 1) * increment;
+            destination += (count - 1) * incrementDestination;
+            source += (count - 1) * incrementSource;
             for(int i=count-1; i>=0; i--) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
                 emuMem->memmoveRaw(destination, source, chunkSize);
-                destination -= increment;
-                source -= increment;
+                destination -= incrementDestination;
+                source -= incrementSource;
             }
         } else {
             for(uint16_t i=0; i<count; i++) {
                 //memmove(&TVC_RAM[destination], &TVC_RAM[source], chunkSize);
                 emuMem->memmoveRaw(destination, source, chunkSize);
-                destination += increment;
-                source += increment;
+                destination += incrementDestination;
+                source += incrementSource;
             }
         }
     }
     return 0;
+}
+
+uint8_t memory_move_chunks_1increment(uint8_t *bufStart) {
+    uint32_t destination = *(uint32_t *)&bufStart[0] & 0x00ffffff;
+    uint32_t source = *(uint32_t *)&bufStart[3] & 0x00ffffff;
+    uint16_t chunkSize = *(uint16_t *)&bufStart[6];
+    uint16_t count = *(uint16_t *)&bufStart[8];
+    uint16_t increment = *(uint16_t *)&bufStart[10];
+    return memory_move_chunks(destination, source, chunkSize, count, increment, increment);
+}
+
+uint8_t memory_move_chunks_2increments(uint8_t *bufStart) {
+    uint32_t destination = *(uint32_t *)&bufStart[0] & 0x00ffffff;
+    uint32_t source = *(uint32_t *)&bufStart[3] & 0x00ffffff;
+    uint16_t chunkSize = *(uint16_t *)&bufStart[6];
+    uint16_t count = *(uint16_t *)&bufStart[8];
+    uint16_t incrementDestination = *(uint16_t *)&bufStart[10];
+    uint16_t incrementSource = *(uint16_t *)&bufStart[12];
+    return memory_move_chunks(destination, source, chunkSize, count, incrementDestination, incrementSource);
 }
 
 uint8_t reverse8BitOrder(uint8_t b) {
@@ -1025,7 +924,6 @@ uint8_t zx7Decompress(uint8_t *bufStart) {
     } else {
         source_offset = FASTRAMBASE + source_offset;
     }
-
     // long startTime = time_us_64();
     uint32_t decompressSize = decompress(source_offset, dest_offset);
 
@@ -1037,7 +935,6 @@ uint8_t zx7Decompress(uint8_t *bufStart) {
 
     return 0;
 }
-
 uint8_t penColor = 0;
 uint8_t set_pen_color(uint8_t *color) {
     penColor = *color & 0x0f;
@@ -1073,9 +970,7 @@ uint8_t set_dot_color(uint8_t *bufStart) {
         return 1;
     }
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
     set_dotc_impl(x, y, penColor);
     return 0;
@@ -1101,9 +996,7 @@ uint8_t get_dot_color(uint8_t *bufStart) {
     if(y>=screenMaxY) {
         return 1;
     }
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
     bufStart[0] = get_dot_color_impl(x, y);
     return 0;
@@ -1138,6 +1031,7 @@ void draw_line_impl(int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint8_t colo
     }
 }
 
+
 void draw_horizontal_line_impl(int16_t x1, int16_t x2, int16_t y, uint8_t color) {
     if(x1 % 2) {
         set_dotc_impl(x1, y, color);
@@ -1159,10 +1053,8 @@ uint8_t draw_line(uint8_t *bufStart) {
     int16_t x2 = *(int16_t *)&bufStart[4];
     int16_t y2 = *(int16_t *)&bufStart[6];
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
-    
+    setFunctionBitmapBaseAddr();
+
     draw_line_impl(x1, y1, x2, y2, penColor);
     
     return 0;
@@ -1174,29 +1066,60 @@ uint8_t draw_rectangle(uint8_t *bufStart) {
     uint8_t w = bufStart[4];
     uint8_t h = bufStart[5];
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
-    
-    // draw_line_impl(x, y, x+w, y, penColor);
-    draw_horizontal_line_impl(x, x+w, y, penColor);
+    setFunctionBitmapBaseAddr();
+
+    if((y>=0) && (y<screenMaxY)) {
+        draw_horizontal_line_impl(MAX(0, x), MIN(x+w, 255), y, penColor);
+    }
     draw_line_impl(x+w, y, x+w, y+h, penColor);
-    // draw_line_impl(x+w, y+h, x, y+h, penColor);
-    draw_horizontal_line_impl(x, x+w, y+h, penColor);
+    if(((y+h)>=0) && ((y+h)<screenMaxY)) {
+        draw_horizontal_line_impl(MAX(0, x), MIN(x+w, 255), y+h, penColor);
+    }
     draw_line_impl(x, y+h, x, y, penColor);
     
     return 0;
 }
 
-uint8_t fill_rectangle(uint8_t *bufStart) {
-    int16_t x = *(int16_t *)&bufStart[0];
-    int16_t y = *(int16_t *)&bufStart[2];
-    uint8_t w = bufStart[4];
-    uint8_t h = bufStart[5];
+void fix_rect_params(uint8_t *bufStart, int16_t *x, int16_t *y, uint8_t *w, uint8_t *h) {
+    *x = *(int16_t *)&bufStart[0];
+    *y = *(int16_t *)&bufStart[2];
+    *w = bufStart[4];
+    *h = bufStart[5];
+    
+    if( (*x < -255) || (*y < -255) || 
+        (*x > 255)  || (*y > screenMaxY) || 
+        (*w == 0) || (*h == 0)) {
+            *x = 0;
+            *y = 0;
+            *w = 0;
+            *h = 0;
+            return;
+    }
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    if(*x<0) {
+        *w += *x;
+        *x = 0;
+    }
+    
+    if(*x + *w > 255)
+        *w = 255 - *x;
+    
+    if(*y<0) {
+        *h += *y;
+        *y = 0;
+    }
+    
+    if(*y + *h >= screenMaxY)
+        *h = screenMaxY - *y - 1;
+}
+
+uint8_t fill_rectangle(uint8_t *bufStart) {
+    int16_t x, y;
+    uint8_t w, h;
+
+    fix_rect_params(bufStart, &x, &y, &w, &h);
+
+    setFunctionBitmapBaseAddr();
 
     for(uint8_t i=y; i<y+h; i++) {
         draw_horizontal_line_impl(x, x+w, i, penColor);
@@ -1211,9 +1134,7 @@ uint8_t draw_multi_line(uint8_t *bufStart) {
         return 1;
     }
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
     for(int i=0; i<pointCount-1; i++) {
         int16_t x1 = *(int16_t *)&bufStart[1 + i*4];
@@ -1233,23 +1154,28 @@ typedef struct {
 
 Point stack[1024];
 
-uint8_t scanline_flood_fill(uint8_t *bufStart) {
+static inline void draw_horizontal_line_2c_impl(int16_t x1, int16_t x2, int16_t y, uint8_t twoColors);
+
+uint8_t scanline_flood_fill_impl(uint8_t startX, uint8_t startY, uint8_t new_color, bool use_2c_mode) {
     // long startTime = time_us_64();
      
-    uint8_t startX = bufStart[0];
-    uint8_t startY = bufStart[1];
-    uint8_t new_color = penColor;
-    if(startY>=screenMaxY)
-        return 1;
+    setFunctionBitmapBaseAddr();
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    // Cannot make it fit into memory because obscure compiler optimization issues. 
+    // void (*selected_draw_line)(int16_t, int16_t, int16_t, uint8_t);
+    // if(use_2c_mode) {
+    //     selected_draw_line = draw_horizontal_line_2c_impl;
+    // } else {
+    //     selected_draw_line = draw_horizontal_line_impl;
+    // }
+
+    uint8_t color_even = new_color;
+    uint8_t color_odd = (new_color << 4) | ((new_color >> 4) & 0x0f);
 
     uint8_t target_color = get_dot_color_impl(startX, startY);
     
     // Ha a kitöltendő szín megegyezik az új színnel, nincs dolgunk
-    if (target_color == new_color) 
+    if (target_color == (new_color & 0x0f)) 
         return 0;
 
     // Memória-optimalizálás: A verem maximális szükséges mérete ritkán haladja meg a kép magasságát.
@@ -1282,9 +1208,19 @@ uint8_t scanline_flood_fill(uint8_t *bufStart) {
         }
         rightX--; // Visszalépés az utolsó érvényes pixelre
 
-        // A megtalált vízszintes vonalszakasz kiszínezése
-        for (int i = leftX; i <= rightX; i++) {
-            set_dotc_impl(i, y, new_color);
+        // A megtalált vízszintes vonalszakasz kiszínezése: fill whole span using horizontal line routine
+        if (rightX >= leftX) {
+            // selected_draw_line((int16_t)leftX, (int16_t)rightX, (int16_t)y, new_color);
+
+            if(use_2c_mode) {
+                if(y & 1) {
+                    draw_horizontal_line_2c_impl((int16_t)leftX, (int16_t)rightX, (int16_t)y, color_odd);
+                } else {
+                    draw_horizontal_line_2c_impl((int16_t)leftX, (int16_t)rightX, (int16_t)y, color_even);
+                }
+            } else {
+                draw_horizontal_line_impl((int16_t)leftX, (int16_t)rightX, (int16_t)y, new_color);
+            }
         }
 
         // Felső sor ellenőrzése (y - 1)
@@ -1330,6 +1266,30 @@ uint8_t scanline_flood_fill(uint8_t *bufStart) {
     return 0;
 }
 
+uint8_t scanline_flood_fill(uint8_t *bufStart) {
+    // long startTime = time_us_64();
+     
+    uint8_t startX = bufStart[0];
+    uint8_t startY = bufStart[1];
+    uint8_t new_color = penColor; // fill with the pen color in both nibbles
+    if(startY>=screenMaxY)
+        return 1;
+    
+    return scanline_flood_fill_impl(startX, startY, new_color, false);
+}
+
+uint8_t scanline_flood_fill_2c(uint8_t *bufStart) {
+    // long startTime = time_us_64();
+     
+    uint8_t startX = bufStart[0];
+    uint8_t startY = bufStart[1];
+    uint8_t new_color = bufStart[2];
+    if(startY>=screenMaxY)
+        return 1;
+    
+    return scanline_flood_fill_impl(startX, startY, new_color, true);
+}
+
 void draw_ellipse_pixels(int16_t xc, int16_t yc, uint8_t x, uint8_t y, uint8_t color) {
     int16_t xx = xc + x;
     int16_t yy = yc + y;
@@ -1356,7 +1316,6 @@ void draw_ellipse_pixels(int16_t xc, int16_t yc, uint8_t x, uint8_t y, uint8_t c
 }
 
 void fill_ellipse_pixels(int16_t xc, int16_t yc, uint8_t x, uint8_t y, uint8_t color) {
-
     if((xc - x > 256) || (xc + x < 0) || (yc - y > screenMaxY) || (yc + y < 0) )
         return;
     int16_t leftX = (xc - x) > 0 ? (xc - x) : 0;
@@ -1380,9 +1339,7 @@ uint8_t ellipse(uint8_t *bufStart, bool fill) {
     uint8_t x = 0;
     int32_t y = b;
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
     
     // Előre kiszámolt négyzetek a túlcsordulás megelőzésére (long long)
     uint32_t a2 = (uint32_t)a * a;
@@ -1448,8 +1405,8 @@ uint8_t fill_ellipse(uint8_t *bufStart) {
 }
 
 /**
- * Copies an image block from fastRAM to the selected bitmap. The image block is defined in
- * fastRAM as a byte block. The size of the block is ((width-1)/2 + 1) * height bytes. The transparent pixels
+ * Copies an image block from slow/fastRAM to the selected bitmap. The image block is defined in
+ * slow/fastRAM as a byte block. The size of the block is ((width-1)/2 + 1) * height bytes. The transparent pixels
  * leaves the destination pixel untouched.
  * This is a sub-condition of the  copy_sub_image  function.
  * INPUT:
@@ -1457,7 +1414,7 @@ uint8_t fill_ellipse(uint8_t *bufStart) {
  *   dextY  (2): Y coordinate of the destination in the bitmap. Signed integer, only visible part is copied
  *   width  (1): width of the image to be copied
  *   height (1): height of the image to be copied
- *   srcAdd (3): source address from fastRam from the image is copied from. 
+ *   srcAdd (3): source address from slow/fastRam from the image is copied from.  bit 23 is set if the source is in PSRAM, otherwise in fastRAM. The address is 24 bit, so the maximum address is 0x00ffffff
  * RETURN:
  *   0: if the image is copied
  *   1: if width or height is 0
@@ -1482,9 +1439,7 @@ uint8_t copy_image_block(uint8_t *bufStart) {
 
     sourceAddress &= 0x007FFFFF;
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
     uint8_t wmultiplier = ((width - 1) >> 1) + 1;
     uint8_t color;
@@ -1552,9 +1507,7 @@ uint8_t copy_image_block_fast(uint8_t *bufStart) {
 
     sourceAddress &= 0x007FFFFF;
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
     uint8_t srcLineWidthInBytes = ((width - 1) >> 1) + 1;
     int skippedLines = -1 * MIN(0, destY);
@@ -1610,8 +1563,6 @@ uint8_t copy_image_block_fast(uint8_t *bufStart) {
     }*/
     return 0;   
 }
-
-
 
 uint8_t create_psram_drive(uint8_t *bufStart) {
     uint16_t num_of_blocks = *(uint16_t *)&bufStart;
@@ -1671,9 +1622,7 @@ uint8_t copy_sub_image(uint8_t *bufStart) {
     if((sWidth==0) || (sHeight == 0) || (dWidth == 0) || (dHeight == 0))
         return 0;
 
-    functionBitmapBaseAddr = (registerFunctionBitmapBase == 0xff) ?
-            (registerBitmapBaseAddr & 0x03) * 0x8000 : 
-            (registerFunctionBitmapBase & 0x1f) * 0x8000;
+    setFunctionBitmapBaseAddr();
 
 /*    uint8_t *source_array = sourceAddress & 0x00800000 ? 
                             psram_array : 
@@ -2595,7 +2544,7 @@ void setStructArrayElement(int idx, tvc_function_t funct, uint8_t sizeOfParam) {
     tvc256k_funct_struct_array[idx] = (tvc_function_struct_t){.func = funct, .param_size = sizeOfParam};
 }
 
-operation_stack_element_t operation_stack[16];
+operation_stack_element_t operation_stack[32];
 uint8_t opst_pos = 0;
 
 operation_stack_element_t* pop_opstack() {
@@ -2631,6 +2580,7 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
     int8_t pw;
     uint8_t *p;
     double d;
+    uint32_t destination;
     switch (*math_expr_poi) {
         case FINISH:
         case ADD:
@@ -2652,23 +2602,23 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
             paramValue->value.vali = 0;
             shift = (*math_expr_poi == 0)?0:1;
             break;
-        case UINT8__:
-            paramValue->type = UINT8__;
+        case TYPE_UINT8:
+            paramValue->type = TYPE_UINT8;
             paramValue->value.vali = *(math_expr_poi+1);
             shift = 2;
             break;
-        case INT16__:
-            paramValue->type = INT16__;
+        case TYPE_INT16:
+            paramValue->type = TYPE_INT16;
             paramValue->value.vali = *(int16_t *)(math_expr_poi + 1);
             shift = 3;
             break;
-        case INT32__:
-            paramValue->type = INT32__;
+        case TYPE_INT32:
+            paramValue->type = TYPE_INT32;
             paramValue->value.vali = *(int32_t *)(math_expr_poi + 1);
             shift = 5;
             break;
-        case TVCFLOAT:
-            paramValue->type = FLOAT__;
+        case TYPE_TVCFLOAT:
+            paramValue->type = TYPE_FLOAT;
             d = 0.0;
             p = math_expr_poi+1;
             for(int i=0; i<5; i++, p++) {
@@ -2690,10 +2640,31 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
             paramValue->value.valf = (float)d;
             shift = 7;
             break;
-        case FLOAT__:
-            paramValue->type = FLOAT__;
+        case TYPE_FLOAT:
+            paramValue->type = TYPE_FLOAT;
             paramValue->value.valf = *(float *)(math_expr_poi + 1);
             shift = sizeof(float) + 1;
+            break;
+        case TYPE_VARREF:
+            destination = *(uint32_t *)(math_expr_poi + 1) & 0x00ffffff;
+            uint8_t* varAddr;
+            if(destination & 0x800000) {
+                //varAddr = psram_array + (destination & 0x7fffff);
+                varAddr = emuMem->memGetRaw(SLOWRAMBASE + (destination & 0x7fffff));
+
+            } else {
+                //varAddr = &TVC_RAM[destination & 0x1fffff];
+                varAddr = emuMem->memGetRaw(FASTRAMBASE + (destination & 0x1fffff));
+            }
+            if((*varAddr >=TYPE_UINT8) && (*varAddr <= TYPE_FLOAT)) {
+                uint8_t *temp_mep = math_expr_poi;
+                math_expr_poi = varAddr;
+                parse_next_param(paramValue);
+                math_expr_poi = temp_mep;
+                shift = 4;
+            } else {
+                shift = -1;
+            }
             break;
         case CONST_2PI:
         case CONST_PI:
@@ -2705,7 +2676,7 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
         case CONST_10:
         case CONST_100:
         case CONST_1000:
-            paramValue->type = FLOAT__;
+            paramValue->type = TYPE_FLOAT;
             paramValue->value.valf = mathConstValues[*math_expr_poi - 0x80];
             shift = 1;
             break;
@@ -2730,64 +2701,64 @@ int8_t evaluate_math_impl() {
             return 0;
         }
         
-        if((type >=ABS) && (type < UINT8__)) {    // 1 operand operation is selected
+        if((type >=ABS) && (type <=ROUND)) {    // 1 operand operation is selected
             val1 = pop_opstack();
             if(val1 == NULL) {
                 return -2;
             }
             switch(type) {
                 case ABS:
-                    if(val1->type == FLOAT__) {
+                    if(val1->type == TYPE_FLOAT) {
                         val1->value.valf = val1->value.valf >= 0 ? val1->value.valf : -val1->value.valf;
                     } else {
                         val1->value.vali = abs(val1->value.vali);
                     }
                     break;
                 case SQR:
-                    if(val1->type == FLOAT__) {
+                    if(val1->type == TYPE_FLOAT) {
                         val1->value.valf = val1->value.valf * val1->value.valf;
                     } else {
                         val1->value.vali = val1->value.vali * val1->value.vali;
                     }
                     break;
                 case SQRT:
-                    val1->value.valf = sqrtf( val1->type == FLOAT__ ? 
+                    val1->value.valf = sqrtf( val1->type == TYPE_FLOAT ? 
                                                 val1->value.valf : 
                                                 val1->value.vali );
-                    val1->type = FLOAT__;
+                    val1->type = TYPE_FLOAT;
                     break;
                 case SIN:
-                    if(val1->type!=FLOAT__)
+                    if(val1->type!=TYPE_FLOAT)
                         return -3;
                     val1->value.valf = sinf(val1->value.valf);
                     break;
                 case COS:
-                    if(val1->type!=FLOAT__)
+                    if(val1->type!=TYPE_FLOAT)
                         return -4;
                     val1->value.valf = cosf(val1->value.valf);
                     break;
                 case TAN:
-                    if(val1->type!=FLOAT__)
+                    if(val1->type!=TYPE_FLOAT)
                         return -5;
                     val1->value.valf = tanf(val1->value.valf);
                     break;
                 case TOINT:
-                    if(val1->type!=FLOAT__)
+                    if(val1->type!=TYPE_FLOAT)
                         return -6;
                     val1->value.vali = (int)val1->value.valf;
-                    val1->type = INT32__;
+                    val1->type = TYPE_INT32;
                     break;
                 case TOFLOAT:
-                    if(val1->type==FLOAT__)
+                    if(val1->type==TYPE_FLOAT)
                         return -7;
                     val1->value.valf = (float)val1->value.vali;
-                    val1->type = FLOAT__;
+                    val1->type = TYPE_FLOAT;
                     break;
                 case ROUND:
-                    if(val1->type!=FLOAT__)
+                    if(val1->type!=TYPE_FLOAT)
                         break;
                     val1->value.vali = (int)roundf(val1->value.valf);
-                    val1->type = INT32__;
+                    val1->type = TYPE_INT32;
                     break;
                 default:
                     return -8;
@@ -2802,98 +2773,98 @@ int8_t evaluate_math_impl() {
             
             switch(type) {
                 case ADD:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = (val1->type == FLOAT__ ? val1->value.valf :  (float)val1->value.vali) + 
-                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT__;
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = (val1->type == TYPE_FLOAT ? val1->value.valf :  (float)val1->value.vali) + 
+                                        (val2->type == TYPE_FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = TYPE_FLOAT;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali + (int32_t)val2->value.vali;
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case SUB:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) -
-                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT__;
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = (val1->type == TYPE_FLOAT ? val1->value.valf  : (float)val1->value.vali) -
+                                        (val2->type == TYPE_FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = TYPE_FLOAT;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali - (int32_t)val2->value.vali;
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case MUL:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) *
-                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT__;
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = (val1->type == TYPE_FLOAT ? val1->value.valf  : (float)val1->value.vali) *
+                                        (val2->type == TYPE_FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = TYPE_FLOAT;
                         val1->value.valf = result;
                     } else {
                         int32_t result = (int32_t)val1->value.vali * (int32_t)val2->value.vali;
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case DIV:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = (val1->type == FLOAT__ ? val1->value.valf  : (float)val1->value.vali) /
-                                        (val2->type == FLOAT__ ? val2->value.valf : (float)val2->value.vali);
-                        val1->type = FLOAT__;
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = (val1->type == TYPE_FLOAT ? val1->value.valf  : (float)val1->value.vali) /
+                                        (val2->type == TYPE_FLOAT ? val2->value.valf : (float)val2->value.vali);
+                        val1->type = TYPE_FLOAT;
                         val1->value.valf = result;
                     } else {
                         val1->value.vali = (int32_t)val1->value.vali / (int32_t)val2->value.vali;
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                     }
                     break;
                 case MIN:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = fminf((val1->type == FLOAT__ ? val1->value.valf : val1->value.vali),
-                                             (val2->type == FLOAT__ ? val2->value.valf : val2->value.vali));
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = fminf((val1->type == TYPE_FLOAT ? val1->value.valf : val1->value.vali),
+                                             (val2->type == TYPE_FLOAT ? val2->value.valf : val2->value.vali));
 
                         val1->value.valf = result;
-                        val1->type = FLOAT__;
+                        val1->type = TYPE_FLOAT;
                     } else {
                         int32_t result = MIN((uint32_t)val1->value.vali,(uint32_t)val2->value.vali);
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                         val1->value.vali = result;
                     }
                     break;
                 case MAX:
-                    if((val1->type == FLOAT__) || (val2->type == FLOAT__)) {
-                        float result = fmaxf((val1->type == FLOAT__ ? val1->value.valf:val1->value.vali),
-                                             (val2->type == FLOAT__ ? val2->value.valf:val2->value.vali));
+                    if((val1->type == TYPE_FLOAT) || (val2->type == TYPE_FLOAT)) {
+                        float result = fmaxf((val1->type == TYPE_FLOAT ? val1->value.valf:val1->value.vali),
+                                             (val2->type == TYPE_FLOAT ? val2->value.valf:val2->value.vali));
 
                         val1->value.valf = result;
-                        val1->type = FLOAT__;
+                        val1->type = TYPE_FLOAT;
                     } else {
                         int32_t result = MAX((uint32_t)val1->value.vali, (uint32_t)val2->value.vali);
-                        if((val1->type == INT32__) || (val2->type == INT32__)) {
-                            val1->type = INT32__;
-                        } else if((val1->type == INT16__) || (val2->type == INT16__)) {
-                            val1->type = INT16__;
+                        if((val1->type == TYPE_INT32) || (val2->type == TYPE_INT32)) {
+                            val1->type = TYPE_INT32;
+                        } else if((val1->type == TYPE_INT16) || (val2->type == TYPE_INT16)) {
+                            val1->type = TYPE_INT16;
                         }
                         val1->value.vali = result;
                     }
@@ -2902,7 +2873,7 @@ int8_t evaluate_math_impl() {
                     return -10;
             }
             opst_pos++; // push back val
-        } else if(((type>=UINT8__) && (type<=FLOAT__)) ||
+        } else if(((type>=TYPE_UINT8) && (type<=TYPE_FLOAT)) ||
                   ((type>=CONST_2PI) && (type<=CONST_0_001))) {
             opst_pos++; // push parsed item 
         }
@@ -2920,21 +2891,241 @@ uint8_t evaluate_math_expression(uint8_t* bufStart) {
         uint8_t type = operation_stack[--opst_pos].type;
         *bufStart = type;
         switch(type) {
-            case UINT8__:
+            case TYPE_UINT8:
                 *(bufStart + 1) = (uint8_t)operation_stack[0].value.vali;
                 break;
-            case INT16__:
+            case TYPE_INT16:
                 *(int16_t *)(bufStart + 1) = (uint16_t)operation_stack[0].value.vali;
                 break;
-            case INT32__:
+            case TYPE_INT32:
                 *(int32_t *)(bufStart + 1) = operation_stack[0].value.vali;
                 break;
-            case FLOAT__:
+            case TYPE_FLOAT:
                 *(float *)(bufStart + 1) = operation_stack[0].value.valf;
                 break;
         }
     }
+    return 0;
+}
 
+static inline void swap_int(int16_t *a, int16_t *b) {
+    int16_t temp = *a; 
+    *a = *b; 
+    *b = temp;
+}
+
+static inline void draw_horizontal_line_2c_impl(int16_t x1, int16_t x2, int16_t y, uint8_t twoColors) {
+    if(x1 > x2) {
+        swap_int(&x1, &x2);
+    }
+
+    if(x1 % 2) {
+        set_dotc_impl(x1, y, twoColors & 0x0f);
+        x1++;
+    }
+    if((x2 % 2) == 0) {
+        set_dotc_impl(x2, y, twoColors >> 4);
+        x2--;
+    }
+    //memset(&TVC_RAM[functionBitmapBaseAddr + y * 128 + (x1 >> 1)], twoColors, (x2-x1 + 1) >> 1);
+    emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr + y * 128 + (x1 >> 1), (x2-x1 + 1) >> 1, twoColors);
+
+}
+
+int16_t clamp_x(int16_t x) {
+    if (x < 0) 
+        return 0;
+    if (x >= 256) 
+        return 256 - 1;
+    return x;
+}
+
+uint8_t draw_filled_triangle(uint8_t *bufferStart) {
+    int16_t x1 = *(int16_t *)&bufferStart[0];
+    int16_t y1 = *(int16_t *)&bufferStart[2];
+    int16_t x2 = *(int16_t *)&bufferStart[4];
+    int16_t y2 = *(int16_t *)&bufferStart[6];
+    int16_t x3 = *(int16_t *)&bufferStart[8];
+    int16_t y3 = *(int16_t *)&bufferStart[10];
+    
+    if(((x2-x1) * (y3-y1) - (y2-y1) * (x3-x1)) > 0)
+        return 0;
+    
+    uint8_t twoColors = bufferStart[12];
+    
+    setFunctionBitmapBaseAddr();
+
+    // 1. Y szerinti rendezés (y1 <= y2 <= y3)
+    if (y1 > y2) { swap_int(&y1, &y2); swap_int(&x1, &x2); }
+    if (y1 > y3) { swap_int(&y1, &y3); swap_int(&x1, &x3); }
+    if (y2 > y3) { swap_int(&y2, &y3); swap_int(&x2, &x3); }
+
+    if ((y3 < 0) || (y1 >= 240) || (y1 == y3)) 
+        return 0;
+
+    int32_t total_height = y3 - y1;
+    
+    // Az RP2350 SDIV utasítása ezt 2-12 órajel alatt elvégzi
+    int32_t dx_total = ((int32_t)(x3 - x1) << 16) / total_height;
+
+    // 2. Felső rész (y1 -> y2)
+    int32_t segment_height = y2 - y1;
+    uint8_t tc_even = twoColors; 
+    uint8_t tc_odd = (twoColors >> 4) | (twoColors << 4);
+    if (segment_height > 0 && y1 < 240 && y2 > 0) {
+        int32_t dx_short = ((int32_t)(x2 - x1) << 16) / segment_height;
+        
+        int32_t x_long = x1 << 16;
+        int32_t x_short = x1 << 16;
+
+        int start_y = y1;
+        int end_y = y2;
+
+        // Pre-stepping a képernyő tetején kilógó részekre
+        if (start_y < 0) {
+            int skip = -start_y;
+            x_long += dx_total * skip;
+            x_short += dx_short * skip;
+            start_y = 0;
+        }
+        if (end_y > 240) end_y = 240;
+
+        for (int y = start_y; y < end_y; y++) {
+            draw_horizontal_line_2c_impl(clamp_x(x_long >> 16), clamp_x(x_short >> 16), y, (y % 2 == 0) ? tc_even : tc_odd);
+            x_long += dx_total;
+            x_short += dx_short;
+        }
+    }
+
+    // 3. Alsó rész (y2 -> y3)
+    segment_height = y3 - y2;
+    if ((segment_height > 0) && (y2 < 240) && (y3 > 0)) {
+        int32_t dx_short = ((int32_t)(x3 - x2) << 16) / segment_height;
+        
+        int32_t x_long = (x1 << 16) + dx_total * (y2 - y1);
+        int32_t x_short = x2 << 16;
+
+        int start_y = y2;
+        int end_y = y3;
+
+        if (start_y < 0) {
+            int skip = -start_y;
+            x_long += dx_total * skip;
+            x_short += dx_short * skip;
+            start_y = 0;
+        }
+        if (end_y >= 240) 
+            end_y = 240 - 1;
+
+        for (int y = start_y; y <= end_y; y++) {
+            draw_horizontal_line_2c_impl(clamp_x(x_long >> 16), clamp_x(x_short >> 16), y, (y % 2 == 0) ? tc_even : tc_odd);
+            x_long += dx_total;
+            x_short += dx_short;
+        }
+    }
+    if(penColor != 8) {
+        draw_line_impl(x1, y1, x2, y2, penColor);
+        draw_line_impl(x2, y2, x3, y3, penColor);
+        draw_line_impl(x3, y3, x1, y1, penColor);
+    }
+
+    return 0;
+}
+
+uint8_t fill_rectangle_2c(uint8_t *bufStart) {
+    int16_t x, y;
+    uint8_t w, h;
+
+    fix_rect_params(bufStart, &x, &y, &w, &h);
+
+    uint8_t twoColors = bufStart[6];
+
+    setFunctionBitmapBaseAddr();
+    
+    uint8_t tc_even = twoColors;
+    uint8_t tc_odd = (twoColors >> 4) | (twoColors << 4);
+    for(uint8_t i=y; i<=y+h; i++) {
+        if(i % 2 == 0)
+            draw_horizontal_line_2c_impl(x, x+w, i, tc_even);
+        else
+            draw_horizontal_line_2c_impl(x, x+w, i, tc_odd);
+    }
+
+    if(penColor != 8) {
+        draw_rectangle(bufStart);
+    }
+
+    return 0;
+}
+
+typedef struct {
+    int x;
+    int dir;      // +1 ha jobbra tart, -1 ha balra
+    int dx;
+    int dy;
+    int err;
+} EdgeTracker;
+
+static inline void init_edge(EdgeTracker *e, int x1, int y1, int x2, int y2) {
+    e->x = x1;
+    e->dx = abs(x2 - x1);
+    e->dy = y2 - y1; // y2 >= y1 a rendezés miatt
+    e->dir = (x2 >= x1) ? 1 : -1;
+    e->err = 0;
+}
+
+// Lépteti az X koordinátát a következő Y sorra (OSZTÁS MENTES!)
+static inline void step_edge(EdgeTracker *e) {
+    if (e->dy == 0) return;
+    
+    e->err += e->dx;
+    while (e->err >= e->dy) {
+        e->x += e->dir;
+        e->err -= e->dy;
+    }
+}
+
+uint8_t draw_filled_triangle_bresenham(uint8_t *bufferStart) {
+    int16_t x1 = *(int16_t *)&bufferStart[0];
+    int16_t y1 = *(int16_t *)&bufferStart[2];
+    int16_t x2 = *(int16_t *)&bufferStart[4];
+    int16_t y2 = *(int16_t *)&bufferStart[6];
+    int16_t x3 = *(int16_t *)&bufferStart[8];
+    int16_t y3 = *(int16_t *)&bufferStart[10];
+    uint8_t twoColors = bufferStart[12];
+
+    setFunctionBitmapBaseAddr();
+
+    // 1. Y szerinti rendezés (y1 <= y2 <= y3)
+    if (y1 > y2) { swap_int(&y1, &y2); swap_int(&x1, &x2); }
+    if (y1 > y3) { swap_int(&y1, &y3); swap_int(&x1, &x3); }
+    if (y2 > y3) { swap_int(&y2, &y3); swap_int(&x2, &x3); }
+
+    if (y3 < 0 || y1 >= 240 || y1 == y3) return 0;
+
+    uint8_t tc_even = twoColors; 
+    uint8_t tc_odd = (twoColors >> 4) | (twoColors << 4);
+
+    EdgeTracker e_long, e_short;
+    init_edge(&e_long, x1, y1, x3, y3);
+    init_edge(&e_short, x1, y1, x2, y2);
+
+    // 2. Felső rész rajzolása (y1 -> y2)
+    for (int y = y1; y < y2; y++) {
+        draw_horizontal_line_2c_impl(e_long.x, e_short.x, y, (y % 2 == 0) ? tc_even : tc_odd);
+        step_edge(&e_long);
+        step_edge(&e_short);
+    }
+
+    // 3. Alsó rész rajzolása (y2 -> y3)
+    // A rövid oldal átvált a (y2 -> y3) szakaszra
+    init_edge(&e_short, x2, y2, x3, y3);
+
+    for (int y = y2; y <= y3; y++) {
+        draw_horizontal_line_2c_impl(e_long.x, e_short.x, y, (y % 2 == 0) ? tc_even : tc_odd);
+        step_edge(&e_long);
+        step_edge(&e_short);
+    }
     return 0;
 }
 
@@ -3003,7 +3194,7 @@ void init_routines() {
     setStructArrayElement(15, copy_dir_to_psram,             0x86);      // 15
     setStructArrayElement(16, replace_pixel_color,           8);
     setStructArrayElement(17, memory_move_chunks_from_block, 12);
-    setStructArrayElement(18, memory_move_chunks,            12);
+    setStructArrayElement(18, memory_move_chunks_1increment, 12);
     setStructArrayElement(19, mirror_sprite_phase,           6);
     setStructArrayElement(20, zx7Decompress,                 10);      // 20
     setStructArrayElement(21, get_pen_color,                 0);
@@ -3024,6 +3215,11 @@ void init_routines() {
     setStructArrayElement(35, get_first_usable_psram_pos,    0);
     setStructArrayElement(36, delete_psram_drive,            0);
     setStructArrayElement(37, evaluate_math_expression,      0x87);
+    setStructArrayElement(38, draw_filled_triangle,          13);
+    setStructArrayElement(39, fill_rectangle_2c,             7);
+    setStructArrayElement(40, scanline_flood_fill_2c,        3);
+    setStructArrayElement(41, memory_move_chunks_2increments, 14);
+
 
     setStructArrayElement(128+MSC_FOPENFILE,    tvcfunc_open_file,       0x83);
     setStructArrayElement(128+MSC_FCLOSEFILE,   tvcfunc_close_file,      4);
@@ -3055,7 +3251,6 @@ void init_routines() {
     math_type_sizes[MAX] = 1;
     math_type_sizes[MIN] = 1;
     math_type_sizes[ABS] = 1;
-    math_type_sizes[SQR] = 1;
     math_type_sizes[SQRT] = 1;
     math_type_sizes[SIN] = 1;
     math_type_sizes[COS] = 1;
@@ -3063,11 +3258,12 @@ void init_routines() {
     math_type_sizes[TOINT] = 1;
     math_type_sizes[TOFLOAT] = 1;
     math_type_sizes[ROUND] = 1;
-    math_type_sizes[UINT8__] = 2;
-    math_type_sizes[INT16__] = 3;
-    math_type_sizes[INT32__] = 5;
-    math_type_sizes[TVCFLOAT] = 7;
-    math_type_sizes[FLOAT__] = 5;
+    math_type_sizes[TYPE_UINT8] = 2;
+    math_type_sizes[TYPE_INT16] = 3;
+    math_type_sizes[TYPE_INT32] = 5;
+    math_type_sizes[TYPE_TVCFLOAT] = 7;
+    math_type_sizes[TYPE_FLOAT] = 5;
+    math_type_sizes[TYPE_VARREF] = 4;
     math_type_sizes[CONST_2PI] = 1;
     math_type_sizes[CONST_PI] = 1;
     math_type_sizes[CONST_PI2] = 1;
