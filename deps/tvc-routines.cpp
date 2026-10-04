@@ -17,7 +17,7 @@
 //#include "psram.h"
 //#include "tvc-lfs-flash.h"
 //#include "tvc-lfs-psram.h"
-//#include "zx7Compress.h"
+#include "zx7Compress.h"
 //#include "hardware/clocks.h"
 //#include "lfs.h"
 #include <stdbool.h>
@@ -1009,26 +1009,25 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
     return 0;
 }
 
-/*
+
 uint8_t zx7Decompress(uint8_t *bufStart) {
     uint32_t dest_offset = *(uint32_t *)&bufStart[0] & 0x00ffffff;
     uint32_t source_offset = *(uint32_t *)&bufStart[3] & 0x00ffffff;
 
-    uint8_t* destAddress;
-    uint8_t* sourceAddress;
     if(dest_offset & 0x00800000) {
-        destAddress = psram_array + (dest_offset & 0x007fffff);
+        dest_offset = SLOWRAMBASE + (dest_offset & 0x007fffff);
     } else {
-        destAddress = TVC_RAM + dest_offset;
+        dest_offset = FASTRAMBASE + dest_offset;
     }
 
     if(source_offset & 0x00800000) {
-        sourceAddress = psram_array + (source_offset & 0x007fffff);
+        source_offset = SLOWRAMBASE + (source_offset & 0x007fffff);
     } else {
-        sourceAddress = TVC_RAM + source_offset;
+        source_offset = FASTRAMBASE + source_offset;
     }
+
     // long startTime = time_us_64();
-    uint32_t decompressSize = decompress((unsigned char *)sourceAddress, (unsigned char *)destAddress);
+    uint32_t decompressSize = decompress(source_offset, dest_offset);
 
     *(uint32_t *)&bufStart[6] = decompressSize;
 
@@ -1038,7 +1037,7 @@ uint8_t zx7Decompress(uint8_t *bufStart) {
 
     return 0;
 }
-*/
+
 uint8_t penColor = 0;
 uint8_t set_pen_color(uint8_t *color) {
     penColor = *color & 0x0f;
@@ -3006,7 +3005,7 @@ void init_routines() {
     setStructArrayElement(17, memory_move_chunks_from_block, 12);
     setStructArrayElement(18, memory_move_chunks,            12);
     setStructArrayElement(19, mirror_sprite_phase,           6);
-//    setStructArrayElement(20, zx7Decompress,                 10);      // 20
+    setStructArrayElement(20, zx7Decompress,                 10);      // 20
     setStructArrayElement(21, get_pen_color,                 0);
     setStructArrayElement(22, set_pen_color,                 1);
     setStructArrayElement(23, get_dot_color,                 2);

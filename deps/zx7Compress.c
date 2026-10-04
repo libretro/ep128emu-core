@@ -1,7 +1,8 @@
 #include "zx7Compress.h"
+namespace TVC256 {
 
-unsigned char *input_data;
-unsigned char *output_data;     // Ha NULL, akkor csak a kicsomagolt méretet adja vissza a Decompress
+uint32_t input_data;
+uint32_t output_data;     // Ha NULL, akkor csak a kicsomagolt méretet adja vissza a Decompress
 int input_index;
 int output_index;
 int input_size;
@@ -19,7 +20,8 @@ void write_bytes(int offset, int length);
 
 int read_byte(void)
 {
-	return input_data[input_index++];
+	return emuMem->readRaw(input_index++);
+	//return input_data[input_index++];
 }
 
 int  read_bit(void)
@@ -72,8 +74,9 @@ int  read_offset()
 void write_byte(int value)
 {
 	++decompressSize;
-	if(output_data)
-		output_data[output_index++] = value;
+/*	if(output_data)
+		output_data[output_index++] = value;*/
+  emuMem->writeRaw(output_data+output_index++,value);
 }
 
 void write_bytes(int offset, int length)
@@ -84,11 +87,12 @@ void write_bytes(int offset, int length)
 	{
 		i = output_index - offset;
 		//write_byte(output_data[i >= 0 ? i : BUFFER_SIZE+i]);
-		write_byte((int)output_data[i]);
+		//write_byte((int)output_data[i]);
+    write_byte((int)emuMem->readRaw(input_data+i));
 	}
 }
 
-int decompress(unsigned char *src, unsigned char *dest)
+int decompress(uint32_t src, uint32_t dest)
 {
 	int length;
 
@@ -121,4 +125,5 @@ int decompress(unsigned char *src, unsigned char *dest)
 	}
 
 	return decompressSize;
+}
 }

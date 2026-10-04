@@ -36,7 +36,11 @@
 // #include <stdio.h>
 // #include <stdlib.h>
 
+#include <stdint.h>
+#include "tvcmem.hpp"
+namespace TVC256 {
+extern TVC64::Memory *emuMem;
 
-int  decompress(unsigned char *src, unsigned char *dest);
-
+int  decompress(uint32_t src, uint32_t dest);
+}
 #endif
