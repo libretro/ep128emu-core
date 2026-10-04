@@ -53,6 +53,7 @@
    2DFX TVC:
    - decrease resolution (ignore 2nd pixels) if not in graphics 2
    - finalize Y offset
+   - add zx1 lib
 */
 
 #include "ep128emu.hpp"
@@ -243,6 +244,7 @@ namespace Ep128 {
     TVC256::currDir.str[254] = 0;
 
     std::memset(&named2dfxPortValues[0], 0x00, 256*9);
+    named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9] = 1;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -1183,6 +1185,28 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
        case TWODFX_UPLOAD_NICK:
          uploadRemaining = named2dfxPortValues[selected2dfxPort*9 + 3] + 256 * named2dfxPortValues[selected2dfxPort*9 + 4];
          break;
+       case TWODFX_SET_TRANSPARENT_COLOR:
+       case 0x41:
+       case 0x42:
+       case 0x43:
+       case 0x44:
+       case 0x45:
+       case 0x46:
+       case 0x47:
+       case 0x48:
+       case 0x49:
+       case 0x4a:
+       case 0x4b:
+       case 0x4c:
+       case 0x4d:
+       case 0x4e:
+       case 0x4f:
+         // No additional parameter, lower 4 bits are used
+         named2dfxPortValues[TWODFX_SET_TRANSPARENT_COLOR*9] = selected2dfxPort - TWODFX_SET_TRANSPARENT_COLOR;
+         break;
+       /* No special action - parameters are recorded */
+       case TWODFX_SET_ENGINE_MODE:
+         break;
        default:
         break;
      }
@@ -1305,7 +1329,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
       curLine++;
 
     // todo: screen height shortcuts
-    if (!(*nBytes))
+    if (!(*nBytes) || named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9]==0)
       return buf;
    // Note: line pixels are according to PAL (768).
     do {
