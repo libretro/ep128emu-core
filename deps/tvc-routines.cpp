@@ -2643,7 +2643,7 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
         case TYPE_FLOAT:
             paramValue->type = TYPE_FLOAT;
             paramValue->value.valf = *(float *)(math_expr_poi + 1);
-            shift = sizeof(float) + 1;
+            shift = /*sizeof(float)*/ 4 + 1;
             break;
         case TYPE_VARREF:
             destination = *(uint32_t *)(math_expr_poi + 1) & 0x00ffffff;
@@ -2651,7 +2651,6 @@ bool parse_next_param(operation_stack_element_t *paramValue) {
             if(destination & 0x800000) {
                 //varAddr = psram_array + (destination & 0x7fffff);
                 varAddr = emuMem->memGetRaw(SLOWRAMBASE + (destination & 0x7fffff));
-
             } else {
                 //varAddr = &TVC_RAM[destination & 0x1fffff];
                 varAddr = emuMem->memGetRaw(FASTRAMBASE + (destination & 0x1fffff));
@@ -2873,8 +2872,8 @@ int8_t evaluate_math_impl() {
                     return -10;
             }
             opst_pos++; // push back val
-        } else if(((type>=TYPE_UINT8) && (type<=TYPE_FLOAT)) ||
-                  ((type>=CONST_2PI) && (type<=CONST_0_001))) {
+        } else if(((type>=TYPE_UINT8) && (type<=TYPE_VARREF)) ||
+                  ((type>=CONST_2PI) && (type<=CONST_1000))) {
             opst_pos++; // push parsed item 
         }
     } while(true);

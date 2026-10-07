@@ -363,22 +363,55 @@ namespace Ep128 {
     TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
     TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
 
-    uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
-    uint8_t tmpBuffer[256];
+    functionResultDelay = true;
+    uint32_t bufferAddr = /*0x8000 + */namedPortValues[REG_FUNCTION_PARAM_START]*128;
+    uint8_t bufferPage = 0;
+    bufferAddr &= 0x3FFF;
+
+    // Memory pointer should point to fastram that is mapped to U2/U3, even if actual paging is different
+    if (namedPortValues[REG_FUNCTION_PARAM_START] < 128)
+    {
+      if (namedPortValues[REG_MEMORY_P2] < 0x10)
+        bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P2];
+      else if (namedPortValues[REG_MEMORY_P2] == 0x10)
+        bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P2_LOW];
+      else if (namedPortValues[REG_MEMORY_P2] == 0xFF)
+        bufferPage = 0xFA; // original U2 - this results in error in real HW
+      else
+      {
+        lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+        return;
+      }
+    }
+    else
+    {
+      if (namedPortValues[REG_MEMORY_P3] < 0x10)
+        bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P3];
+      else if (namedPortValues[REG_MEMORY_P3] == 0x11)
+        bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P3_LOW];
+      else if (namedPortValues[REG_MEMORY_P3] == 0xFF)
+        bufferPage = 0xFB; // original U3 - this results in error in real HW
+      else
+      {
+        lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+        return;
+      }
+    }
+    bufferAddr += bufferPage<<14;
 
     for (uint8_t currFunc = 0; currFunc<funcCount; currFunc++)
     {
-      uint8_t* bufferStart = hostMem->memGet(bufferAddr+1);
+      uint8_t* bufferStart = hostMem->memGetRaw(bufferAddr+1);
+
       uint8_t funcCode = *(bufferStart-1);
       uint8_t paramLen = TVC256::getFunctionParamSize(bufferStart, TVC256::tvc256k_funct_struct_array[funcCode].param_size);
-      memcpy(&tmpBuffer[0], bufferStart, paramLen);
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
         /*printf("Multi Func call: %d/%d %02X params at %04x len %02x\n",
                currFunc+1,funcCount,funcCode,bufferAddr, paramLen);*/
 
-        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(&tmpBuffer[0]);
+        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         //printf("Func res:  %02X\n", lastFunctionResult);
         if (lastFunctionResult)
         {
