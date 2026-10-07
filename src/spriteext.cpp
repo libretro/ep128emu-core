@@ -596,6 +596,11 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
          scrollY = value & 0x07;
          scrollBorderY = value & 0x80;
          break;
+       case REG_FUNCTION_BITMAP_BASE:
+         if (value < 0xFF)
+           value &= 0x03;
+         namedPortValues[portAddr] = value;
+         break;
        default:
          // Video related ports are written instantly (lot of TODO here)
          if (portAddr <= REG_SCREEN_MAXY)

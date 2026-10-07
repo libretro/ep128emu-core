@@ -94,7 +94,6 @@ void setFunctionBitmapBaseAddr() {
 
 // Fills the bitmap screen area with the transparent pattern
 uint8_t clear_bitmap_screen(__unused uint8_t* bufferStart) {
-    (void) bufferStart;
     setFunctionBitmapBaseAddr();
     //memset(&TVC_RAM[functionBitmapBaseAddr], 0x88, 128 * screenMaxY);
     emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr, 128*screenMaxY, 0x88);
@@ -2487,7 +2486,7 @@ uint8_t tvcfunc_sync(uint8_t* bufferStart) {
         default:
             return 3;
     }*/
-    return FR_INVALID_PARAMETER + 0x80;
+    return FR_OK;
 }
 
 uint8_t tvcfunc_mount_dsk(uint8_t *bufferStart) {
@@ -2928,7 +2927,6 @@ static inline void draw_horizontal_line_2c_impl(int16_t x1, int16_t x2, int16_t 
     }
     //memset(&TVC_RAM[functionBitmapBaseAddr + y * 128 + (x1 >> 1)], twoColors, (x2-x1 + 1) >> 1);
     emuMem->memsetRaw(FASTRAMBASE + functionBitmapBaseAddr + y * 128 + (x1 >> 1), (x2-x1 + 1) >> 1, twoColors);
-
 }
 
 int16_t clamp_x(int16_t x) {
