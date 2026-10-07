@@ -52,7 +52,8 @@
 
    2DFX TVC:
    - decrease resolution (ignore 2nd pixels) if not in graphics 2
-   - display of non-basic-safe area
+   - finalize Y offset
+   - add zx1 lib
 */
 
 #include "ep128emu.hpp"
@@ -70,6 +71,7 @@
 #include "tvc-routines.h"
 #include "2dfx_builtin_logo.h"
 #include "twodfx_api.h"
+#include "2dfx_main.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -107,7 +109,7 @@ namespace Ep128 {
       1,    1,    1,    0,   2,    2,    2,    2,   0,255,255,  5,   7,  4,  4,  7,
       1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
       8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
-      8,    8,    8,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
+      5,    5,    5,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
       4,    0,    8,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
     255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
     255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
@@ -130,7 +132,8 @@ namespace Ep128 {
       scrollX(0),
       scrollY(0),
       scrollBorderX(false),
-      scrollBorderY(false)
+      scrollBorderY(false),
+      uploadRemaining(0)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -164,6 +167,7 @@ namespace Ep128 {
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
     TVC256::init_routines();
+    TWODFX::build_source_conversion_luts();
     this->reset(1);
   }
 
@@ -240,6 +244,7 @@ namespace Ep128 {
     TVC256::currDir.str[254] = 0;
 
     std::memset(&named2dfxPortValues[0], 0x00, 256*9);
+    named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9] = 1;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -358,22 +363,55 @@ namespace Ep128 {
     TVC256::registerFunctionBitmapBase = namedPortValues[REG_FUNCTION_BITMAP_BASE];
     TVC256::screenMaxY = namedPortValues[REG_SCREEN_MAXY];
 
-    uint32_t bufferAddr = 0x8000 + namedPortValues[REG_FUNCTION_PARAM_START]*128;
-    uint8_t tmpBuffer[256];
+    functionResultDelay = true;
+    uint32_t bufferAddr = /*0x8000 + */namedPortValues[REG_FUNCTION_PARAM_START]*128;
+    uint8_t bufferPage = 0;
+    bufferAddr &= 0x3FFF;
+
+    // Memory pointer should point to fastram that is mapped to U2/U3, even if actual paging is different
+    if (namedPortValues[REG_FUNCTION_PARAM_START] < 128)
+    {
+      if (namedPortValues[REG_MEMORY_P2] < 0x10)
+        bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P2];
+      else if (namedPortValues[REG_MEMORY_P2] == 0x10)
+        bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P2_LOW];
+      else if (namedPortValues[REG_MEMORY_P2] == 0xFF)
+        bufferPage = 0xFA; // original U2 - this results in error in real HW
+      else
+      {
+        lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+        return;
+      }
+    }
+    else
+    {
+      if (namedPortValues[REG_MEMORY_P3] < 0x10)
+        bufferPage = TVC256_FASTRAM_START_SEGMENT + namedPortValues[REG_MEMORY_P3];
+      else if (namedPortValues[REG_MEMORY_P3] == 0x11)
+        bufferPage = TVC256_SLOWRAM_START_SEGMENT + namedPortValues[REG_MEMORY_MAP_8M_P3_LOW];
+      else if (namedPortValues[REG_MEMORY_P3] == 0xFF)
+        bufferPage = 0xFB; // original U3 - this results in error in real HW
+      else
+      {
+        lastFunctionResult = 0x80 + 19; //FR_INVALID_PARAMETER
+        return;
+      }
+    }
+    bufferAddr += bufferPage<<14;
 
     for (uint8_t currFunc = 0; currFunc<funcCount; currFunc++)
     {
-      uint8_t* bufferStart = hostMem->memGet(bufferAddr+1);
+      uint8_t* bufferStart = hostMem->memGetRaw(bufferAddr+1);
+
       uint8_t funcCode = *(bufferStart-1);
       uint8_t paramLen = TVC256::getFunctionParamSize(bufferStart, TVC256::tvc256k_funct_struct_array[funcCode].param_size);
-      memcpy(&tmpBuffer[0], bufferStart, paramLen);
 
      if (TVC256::tvc256k_funct_struct_array[funcCode].func)
      {
         /*printf("Multi Func call: %d/%d %02X params at %04x len %02x\n",
                currFunc+1,funcCount,funcCode,bufferAddr, paramLen);*/
 
-        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(&tmpBuffer[0]);
+        lastFunctionResult = TVC256::tvc256k_funct_struct_array[funcCode].func(bufferStart);
         //printf("Func res:  %02X\n", lastFunctionResult);
         if (lastFunctionResult)
         {
@@ -1119,7 +1157,33 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
                selected2dfxPort);
         return;
       }
-      if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
+      if (uploadRemaining > 0)
+      {
+        uint32_t targetAddr = named2dfxPortValues[selected2dfxPort*9 + 0] + 
+                        256 * named2dfxPortValues[selected2dfxPort*9 + 1] +
+                  256 * 256 * named2dfxPortValues[selected2dfxPort*9 + 2];
+        targetAddr += named2dfxPortValues[selected2dfxPort*9 + 3] +
+                256 * named2dfxPortValues[selected2dfxPort*9 + 4] -
+                      uploadRemaining;
+        // Limit to 2 MB
+        targetAddr &= 0x1fffff;
+        targetAddr += (TVC256_SLOWRAM_START_SEGMENT)<<14;
+        if (selected2dfxPort == TWODFX_UPLOAD_RAW)
+        {
+          hostMem->writeRaw(targetAddr,value);  
+        }
+        else if (selected2dfxPort == TWODFX_UPLOAD_TVC)
+        {
+          hostMem->writeRaw(targetAddr,TWODFX::tvc_to_sprite_lut[value]);
+        }
+        else if (selected2dfxPort == TWODFX_UPLOAD_NICK)
+        {
+          hostMem->writeRaw(targetAddr,TWODFX::nick_to_sprite_lut[value]);
+        }
+        uploadRemaining--;
+        return;
+      }
+      else if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
       {
         printf("2DFX func err: %02x - param overflow ( > %d)\n",
                selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort]);
@@ -1139,6 +1203,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
              named2dfxPortValues[selected2dfxPort*9 + 6], named2dfxPortValues[selected2dfxPort*9 + 7],
              named2dfxPortValues[selected2dfxPort*9 + 8]);
 
+     uploadRemaining = 0;
      switch (selected2dfxPort)
      {
        case TWODFX_SHOW_BUILTIN_LOGO:
@@ -1147,6 +1212,33 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
 
        case TWODFX_HIDE_BUILTIN_LOGO:
          named2dfxPortValues[selected2dfxPort*9] = 0;
+         break;
+       case TWODFX_UPLOAD_RAW:
+       case TWODFX_UPLOAD_TVC:
+       case TWODFX_UPLOAD_NICK:
+         uploadRemaining = named2dfxPortValues[selected2dfxPort*9 + 3] + 256 * named2dfxPortValues[selected2dfxPort*9 + 4];
+         break;
+       case TWODFX_SET_TRANSPARENT_COLOR:
+       case 0x41:
+       case 0x42:
+       case 0x43:
+       case 0x44:
+       case 0x45:
+       case 0x46:
+       case 0x47:
+       case 0x48:
+       case 0x49:
+       case 0x4a:
+       case 0x4b:
+       case 0x4c:
+       case 0x4d:
+       case 0x4e:
+       case 0x4f:
+         // No additional parameter, lower 4 bits are used
+         named2dfxPortValues[TWODFX_SET_TRANSPARENT_COLOR*9] = selected2dfxPort - TWODFX_SET_TRANSPARENT_COLOR;
+         break;
+       /* No special action - parameters are recorded */
+       case TWODFX_SET_ENGINE_MODE:
          break;
        default:
         break;
@@ -1195,14 +1287,14 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     }
   }
 
-  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint8_t *x, uint8_t *y, uint8_t *bitOffset)
+  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint16_t *x, uint16_t *y, uint8_t *bitOffset)
   {
-    if (screenX + TWODFX_TVC_BASIC_SAFE_MIN_X < twodfxX || screenX + TWODFX_TVC_BASIC_SAFE_MIN_X >= twodfxX + *x)
+    if (screenX < twodfxX || screenX >= twodfxX + *x)
       return false;
     if (screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y < twodfxY || screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y >= twodfxY + *y)
       return false;
 
-    *x = screenX + TWODFX_TVC_BASIC_SAFE_MIN_X - twodfxX;
+    *x = screenX - twodfxX;
     *y = screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y - twodfxY;
     div_t logoOffs = div(*x, 4);
     *bitOffset = logoOffs.rem;
@@ -1222,19 +1314,21 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      // Show / hide builtin logo
      if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9])
      {
-        uint8_t actualX = TWO_DFX_BUILTIN_LOGO_W;
-        uint8_t actualY = TWO_DFX_BUILTIN_LOGO_H;
+        uint16_t actualX = TWO_DFX_BUILTIN_LOGO_W;
+        uint16_t actualY = TWO_DFX_BUILTIN_LOGO_H;
         uint8_t bitOffs = 4;
 
         int firstPixel, lastPixel;
-        firstPixel = named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X);
+        firstPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
+                       named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16);
         if (firstPixel < 0) firstPixel = 0;
-        lastPixel = (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16 + TWODFX_TVC_BASIC_SAFE_MIN_X );
+        lastPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
+                     (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16);
         if (lastPixel > 15) lastPixel = 15;
 
         if (coordConv2dfx(
-              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
-              named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
+              ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
+               (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x01)       * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
               currSlot * 16 + firstPixel, curLine,
               &actualX,&actualY, &bitOffs))
         {
@@ -1260,16 +1354,16 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     const unsigned char *bufp = buf;
     const uint8_t *endp = buf + *nBytes;
     size_t outPos = 0;
-    size_t currSlotPlus = 0;
+    size_t currSlotPlus = 0; // this is absolute slot in case of 2dfx, not only the visible area
 
     if (vsyncCnt>0)
       curLine = 0;
     else 
       curLine++;
 
-    if (!(*nBytes) || curLine < SPRITEEXT_FIRST_LINE || curLine > namedPortValues[REG_SCREEN_MAXY] + SPRITEEXT_FIRST_LINE)
+    // todo: screen height shortcuts
+    if (!(*nBytes) || named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9]==0)
       return buf;
-   // todo: screen height limit
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
@@ -1279,6 +1373,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos] = 0x00;
           bufp = bufp + 1;
           outPos++;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x00);
@@ -1288,6 +1383,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
            std::memcpy(&(buf_[outPos]), bufp, 2);
           bufp = bufp + 2;
           outPos += 2;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x01);
@@ -1297,6 +1393,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
            std::memcpy(&(buf_[outPos]), bufp, 3);
           bufp = bufp + 3;
           outPos += 3;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x02);
@@ -1304,9 +1401,9 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
       case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
         do {
            std::memcpy(&(buf_[outPos]), bufp, 4);
-
           bufp = bufp + 4;
           outPos += 4;
+          currSlotPlus++;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x03);

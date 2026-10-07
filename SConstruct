@@ -191,7 +191,7 @@ ep128emuLibEnvironment = Environment(ENV = { 'PATH' : os.environ['PATH'],
 if linux32CrossCompile:
     compilerFlags = ' -m32 ' + compilerFlags
 ep128emuLibEnvironment.Append(CCFLAGS = Split(compilerFlags))
-ep128emuLibEnvironment.Append(CPPPATH = ['.', './src'])
+ep128emuLibEnvironment.Append(CPPPATH = ['.', './src','./deps'])
 if userFlags:
     ep128emuLibEnvironment.MergeFlags(userFlags)
 if not mingwCrossCompile:
@@ -457,7 +457,7 @@ if enableSDExt:
 
 spriteextSources = []
 if enableSpriteExt:
-    spriteextSources = ['src/spriteext.cpp', 'src/tvc-routines.cpp']
+    spriteextSources = ['src/spriteext.cpp', 'deps/tvc-routines.cpp', 'deps/zx7Compress.cpp','deps/2dfx_main.cpp']
 
 ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/dave.cpp
