@@ -7,7 +7,6 @@ written in C++, and supporting Windows and POSIX platforms (32 and 64
 bit Windows and Linux, and MacOS X have been tested).
 It implements accurate, high quality hardware emulation, however, the
 system requirements are higher than that of most other emulators.
-Versions named "-core" have improvements from the libretro core version.
 
 Features
 ========
@@ -1080,6 +1079,9 @@ ep128emu is copyright © 2003-2017 by Istvan Varga
 <istvanv@users.sourceforge.net>. Z80 emulation copyright © 1999-2003 by
 Kevin Thacker and Vincze Béla György. dotconf 1.3 is copyright by Lukas
 Schröder and William Hubbs. reSID 1.0 copyright © 2010 by Dag Lem.
+Later ep128emu changes are copyright © 2021-2026 by Zoltan Balogh.
+TVC256++ related files under deps/ are copyright © 2026 by Sandor Vass
+
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -1106,4 +1108,3 @@ Attus         - Linux fixes and binary packages for the UHU distribution
 Martin Bantz  - PCLinuxOS RPM spec file
 LGB           - GitHub import from SourceForge, Linux testing and fixes,
                 SD card emulation
-
