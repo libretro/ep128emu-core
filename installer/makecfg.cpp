@@ -39,12 +39,12 @@
 #include <vector>
 
 #ifndef MAKECFG_ROM_PKG_NAME
-#  define MAKECFG_ROM_PKG_NAME  "ep128emu_roms-2.0.11.bin"
+#  define MAKECFG_ROM_PKG_NAME  "ep128emu_roms-2.0.12.5.bin"
 #endif
 
 #ifdef MAKECFG_USE_CURL
 #  ifndef MAKECFG_ROM_URL_1
-#    define MAKECFG_ROM_URL_1   "http://ep128.hu/Emu/" MAKECFG_ROM_PKG_NAME
+#    define MAKECFG_ROM_URL_1   "https://zoltanvb.github.io/ep128emu/" MAKECFG_ROM_PKG_NAME
 #  endif
 #  ifndef MAKECFG_ROM_URL_2
 #    define MAKECFG_ROM_URL_2   "https://enterpriseforever.com/"        \

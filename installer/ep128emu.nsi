@@ -490,14 +490,7 @@ Section "Download and install ROM images" SecDLRoms
 
   SetOutPath "$INSTDIR\roms"
 
-  INetC::get "http://ep128.hu/Emu/ep128emu_roms-2.0.11.bin" "$INSTDIR\roms\ep128emu_roms-2.0.11.bin"
-  Pop $R0
-  StrCmp $R0 "OK" downloadDone 0
-  StrCmp $R0 "Cancelled" downloadDone 0
-
-  MessageBox MB_OK "WARNING: download from ep128.hu failed ($R0), trying enterpriseforever.com instead"
-
-  INetC::get "https://enterpriseforever.com/letoltesek-downloads/egyeb-misc/?action=dlattach;attach=16928" "$INSTDIR\roms\ep128emu_roms-2.0.11.bin"
+  INetC::get "https://zoltanvb.github.io/ep128emu/ep128emu_roms-2.0.12.5.bin" "$INSTDIR\roms\ep128emu_roms-2.0.12.5.bin"
   Pop $R0
   StrCmp $R0 "OK" downloadDone 0
   StrCmp $R0 "Cancelled" downloadDone 0
@@ -810,6 +803,7 @@ Section "Uninstall"
   Delete "$INSTDIR\roms\ep128emu_roms.bin"
   Delete "$INSTDIR\roms\ep128emu_roms-2.0.10.bin"
   Delete "$INSTDIR\roms\ep128emu_roms-2.0.11.bin"
+  Delete "$INSTDIR\roms\ep128emu_roms-2.0.12.5.bin"
   Delete "$INSTDIR\roms\ep_basic.rom"
   Delete "$INSTDIR\roms\epd17l12.rom"
   Delete "$INSTDIR\roms\epd17z12.rom"
