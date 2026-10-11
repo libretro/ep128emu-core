@@ -311,7 +311,7 @@ uint8_t memory_move_short(uint8_t *buf) {
     if(memoryBlock>0x11)
         return 1;
 
-    if(((source + length) >= 16384) || ((destination + length) >= 16384)) {
+    if(((source + length) > 16384) || ((destination + length) > 16384)) {
         return 2;
     }
     if (memoryBlock < 0x10) memoryBlock += TVC256_FASTRAM_START_SEGMENT;
@@ -334,7 +334,7 @@ uint8_t memory_move_full(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
+    if(((source + length) > 256*1024) || ((destination + length) > 256*1024)) {
         return 1;
     }
     destination += FASTRAMBASE;
@@ -356,7 +356,7 @@ uint8_t memory_move_chunks_full(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 256*1024) || ((destination + length) >= 256*1024)) {
+    if(((source + length) > 256*1024) || ((destination + length) > 256*1024)) {
         return 1;
     }
     // This function is never used.
@@ -377,7 +377,7 @@ uint8_t memory_move_from_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) || ((destination + length) >= 256*1024)) {
+    if(((source + length) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024) || ((destination + length) > 256*1024)) {
         return 1;
     }
     destination += FASTRAMBASE;
@@ -400,7 +400,7 @@ uint8_t memory_move_to_slow(uint8_t *buf) {
     uint32_t destination = *(uint32_t *)&buf[0] & 0x00ffffff;
     uint32_t source = *(uint32_t *)&buf[3] & 0x00ffffff;
     uint32_t length = *(uint32_t *)&buf[6] & 0x00ffffff;
-    if(((source + length) >= 256*1024) || ((destination + length) >= REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
+    if(((source + length) > 256*1024) || ((destination + length) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 1;
     }
     destination += SLOWRAMBASE;
@@ -684,7 +684,7 @@ uint8_t memory_move_chunks_from_block(uint8_t *bufStart) {
     if((chunkSize == 0) || (increment == 0) || (count == 0)) {
         return 1;
     }
-    if((uint32_t)chunkSize * count + destination > 256*1024) {
+    if((uint32_t)chunkSize + (uint32_t)increment*(count-1) + destination > 256*1024) {
         return 2;
     }
     if(sourceInPSRAM) {
@@ -745,13 +745,13 @@ uint8_t memory_move_chunks(uint32_t destination,
     if((chunkSize == 0) || ((incrementSource == 0) && (incrementDestination == 0)) || (count == 0)) {
         return 1;
     }
-    if(destination + chunkSize + (count-1)*incrementDestination > 256*1024) {
+    if(destination + chunkSize + (uint32_t)(count-1)*incrementDestination > 256*1024) {
         return 2;
     }
-    if(sourceInPSRAM && ((source + chunkSize + (count-1)*incrementSource) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
+    if(sourceInPSRAM && ((source + chunkSize + (uint32_t)(count-1)*incrementSource) > REG_MEMORY_PSRAM_SIZE_IN_MB_DEFAULT*1024*1024)) {
         return 3;
     }
-    if(!sourceInPSRAM && ((source + chunkSize + (count-1)*incrementSource) > 256*1024)) {
+    if(!sourceInPSRAM && ((source + chunkSize + (uint32_t)(count-1)*incrementSource) > 256*1024)) {
         return 3;
     }
 
@@ -837,7 +837,7 @@ uint8_t mirror_sprite_phase(uint8_t *bufStart) {
     if(phase_count == 0)
         return 0;
 
-    if((phase_address + (phase_count+1) * (color_mode?256:64) - 1) >= 256*1024) {
+    if((phase_address + (uint16_t)phase_count * (color_mode?256:64) - (color_mode?3:0)) > 256*1024) {
         return 1;
     }
 
