@@ -39,12 +39,12 @@
 #include <vector>
 
 #ifndef MAKECFG_ROM_PKG_NAME
-#  define MAKECFG_ROM_PKG_NAME  "ep128emu_roms-2.0.11.bin"
+#  define MAKECFG_ROM_PKG_NAME  "ep128emu_roms-" EP128EMU_CURRENT_VERSION ".bin"
 #endif
 
 #ifdef MAKECFG_USE_CURL
 #  ifndef MAKECFG_ROM_URL_1
-#    define MAKECFG_ROM_URL_1   "http://ep128.hu/Emu/" MAKECFG_ROM_PKG_NAME
+#    define MAKECFG_ROM_URL_1   "https://zoltanvb.github.io/ep128emu/" MAKECFG_ROM_PKG_NAME
 #  endif
 #  ifndef MAKECFG_ROM_URL_2
 #    define MAKECFG_ROM_URL_2   "https://enterpriseforever.com/"        \
@@ -231,6 +231,8 @@ class Ep128EmuMachineConfiguration {
     std::string       romFile;
     bool              enabled;
   } sdext;
+  unsigned int  spriteExtModel;
+  unsigned int  sidModel;
  public:
   Ep128EmuMachineConfiguration(Ep128Emu::ConfigurationDB& config,
                                uint64_t machineConfig,
@@ -410,6 +412,10 @@ static const EP_ROM_File epROMFiles[61] = {
 #define TVC_ROM_FILEIO          (uint64_t(1) << 47)
 #define TVC_ROM_UPM_C           (uint64_t(1) << 48)
 #define TVC_ROM_UPM_D           (uint64_t(1) << 49)
+#define TVC_ROM_TVC256          (uint64_t(1) << 50)
+#define TVC_ROM_TVC256_RAMINIT  (uint64_t(1) << 51)
+#define TVC_ROM_SYS12_FAST      (uint64_t(1) << 52)
+#define TVC_ROM_SYS22_FAST      (uint64_t(1) << 53)
 
 #define IS_EP_CONFIG(x)         bool((x) & 0x0000FFFFUL)
 #define EP_RAM_SIZE(x)          epRAMSizeTable[(x) & 7UL]
@@ -794,6 +800,22 @@ static const EPMachineConfig machineConfigs[] = {
     TVC_RAM_128K | TVC_ROM_SYS22 | TVC_ROM_EXT22 | TVC_ROM_DOS12C
     | TVC_ROM_DOS12D
   },
+  { "tvc/TVC_64k+_V12_TVC256.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS12 | TVC_ROM_EXT12 | TVC_ROM_TVC256
+    | TVC_ROM_TVC256_RAMINIT
+  },
+  { "tvc/TVC_64k+_V22_TVC256.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS22 | TVC_ROM_EXT22 | TVC_ROM_TVC256
+    | TVC_ROM_TVC256_RAMINIT
+  },
+  { "tvc/TVC_64k+_V12_TVC256_fastboot.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS12_FAST | TVC_ROM_EXT12 | TVC_ROM_TVC256
+    | TVC_ROM_TVC256_RAMINIT
+  },
+  { "tvc/TVC_64k+_V22_TVC256_fastboot.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS22_FAST | TVC_ROM_EXT22 | TVC_ROM_TVC256
+    | TVC_ROM_TVC256_RAMINIT
+  },
   { (char *) 0,
     0UL
   }
@@ -807,6 +829,8 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
 {
   sdext.romFile.clear();
   sdext.enabled = false;
+  spriteExtModel = 0;
+  sidModel = 0;
   if (!IS_EP_CONFIG(machineConfig)) {
     memory.ram.size = ZX_CPC_RAM_SIZE(machineConfig);
     if (IS_ZX_CONFIG(machineConfig)) {
@@ -870,6 +894,10 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
         memory.rom[0].file = romDirectory + "tvc12_sys.rom";
       else if (machineConfig & TVC_ROM_SYS22)
         memory.rom[0].file = romDirectory + "tvc22_sys.rom";
+      else if (machineConfig & TVC_ROM_SYS12_FAST)
+        memory.rom[0].file = romDirectory + "tvc12_fast2_sys.rom";
+      else if (machineConfig & TVC_ROM_SYS22_FAST)
+        memory.rom[0].file = romDirectory + "tvc22_fast_sys.rom";
       if (machineConfig & TVC_ROM_EXT12)
         memory.rom[2].file = romDirectory + "tvc12_ext.rom";
       else if (machineConfig & TVC_ROM_EXT22)
@@ -880,6 +908,22 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
         memory.rom[3].file = romDirectory + "tvc_dos12d.rom";
       if (machineConfig & TVC_ROM_FILEIO)
         memory.rom[4].file = romDirectory + "tvcfileio.rom";
+      if (machineConfig & TVC_ROM_TVC256)
+      {
+        memory.rom[5].file = romDirectory + "tvc256-024.rom";
+        spriteExtModel = 1;
+        sidModel = 1;
+      }
+      if (machineConfig & TVC_ROM_TVC256_RAMINIT)
+      {
+        memory.rom[0x10].file = romDirectory + "tvc256-raminit.rom";
+        memory.rom[0x11].file = romDirectory + "tvc256-raminit.rom";
+        memory.rom[0x11].offset = 16384;
+        memory.rom[0x12].file = romDirectory + "tvc256-raminit.rom";
+        memory.rom[0x12].offset = 16384*2;
+        memory.rom[0x13].file = romDirectory + "tvc256-raminit.rom";
+        memory.rom[0x13].offset = 16384*3;
+      }
       if (machineConfig & TVC_ROM_SDEXT) {
         sdext.romFile = romDirectory + "tvc_sdext.rom";
         sdext.enabled = true;
@@ -982,9 +1026,23 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
     config.createKey("memory.rom.43.offset", memory.rom[0x43].offset);
     config.createKey("memory.configFile", memory.configFile);
   }
+  if (IS_TVC_CONFIG(machineConfig) && spriteExtModel == SPRITEEXT_TVC256) {
+    config.createKey("memory.rom.05.file", memory.rom[0x05].file);
+    config.createKey("memory.rom.05.offset", memory.rom[0x05].offset);
+    config.createKey("memory.rom.10.file", memory.rom[0x10].file);
+    config.createKey("memory.rom.10.offset", memory.rom[0x10].offset);
+    config.createKey("memory.rom.11.file", memory.rom[0x11].file);
+    config.createKey("memory.rom.11.offset", memory.rom[0x11].offset);
+    config.createKey("memory.rom.12.file", memory.rom[0x12].file);
+    config.createKey("memory.rom.12.offset", memory.rom[0x12].offset);
+    config.createKey("memory.rom.13.file", memory.rom[0x13].file);
+    config.createKey("memory.rom.13.offset", memory.rom[0x13].offset);
+  }
   if (IS_EP_CONFIG(machineConfig) || IS_TVC_CONFIG(machineConfig)) {
     config.createKey("sdext.romFile", sdext.romFile);
     config.createKey("sdext.enabled", sdext.enabled);
+    config.createKey("spriteExt.model", spriteExtModel);
+    config.createKey("sid.3.model", sidModel);
   }
 }
 

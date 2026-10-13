@@ -52,6 +52,14 @@ namespace TVC64 {
     void checkReadBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
     void checkWriteBreakPoint(uint16_t addr, uint8_t page, uint8_t value);
    public:
+#ifdef ENABLE_SPRITEEXT
+    uint8_t  spriteExtModel;
+    bool     spriteExtEnabled;
+    uint8_t  spriteext_p2_reg;
+    uint8_t  spriteext_p3_reg;
+    uint16_t psram_p2_reg;
+    uint16_t psram_p3_reg;
+#endif
     Memory();
     virtual ~Memory();
     void setBreakPoint(uint8_t segment, uint16_t addr,
@@ -71,9 +79,13 @@ namespace TVC64 {
     inline uint8_t readOpcode(uint16_t addr);
     inline uint8_t readNoDebug(uint16_t addr) const;
     inline uint8_t readRaw(uint32_t addr) const;
+    inline void memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value);
+    inline void memmoveRaw(uint32_t dstAddr, uint32_t startAddr, uint16_t len);
+    inline uint8_t* memGet(uint16_t addr);
     inline void write(uint16_t addr, uint8_t value);
     inline void writeRaw(uint32_t addr, uint8_t value);
     inline void writeROM(uint32_t addr, uint8_t value);
+    inline uint8_t* memGetRaw(uint32_t addr);
     // set memory paging:
     //   bits 0 to 7:   port 02h:
     //          b0, b1:   unused
@@ -183,9 +195,102 @@ namespace TVC64 {
 
   inline void Memory::writeRaw(uint32_t addr, uint8_t value)
   {
-    uint8_t segment = uint8_t(addr >> 14);
-    if (!segmentROMTable[segment])
+    uint8_t segment = uint8_t((addr&0x3FFFFF) >> 14);
+    if (segmentTable[segment] && !segmentROMTable[segment])
       segmentTable[segment][addr & 0x3FFF] = value;
+  }
+
+  inline void Memory::memsetRaw(uint32_t startAddr, uint32_t len, uint8_t value)
+  {
+    if (len > 0x3FFFFF - startAddr)
+      len = 0x3FFFFF - startAddr;
+    // Note: memsetRaw is not expected to be used for sdext, as it is not mapped to raw address space
+    uint8_t startSegment = uint8_t(startAddr >> 14);
+    uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
+    for (uint8_t currSegment = startSegment; currSegment <= endSegment; currSegment++)
+    {
+      if (segmentROMTable[currSegment]) continue;
+      uint16_t memsetStartAddr = currSegment == startSegment ? startAddr & 0x3FFF : 0;
+      uint16_t memsetEndAddr   = currSegment == endSegment   ? (startAddr+len-1) & 0x3FFF : 0x3FFF;
+      std::memset(segmentTable[currSegment]+memsetStartAddr, value, memsetEndAddr - memsetStartAddr + 1);
+    }
+  }
+
+  inline void Memory::memmoveRaw(uint32_t dstAddr, uint32_t startAddr, uint16_t len)
+  {
+    // Limit to the 4MiB total address space
+    if (len > 0x3FFFFF - startAddr)
+      len = 0x3FFFFF - startAddr;
+    if (len > 0x3FFFFF - dstAddr)
+      len = 0x3FFFFF - dstAddr;
+    // Note: memmoveRaw is not expected to be used for sdext, as it is not mapped to raw address space
+    uint8_t startSegment = uint8_t(startAddr >> 14);
+    uint8_t endSegment   = uint8_t((startAddr+len-1) >> 14);
+    uint8_t startSegmentD = uint8_t(dstAddr >> 14);
+    uint8_t endSegmentD   = uint8_t((dstAddr+len-1) >> 14);
+    //printf("memmove  : %08x -> %08x %04x\n",startAddr,dstAddr,len);
+
+    if (dstAddr == startAddr || len == 0)
+      return;
+
+    if (dstAddr < startAddr)
+    {
+      while(len > 0)
+      {
+        uint16_t thisMoveLen = len;
+        uint16_t memmoveSrcAddr = startAddr & 0x3FFF;
+        uint16_t memmoveDstAddr = dstAddr   & 0x3FFF;
+
+        startSegment = uint8_t(startAddr >> 14);
+        startSegmentD = uint8_t(dstAddr >> 14);
+        if (startSegment != endSegment)
+        {
+          thisMoveLen = 0x4000 - memmoveSrcAddr;
+        }
+        endSegmentD = uint8_t((dstAddr+thisMoveLen-1) >> 14);
+        if (endSegmentD != startSegmentD)
+        {
+          thisMoveLen = 0x4000 - memmoveDstAddr;
+        }
+        //printf("submove 1: %02x::%04x -> %02x::%04x %04x\n",startSegment,memmoveSrcAddr,startSegmentD,memmoveDstAddr,thisMoveLen);
+        if (memmoveDstAddr + thisMoveLen > 0x4000 || memmoveSrcAddr + thisMoveLen > 0x4000)
+          printf("__________oversized move 2 \n");
+        else
+          std::memmove(segmentTable[startSegmentD]+memmoveDstAddr,segmentTable[startSegment]+memmoveSrcAddr,thisMoveLen);
+        startAddr += thisMoveLen;
+        dstAddr += thisMoveLen;
+        len -= thisMoveLen;
+      }
+    }
+    else
+    {
+      while(len > 0)
+      {
+        uint16_t thisMoveLen = len;
+        uint16_t memmoveSrcEndAddr = (startAddr+len-1) & 0x3FFF;
+        uint16_t memmoveDstEndAddr = (dstAddr  +len-1) & 0x3FFF;
+
+        endSegment   = uint8_t((startAddr+len-1) >> 14);
+        if (startSegment != endSegment)
+        {
+          thisMoveLen = memmoveSrcEndAddr+1;
+        }
+        endSegmentD   = uint8_t((dstAddr+len-1            ) >> 14);
+        startSegmentD = uint8_t((dstAddr+len-1-thisMoveLen) >> 14);
+        if (endSegmentD != startSegmentD)
+        {
+          thisMoveLen = memmoveDstEndAddr+1;
+        }
+        //printf("submove 2: %02x::%04x -> %02x::%04x %04x/%04x\n",endSegment,memmoveSrcEndAddr,endSegmentD,memmoveDstEndAddr,thisMoveLen,len);
+        if (memmoveDstEndAddr+1 < thisMoveLen || memmoveSrcEndAddr+1 < thisMoveLen)
+        {
+          printf("__________oversized move 3 \n");
+        }
+        else
+          std::memmove(segmentTable[endSegmentD]+memmoveDstEndAddr+1-thisMoveLen,segmentTable[endSegment]+memmoveSrcEndAddr+1-thisMoveLen,thisMoveLen);
+        len -= thisMoveLen;
+      }
+    }
   }
 
   inline void Memory::writeROM(uint32_t addr, uint8_t value)
@@ -193,6 +298,23 @@ namespace TVC64 {
     uint8_t segment = uint8_t(addr >> 14);
     if (segmentTable[segment])
       segmentTable[segment][addr & 0x3FFF] = value;
+  }
+
+  inline uint8_t* Memory::memGet(uint16_t addr)
+  {
+    uint8_t page = uint8_t(addr >> 13);
+    if (pageAddressTableR[page])
+      return &(pageAddressTableR[page][addr]);
+    return nullptr;
+  }
+
+  inline uint8_t* Memory::memGetRaw(uint32_t addr)
+  {
+    addr &= 0x3FFFFF;
+    uint8_t segment = uint8_t(addr >> 14);
+    if (segmentTable[segment])
+      return &(segmentTable[segment][addr & 0x3FFF]);
+    return nullptr;
   }
 
   inline uint16_t Memory::getPaging() const

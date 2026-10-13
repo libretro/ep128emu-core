@@ -246,6 +246,11 @@ namespace Ep128Emu {
     } sid;
     bool          sidConfigurationChanged;
     // ----------------
+    struct {
+      int         model;
+    } spriteExt;
+    bool          spriteExtConfigurationChanged;
+
     EmulatorConfiguration(VirtualMachine& vm__,
                           VideoDisplay& videoDisplay_,
                           AudioOutput& audioOutput_

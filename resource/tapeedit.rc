@@ -31,5 +31,5 @@ BEGIN
   END
 END
 
-101 ICON ".\\resource\\tapeedit.ico"
+101 ICON "./resource/tapeedit.ico"
 

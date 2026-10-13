@@ -33,8 +33,12 @@
 #ifdef ENABLE_SDEXT
 #  include "sdext.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 #include <vector>
+#include <dirent.h>
 
 static const uint8_t  keyboardConvTable[128] = {
   //   N   BSLASH        B        C        V        X        Z   LSHIFT
@@ -148,7 +152,7 @@ namespace TVC64 {
     while (n--) {
       toneGenCnt1 = toneGenCnt1 + 2U;
       while (EP128EMU_UNLIKELY(toneGenCnt1 >= 4096U)) {
-        toneGenCnt1 = toneGenFreq;
+        toneGenCnt1 = toneGenFreq + (toneGenCnt1 - 4096U);
         toneGenCnt2 = (toneGenCnt2 + 1) & 0x0F;
         if (EP128EMU_UNLIKELY(!(toneGenCnt2 & 7))) {
           if ((irqEnableMask & 0x10) != 0 && (n + b) > 0)
@@ -167,6 +171,9 @@ namespace TVC64 {
         if (((toneGenCnt2 | 0xF7) + uint8_t(toneGenEnabled)) & 0xFF)
           tmp += uint32_t(audioOutputLevelTable[audioOutputLevel]);
         soundOutputSignal = tmp | (tmp << 16);
+#ifdef ENABLE_RESID
+        soundOutputSignal += externalDACOutput;
+#endif
         sendAudioOutput(soundOutputSignal);
       }
       videoRenderer.runOneCycle();
@@ -181,7 +188,7 @@ namespace TVC64 {
     if (b) {
       toneGenCnt1++;
       if (EP128EMU_UNLIKELY(toneGenCnt1 >= 4096U)) {
-        toneGenCnt1 = toneGenFreq;
+        toneGenCnt1 = toneGenFreq + (toneGenCnt1 - 4096U);
         toneGenCnt2 = (toneGenCnt2 + 1) & 0x0F;
       }
     }
@@ -339,6 +346,7 @@ namespace TVC64 {
     vm.updateCPUCycles(cycles);
   }
 
+  // Counterpart of ep128emuSystemCall in tvcfileio
   EP128EMU_REGPARM1 void TVC64VM::Z80_::tapePatch()
   {
     uint8_t n;
@@ -354,6 +362,7 @@ namespace TVC64 {
       R.AF.B.h = (n > 0 ? 0xFF : 0x00);
       return;
     }
+    // Actual file I/O is not possible without a file being open
     if (n >= 3 && n <= 9 && !fileIOFile) {
       R.AF.B.h = 0xE9;          // file not open
       if (n == 5) {
@@ -644,10 +653,35 @@ namespace TVC64 {
 
   void TVC64VM::TVCVideo_::drawLine(const uint8_t *buf, size_t nBytes)
   {
+#ifdef ENABLE_SPRITEEXT
+    size_t newnBytes = nBytes;
+    // writing irqState directly is ugly
+    if (vm.spriteExtModel == SPRITEEXT_TVC256)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else
+    {
+#endif // ENABLE_SPRITEEXT
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(buf, nBytes);
     if (vm.videoCapture)
       vm.videoCapture->horizontalSync(buf, nBytes);
+#ifdef ENABLE_SPRITEEXT
+    }
+#endif // ENABLE_SPRITEEXT
   }
 
   void TVC64VM::TVCVideo_::vsyncStateChange(bool newState,
@@ -703,7 +737,7 @@ namespace TVC64 {
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
     uint8_t   retval = 0xFF;
-    addr = addr & 0x7F;
+    addr = addr & 0xFF;
     switch (addr) {
     // 0x00-0x0F: unused (write only)
     case 0x10:                          // extension 0: floppy drive controller
@@ -747,7 +781,43 @@ namespace TVC64 {
       }
       break;
     // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
-    // 0x30-0x3F: extension 2 (reserved currently for GameCard)
+#ifdef ENABLE_SPRITEEXT
+    // 0x30-0x3F: extension 2, tvc256++ (spriteext)
+    case 0x30:
+    case 0x32:
+    case 0x34:
+    case 0x36:
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
+         retval = vm.spriteext.io_port_values[addr-0x30];
+      break;
+    case 0x31:
+    case 0x35:
+      if (vm.spriteExtModel == SPRITEEXT_TVC256) {
+         if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_DX)
+         {
+           vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
+           retval = static_cast < uint8_t > (vm.mouseDeltaX);
+           vm.mouseDeltaX = 0;
+           vm.spriteext.readNamedPort(addr == 0x35);
+         }
+         else if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_DY)
+         {
+           vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext.mouse_speed * -1.0f);
+           retval = static_cast < uint8_t > (vm.mouseDeltaY);
+           vm.mouseDeltaY = 0;
+           vm.spriteext.readNamedPort(addr == 0x35);
+         }
+         else if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_BUTTONS)
+         {
+           retval = vm.mouseButtonState;
+           vm.spriteext.readNamedPort(addr == 0x35);
+         }
+         else
+           retval = vm.spriteext.readNamedPort(addr == 0x35);
+      }
+      break;
+#endif
+    // 0x40-0x4F: extension 3 (reserved currently for GameCard)
     // Ext 3/4 joystick states
     // GameCard HW spec (i.e. actual port return value): 
     //   active-low, bit0: up, bit1: down, bit2: left, bit3: right, bit4: fire, bit5..7: unused
@@ -756,7 +826,7 @@ namespace TVC64 {
     //   joystickCodesExt3[7] = { 0x63, 0x62, 0x61, 0x60, 0x64, 0x65, 0x66 };
     //   joystickCodesExt4[7] = { 0x6b, 0x6a, 0x69, 0x68, 0x6c, 0x6d, 0x6e };
     // Scan codes are passed through setKeyboardState, so reading it is a bit confusing
-    case 0x32:
+    case 0x42:
       retval = 0xE0;
       if (vm.keyboardState[0xC] & 0x08)
          retval = retval | 0x01;
@@ -769,7 +839,7 @@ namespace TVC64 {
       if (vm.keyboardState[0xC] & 0x10)
          retval = retval | 0x10;
       break;
-    case 0x33:
+    case 0x43:
       retval = 0xE0;
       if (vm.keyboardState[0xD] & 0x08)
          retval = retval | 0x01;
@@ -782,7 +852,6 @@ namespace TVC64 {
       if (vm.keyboardState[0xD] & 0x10)
          retval = retval | 0x10;
       break;
-    // 0x40-0x4F: extension 3 (unimplemented)
     case 0x50:                          // toggle tape output (repeated 8 times)
     case 0x51:
     case 0x52:
@@ -836,6 +905,13 @@ namespace TVC64 {
     case 0x7F:
       retval = vm.crtc.readRegister(vm.crtcRegisterSelected);
       break;
+#ifdef ENABLE_SPRITEEXT
+    case 0xF8:
+    case 0xF9:
+      if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+         retval = vm.spriteext.read2dfxPort(addr);
+      break;
+#endif // ENABLE_SPRITEEXT
     }
     return retval;
   }
@@ -844,10 +920,18 @@ namespace TVC64 {
                                     uint16_t addr, uint8_t value)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    addr = addr & 0x7F;
+    addr = addr & 0xFF;
     switch (addr) {
     case 0x00:                          // border color
       vm.videoRenderer.setColor(4, value);
+#ifdef ENABLE_SPRITEEXT
+      // IGRB double-bits -> IRGB 4-bit
+      vm.spriteext.writeNamedPortDebug(REG_SCREEN_BORDER_COLOR,  
+        ((value & 0x80)>>4) |
+        ((value & 0x20)>>4) |
+        ((value & 0x08)>>1) |
+        ((value & 0x02)>>1));
+#endif
       break;
     case 0x01:                          // printer data output (unimplemented)
       break;
@@ -947,9 +1031,103 @@ namespace TVC64 {
     case 0x1B:
       vm.ioPorts.writeDebug(addr & 0x7C, value);
       break;
-    // 0x20-0x2F: extension 1 (unimplemented)
-    // 0x30-0x3F: extension 2 (unimplemented)
-    // 0x40-0x4F: extension 3 (unimplemented)
+    // 0x20-0x2F: extension 1 (reserved currently for tvcfileio which does not need ports)
+#ifdef ENABLE_SPRITEEXT
+    // 0x30-0x3F: extension 2, tvc256++ (spriteext)
+    case 0x30:
+    case 0x32:
+    case 0x34:
+    case 0x36:
+      // Register select or register increment change: just record the write
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
+        vm.spriteext.io_port_values[addr-0x30] = value;
+      break;
+    case 0x31:
+    case 0x35:
+      if (vm.spriteExtModel == SPRITEEXT_TVC256) {
+      if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
+        vm.memory.spriteext_p2_reg = value;
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
+        vm.memory.spriteext_p3_reg = value;
+      // TODO: delayed paging in case of slow ram
+      // Limitation: only 2MB available for now, so high reg is ignored
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
+      {
+        vm.memory.psram_p2_reg = value & 0x7F;
+        vm.memory.spriteext_p2_reg = 0x10;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
+      {
+        vm.memory.psram_p3_reg = value & 0x7F;
+        vm.memory.spriteext_p3_reg = 0x11;
+      }
+      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_ROM_PAGE)
+      {
+        // Carry out "ROM paging": swap the appropriate 6(!)kB part
+        // to the start of the IOMEM area.
+        // Note that the prepared ROM is actually 6+2+6+2=16 kB large so that
+        // the 2 kB RAM area at the end of the IOMEM range is not overwritten.
+        uint8_t subPage = value & 7;
+        uint8_t* areaLow;
+        uint8_t tmp;
+        if (areaLow = (uint8_t*)vm.memory.getSegmentPtr(0x05)) {
+          uint8_t* areaHigh = areaLow + 0x2000;
+          if (subPage == 1 && areaLow[0] == 'M' && areaLow[1] == 'O' &&
+                              areaLow[2] == 'P' && areaLow[3] == 'S') {
+            // Low-performance naive swap routine. Still, it does not matter much
+            // as 2nd page is only used for "help" output.
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+          else if (subPage == 0 && areaHigh[0] == 'M' && areaHigh[1] == 'O' &&
+                                   areaHigh[2] == 'P' && areaHigh[3] == 'S') {
+            for(int i=0;i<0x1800;i++)
+            {
+              tmp = areaLow[i];
+              areaLow[i] = areaHigh[i];
+              areaHigh[i] = tmp;
+            }
+          }
+        }
+      }
+#ifdef ENABLE_RESID
+         else if (vm.spriteext.io_port_values[addr-0x31] >= REG_SID_BASE &&
+                  vm.spriteext.io_port_values[addr-0x31] <= REG_SID_LAST)
+         {
+          if (vm.sidModel)
+          {
+            if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
+              vm.setCallback(&TVC64VM::sidCallback, &vm, true);
+              vm.sidEnabled = true;
+            }
+            vm.sid->write(vm.spriteext.io_port_values[addr-0x31] - REG_SID_BASE, value);
+          }
+         }
+#endif
+         vm.memory.setPaging(vm.memory.getPaging());
+         vm.spriteext.writeNamedPort(addr == 0x35,value);
+      }
+      break;
+#endif
+    // 0x40-0x4F: extension 3 (reserved currently for GameCard)
+    // TODO: 0x40 SN76489 register
+    case 0x4F:
+      {
+         // Carry out "paging": map the GameCard ROM (may be present on segments 0x20-0x23)
+         // to the IOMEM area.
+         uint8_t subPage = value & 7;
+         uint8_t sourceSegment = TVCGAMECARD_ROM_START_SEGMENT + (subPage>>1);
+         if (vm.memory.getSegmentPtr(sourceSegment) && vm.memory.getSegmentPtr(0x06)) {
+           uint8_t* src = (uint8_t*)vm.memory.getSegmentPtr(sourceSegment);
+           if (subPage & 1) src += 0x2000;
+           std::memcpy((uint8_t*)vm.memory.getSegmentPtr(0x06), src, 0x2000);
+         }
+      }
+      break;
     case 0x50:                          // toggle tape output (repeated 8 times)
       vm.tapeOutputSignal = ~(vm.tapeOutputSignal) & 0x01;
       break;
@@ -1022,23 +1200,39 @@ namespace TVC64 {
     case 0x7F:
       vm.ioPorts.writeDebug(addr & 0x71, value);
       break;
+#ifdef ENABLE_SPRITEEXT
+    case 0xF8:
+    case 0xF9:
+      if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+         vm.spriteext.write2dfxPort(addr, value);
+      break;
+#endif // ENABLE_SPRITEEXT
+
     }
   }
 
   uint8_t TVC64VM::ioPortDebugReadCallback(void *userData, uint16_t addr)
   {
     TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
-    addr = addr & 0x7F;
-    if (addr >= 0x70)
-      addr = addr & 0x71;
-    else if (addr >= 0x60)
-      addr = addr & 0x73;
-    else if (addr >= 0x58)
-      addr = addr & 0x7B;
-    else if (addr >= 0x50)
-      addr = addr & 0x78;
-    else if ((addr >= 0x0C && addr < 0x10) || (addr >= 0x14 && addr < 0x1C))
-      addr = addr & 0x7C;
+
+    if (addr & 0x100)
+    {
+      addr = addr & 0x1FF;
+    }
+    else
+    {
+      addr = addr & 0xFF;
+      if (addr >= 0x70)
+        addr = addr & 0x71;
+      else if (addr >= 0x60)
+        addr = addr & 0x73;
+      else if (addr >= 0x58)
+        addr = addr & 0x7B;
+      else if (addr >= 0x50)
+        addr = addr & 0x78;
+      else if ((addr >= 0x0C && addr < 0x10) || (addr >= 0x14 && addr < 0x1C))
+        addr = addr & 0x7C;
+    }
     uint8_t   retval = vm.ioPorts.getLastValueWritten(addr);
     switch (addr) {
     case 0x10:                          // extension 0: floppy drive controller
@@ -1065,6 +1259,20 @@ namespace TVC64 {
                | (vm.wd177x.getFloppyDrive().getDiskChangeFlag() ? 0x00 : 0x40)
                | (vm.wd177x.getDataRequestFlag() ? 0x80 : 0x00);
       break;
+
+#ifdef ENABLE_SPRITEEXT
+    // 0x30-0x3F: extension 2, tvc256++ (spriteext)
+    case 0x30:
+    case 0x31:
+    case 0x32:
+    case 0x34:
+    case 0x35:
+    case 0x36:
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
+         retval = vm.spriteext.io_port_values[addr-0x30];
+      break;
+#endif
+
     case 0x58:                          // keyboard matrix
       retval = vm.tvcKeyboardState[vm.keyboardRow];
       break;
@@ -1082,6 +1290,12 @@ namespace TVC64 {
       retval = vm.crtc.readRegister(vm.crtcRegisterSelected);
       break;
     }
+#ifdef ENABLE_SPRITEEXT
+    if (vm.spriteExtEnabled) {
+       if (addr > 0xFF)
+         retval = vm.spriteext.readNamedPortDebug((uint8_t)(addr & 0xFF));
+    }
+#endif // ENABLE_SPRITEEXT
     return retval;
   }
 
@@ -1380,6 +1594,15 @@ namespace TVC64 {
       tapeSamplesPerCRTCCycle(0L),
       tapeSamplesRemaining(-1L),
       crtcFrequency(1562500)
+#ifdef ENABLE_RESID
+      , sid((Ep128::SID *) 0),
+      sidEnabled(false),
+      sidModel(0),
+      sidAddressRegister(0x00),
+      sidOutputAccumulator(0),
+      sidVolumeL(1039),
+      sidVolumeR(1039)
+#endif
   {
     for (size_t i = 0;
          i < (sizeof(callbacks) / sizeof(TVC64VMCallback));
@@ -1389,12 +1612,21 @@ namespace TVC64 {
       callbacks[i].nxt = (TVC64VMCallback *) 0;
     }
     // register I/O callbacks
+#ifdef ENABLE_SPRITEEXT
+    ioPorts.setReadCallback(
+        0x0000, 0x00FF, &ioPortReadCallback, (void *) this, 0x0000);
+    ioPorts.setDebugReadCallback(
+        0x0100, 0x01FF, &ioPortDebugReadCallback, (void *) this, 0x0000);
+    ioPorts.setWriteCallback(
+        0x0000, 0x00FF, &ioPortWriteCallback, (void *) this, 0x0000);
+#else
     ioPorts.setReadCallback(
         0x0000, 0x007F, &ioPortReadCallback, (void *) this, 0x0000);
     ioPorts.setDebugReadCallback(
         0x0000, 0x007F, &ioPortDebugReadCallback, (void *) this, 0x0000);
     ioPorts.setWriteCallback(
         0x0000, 0x007F, &ioPortWriteCallback, (void *) this, 0x0000);
+#endif
     crtc.setHSyncStateChangeCallback(&hSyncStateChangeCallback, (void *) this);
     crtc.setVSyncStateChangeCallback(&vSyncStateChangeCallback, (void *) this);
     wd177x.setIsWD1773(true);
@@ -1495,6 +1727,24 @@ namespace TVC64 {
 #ifdef ENABLE_SDEXT
     sdext.reset(int(isColdReset));
 #endif
+#ifdef ENABLE_RESID
+    if (isColdReset)
+      sidAddressRegister = 0x00;
+    if (sid) {
+      if (sidEnabled) {
+        setCallback(&sidCallback, this, false);
+        sidEnabled = false;
+      }
+      sid->reset();
+      sidClockAccumulator = 0;
+      sidPrevCrtcClock = 0;
+    }
+#endif
+#ifdef ENABLE_SPRITEEXT
+     spriteext.reset(int(isColdReset));
+     spriteext.setMemRef(&memory);
+     spriteext.setVmRef(this);
+#endif
   }
 
   void TVC64VM::resetMemoryConfiguration(size_t memSize)
@@ -1591,6 +1841,43 @@ namespace TVC64 {
     if (videoCapture)
       videoCapture->setClockFrequency(crtcFrequency);
   }
+
+  void TVC64VM::setMouseState(int8_t dX, int8_t dY,
+                              uint8_t buttonState, uint8_t mouseWheelEvents)
+  {
+    if (EP128EMU_UNLIKELY(isRecordingDemo | isPlayingDemo)) {
+      if (isPlayingDemo)
+        return;
+      if (EP128EMU_UNLIKELY(haveTape() && getIsTapeMotorOn() &&
+                            getTapeButtonState() != 0)) {
+        stopDemoRecording(false);
+      }
+      else if (/*mouseEmulationEnabled*/true) {
+        demoBuffer.writeUIntVLen(demoTimeCnt);
+        demoTimeCnt = 0U;
+        demoBuffer.writeByte(0x03);     // event type (mouse)
+        demoBuffer.writeByte(0x04);     // number of data bytes
+        demoBuffer.writeByte(uint8_t(dX));
+        demoBuffer.writeByte(uint8_t(dY));
+        demoBuffer.writeByte(buttonState);
+        demoBuffer.writeByte(mouseWheelEvents);
+      }
+    }
+    int     dX_ = int(dX) + int(mouseDeltaX);
+    int     dY_ = int(dY) + int(mouseDeltaY);
+    mouseDeltaX = int8_t(dX_ > -128 ? (dX_ < 127 ? dX_ : 127) : -128);
+    mouseDeltaY = int8_t(dY_ > -128 ? (dY_ < 127 ? dY_ : 127) : -128);
+    mouseButtonState = buttonState;
+    if (mouseWheelEvents) {
+      if (mouseWheelEvents & 0x01)      // up
+        mouseWheelDelta = (mouseWheelDelta + 1) & 0xFF;
+      if (mouseWheelEvents & 0x02)      // down
+        mouseWheelDelta = (mouseWheelDelta - 1) & 0xFF;
+      if (((mouseWheelDelta + 0x10) & 0xFF) >= 0x20)    // overflow
+        mouseWheelDelta = ((mouseWheelDelta & 0x80) ? 0xF8 : 0x07);
+    }
+  }
+
 
   void TVC64VM::setKeyboardState(int keyCode, bool isPressed)
   {
@@ -1750,6 +2037,76 @@ namespace TVC64 {
   {
     Ep128Emu::VirtualMachine::tapeSeek(t);
   }
+
+#ifdef ENABLE_RESID
+
+  void TVC64VM::setSIDConfiguration(int n, int model,
+                                    double volumeL, double volumeR)
+  {
+    if (n != 3)
+      return;
+    if (model <= 0 || model > 2) {
+      if (sidEnabled) {
+        setCallback(&sidCallback, this, false);
+        sidEnabled = false;
+      }
+      model = 0;
+    }
+    else if (!sid) {
+      sid = new Ep128::SID(sidOutputAccumulator);
+    }
+    if (bool(model) != bool(sidModel) && sid)
+      sid->reset();
+    sidModel = uint8_t(model);
+    if (model)
+      sid->set_chip_model(model == 1 ? Ep128::MOS6581 : Ep128::MOS8580);
+    sidVolumeL = int32_t(volumeL * 1039.75);
+    sidVolumeR = int32_t(volumeR * 1039.75);
+  }
+
+  void TVC64VM::sidCallback(void *userData)
+  {
+    TVC64VM&  vm = *(reinterpret_cast<TVC64VM *>(userData));
+    // Scale the cycles with crctFrequency 1562500Hz vs. tvc256++ 985337Hz / sid orig 985248
+    int64_t currSidClock = (((int64_t)vm.crtcCyclesRemainingH<<32) / (int64_t)vm.crtcFrequency * (int64_t)985337);
+    if (currSidClock > vm.sidPrevCrtcClock)
+      vm.sidClockAccumulator += currSidClock;
+
+    while (EP128EMU_UNLIKELY(vm.sidClockAccumulator - currSidClock >= (int64_t)(1)<<32))
+    {
+      vm.sidClockAccumulator -= (int64_t)(1)<<32;
+      vm.sidOutputAccumulator = 0;
+      Ep128::SID::clockCallback(vm.sid);
+      // FIXME: this is the maximum safe range with all 4 DAVE channels
+      // active, but it can overflow with tape feedback (unlikely in
+      // practice)
+      const int32_t sidOutputMax = (65535 - (63 * 4 * 128)) << 15;
+      const int32_t sidOutputOffs = (65535 - (63 * 4 * 128) + 1) << 14;
+      int32_t outL = vm.sidOutputAccumulator * vm.sidVolumeL + sidOutputOffs;
+      int32_t outR = vm.sidOutputAccumulator * vm.sidVolumeR + sidOutputOffs;
+      outL = (outL >= 0 ? (outL < sidOutputMax ? outL : sidOutputMax) : 0);
+      outR = (outR >= 0 ? (outR < sidOutputMax ? outR : sidOutputMax) : 0);
+      vm.externalDACOutput = uint32_t((outL >> 15) | ((outR >> 15) << 16));
+    }
+    vm.sidPrevCrtcClock = currSidClock;
+  }
+
+#endif
+
+#ifdef ENABLE_SPRITEEXT
+  void TVC64VM::setSpriteExtConfiguration(int model)
+  {
+    if (model <= 0 || model > 2) {
+        spriteExtEnabled = false;
+        spriteExtModel = 0;
+    } else {
+        spriteExtEnabled = true;
+        spriteExtModel = (uint8_t) model;
+        spriteext.reset(2);
+        memory.spriteExtModel = spriteExtModel;
+    }
+  }
+#endif
 
   void TVC64VM::setBreakPoint(const Ep128Emu::BreakPoint& bp, bool isEnabled)
   {
@@ -2034,4 +2391,3 @@ namespace TVC64 {
   }
 
 }       // namespace TVC64
-

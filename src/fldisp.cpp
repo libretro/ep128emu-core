@@ -171,6 +171,30 @@ namespace Ep128Emu {
             break;
         } while (bufp[0] == 0x08);
         break;
+      case 0x09:                        // 1x16 pixels, 256 colors - only for sprite ext
+        do {
+          outBuf[ 0] = bufp[1];
+          outBuf[ 1] = bufp[2];
+          outBuf[ 2] = bufp[3];
+          outBuf[ 3] = bufp[4];
+          outBuf[ 4] = bufp[5];
+          outBuf[ 5] = bufp[6];
+          outBuf[ 6] = bufp[7];
+          outBuf[ 7] = bufp[8];
+          outBuf[ 8] = bufp[9];
+          outBuf[ 9] = bufp[10];
+          outBuf[10] = bufp[11];
+          outBuf[11] = bufp[12];
+          outBuf[12] = bufp[13];
+          outBuf[13] = bufp[14];
+          outBuf[14] = bufp[15];
+          outBuf[15] = bufp[16];
+          outBuf = outBuf + 16;
+          bufp = bufp + 17;
+          if (outBuf >= endp)
+            break;
+        } while (bufp[0] == 0x09);
+        break;
       default:                          // invalid flag byte
         do {
           *(outBuf++) = 0x00;

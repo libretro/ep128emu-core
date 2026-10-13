@@ -131,10 +131,10 @@ void Ep128EmuGUI::init_()
 void Ep128EmuGUI::updateDisplay_windowTitle()
 {
   if (oldPauseFlag) {
-    std::sprintf(&(windowTitleBuf[0]), "ep128emu 2.0.11.2 (paused)");
+    std::sprintf(&(windowTitleBuf[0]), "ep128emu " EP128EMU_CURRENT_VERSION " (paused)");
   }
   else {
-    std::sprintf(&(windowTitleBuf[0]), "ep128emu 2.0.11.2 (%d%%)",
+    std::sprintf(&(windowTitleBuf[0]), "ep128emu " EP128EMU_CURRENT_VERSION " (%d%%)",
                  int(oldSpeedPercentage));
   }
   mainWindow->label(&(windowTitleBuf[0]));
@@ -519,18 +519,30 @@ void Ep128EmuGUI::createMenus()
     diskConfigWindow->sdCardImageGroup->hide();
 #endif
   }
-  if (iconNum != 0) {                   // not Enterprise
+  if (iconNum != 0) {             // not Enterprise
     machineConfigWindow->vmCPUFrequencyValuator->deactivate();
     machineConfigWindow->vmSoundClockFrequencyValuator->deactivate();
     machineConfigWindow->enableMemoryTimingValuator->hide();
-#ifndef ENABLE_RESID
   }
+#ifndef ENABLE_RESID
   {
+#else
+  if (iconNum != 0 && iconNum != 3) {
 #endif
     machineConfigWindow->sidConfigurationGroup->deactivate();
     machineConfigWindow->sidConfigurationGroup->hide();
     machineConfigWindow->vmConfigurationTabs->remove(
         *(machineConfigWindow->sidConfigurationGroup));
+  }
+#ifndef ENABLE_SPRITEEXT
+  {
+#else
+  if (iconNum != 0 && iconNum != 3) {
+#endif
+    machineConfigWindow->spriteExtConfigurationGroup->deactivate();
+    machineConfigWindow->spriteExtConfigurationGroup->hide();
+    machineConfigWindow->vmConfigurationTabs->remove(
+        *(machineConfigWindow->spriteExtConfigurationGroup));
   }
   mainMenuBar->add("File/Configuration/Load from ASCII file (Alt+Q)",
                    (char *) 0, &menuCallback_File_LoadConfig, (void *) this);
@@ -926,7 +938,45 @@ int Ep128EmuGUI::handleFLTKEvent(void *userData, int event)
   case FL_KEYDOWN:
     {
       int   keyCode = Fl::event_key();
+      const char *keyText = Fl::event_text();
       bool  isKeyPress = (event == FL_KEYDOWN);
+      // Workaround for a really weird bug on Linux desktop (FLTK? Wayland?):
+      // international keys have a scancode of 0 in the downstroke direction, but still return reasonable (accented) text,
+      // so it is used for converting. Upstroke is normal (???)
+      if (keyCode == 0 && keyText[0] && keyText[1]) {
+         // Ugly hack but sufficient here: check only 2nd byte of UTF-8
+         switch((uint8_t)keyText[1]) {
+         case 0xb6:
+            keyCode = 246;
+            break;
+         case 0xbc:
+            keyCode = 252;
+            break;
+         case 0xb3:
+            keyCode = 243;
+            break;
+         case 0x91:
+            keyCode = 501;
+            break;
+         case 0xba:
+            keyCode = 250;
+            break;
+         case 0xa9:
+            keyCode = 233;
+            break;
+         case 0xa1:
+            keyCode = 225;
+            break;
+         case 0xb1:
+            keyCode = 507;
+            break;
+         case 0xad:
+            keyCode = 237;
+            break;
+         default:
+            ;
+         }
+      }
       if (!(keyCode >= (FL_F + 9) && keyCode <= (FL_F + 12))) {
         int   n = gui_.config.convertKeyCode(keyCode);
         if (n >= 0 && (gui_.functionKeyState == 0U || !isKeyPress)) {

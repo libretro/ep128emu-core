@@ -1866,6 +1866,20 @@ namespace Ep128 {
 
 #endif
 
+#ifdef ENABLE_SPRITEEXT
+  void Ep128VM::setSpriteExtConfiguration(int model)
+  {
+    // for Enterprise, there is only 2DFX or none
+    if (model <= 0 || model == 1 || model > 2) {
+/*      if (sidEnabled) {
+        setCallback(&sidCallback, this, false);
+        sidEnabled = false;*/
+      }
+      model = 0;
+      spriteExtModel = (uint8_t) model;
+  }
+#endif
+
   void Ep128VM::setCPUFrequency(size_t freq_)
   {
     // NOTE: Z80 frequency should always be greater than NICK frequency,

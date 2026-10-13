@@ -1026,6 +1026,27 @@ class Ep128EmuGUI_MachineConfigWindow {open
             }
           }
         }
+        Fl_Group spriteExtConfigurationGroup {
+          label Sprite open
+          xywh {10 35 380 370} hide
+        } {
+          Fl_Group {} {
+            label {Sprite extension emulation settings} open
+            xywh {20 45 360 135} box ENGRAVED_FRAME align 21
+          } {
+            Fl_Choice spriteExtModelValuator {
+              label Model
+              callback {{
+  gui.config.spriteExt.model = o->value();
+  gui.config.spriteExtConfigurationChanged = true;
+}}
+              xywh {30 70 145 25} down_box BORDER_BOX align 8
+              code0 {o->add("Disabled|TVC256++|2DFX");}
+            } {}
+          }
+        }
+
+
       }
     }
   }
@@ -1136,6 +1157,10 @@ class Ep128EmuGUI_MachineConfigWindow {open
   sidVolumeLValuator->value(gui.config.sid.volumeL);
   sidVolumeRValuator->value(gui.config.sid.volumeR);
 \#endif
+\#ifdef ENABLE_SPRITEEXT
+  spriteExtModelValuator->value(gui.config.spriteExt.model);
+\#endif
+
 }} {}
   }
   Function {setROMImageFile(uint8_t segment_, const std::string& fileName_)} {open private return_type void

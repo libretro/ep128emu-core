@@ -1,6 +1,7 @@
 /.sconf_temp
 /.sconsign.dblite
 /config.log
+/mingw*
 *.o
 *.so
 *.a

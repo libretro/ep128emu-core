@@ -27,6 +27,7 @@
 #include "snd_conv.hpp"
 #include "soundio.hpp"
 #include "tape.hpp"
+#include <dirent.h>
 
 namespace Ep128 {
   struct Z80_REGISTERS;
@@ -74,8 +75,12 @@ namespace Ep128Emu {
     bool            fileIOEnabled;
    private:
     std::string     fileIOWorkingDirectory;
+    std::string     fileIOWorkingSubDir;
     void            (*fileNameCallback)(void *userData, std::string& fileName);
     void            *fileNameCallbackUserData;
+    bool            sanitizeFileOrDirName(std::string& fileOrDirName);
+    bool            getRealFileOrDirName(std::string& fileOrDirName, uint8_t* attr, uint32_t* fsize);
+    int             lastFileSize;
    public:
     struct VMStatus {
       bool      isRecordingDemo;
@@ -159,6 +164,13 @@ namespace Ep128Emu {
      */
     virtual void setSIDConfiguration(int n, int model,
                                      double volumeL, double volumeR);
+#endif
+#ifdef ENABLE_SPRITEEXT
+    /*!
+     * Configure sprite extension card,
+     * 'model' can be 0 to disable the emulation, 1 for TVC256++ or 2 for 2DFX.
+     */
+    virtual void setSpriteExtConfiguration(int model);
 #endif
     /*!
      * Set audio output quality.
@@ -710,6 +722,13 @@ namespace Ep128Emu {
     }
     void setAudioConverterSampleRate(float sampleRate_);
    public:
+    bool getFileOrDirStat(std::string& fileOrDirName, uint8_t* attr, uint32_t* fsize);
+    int setWorkingDirSubdir(std::string& subDirName);
+    int getWorkingDirSubdir(std::string& subDirName);
+    int openDirInWorkingDirectory(DIR*& d, std::string& dirName_);
+    int closeDirInWorkingDirectory(DIR*& d);
+    int getLastFileSize();
+
     /*!
      * Open a file in the user specified working directory. 'fileName_' is the
      * file name without any leading directory components; it is converted to

@@ -241,6 +241,10 @@ namespace Ep128 {
     uint8_t   midiSavedStatus;
     uint8_t   midiBuffer[256];
 #endif
+#ifdef ENABLE_SPRITEEXT
+    bool      spriteExtEnabled;
+    uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
+#endif
     // ----------------
     void updateTimingParameters();
     void setMemoryWaitTiming();
@@ -346,6 +350,9 @@ namespace Ep128 {
      */
     virtual void setSIDConfiguration(int n, int model,
                                      double volumeL, double volumeR);
+#endif
+#ifdef ENABLE_SPRITEEXT
+    virtual void setSpriteExtConfiguration(int model);
 #endif
     /*!
      * Set CPU clock frequency (in Hz); defaults to 4000000 Hz.
