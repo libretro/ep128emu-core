@@ -1,5 +1,5 @@
 // Original tvc256++ code Copyright 2026 Sandor Vass
-// See licenses/LICENSE.tvc256
+// See licenses/LICENSE.tvc256 and https://github.com/dikdom/tvc256kplusplus
 
 /* This file is originated from tvc256++ firmware. The structure
    is kept to enable merge of later changes easier than re-implementing
