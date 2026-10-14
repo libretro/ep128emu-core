@@ -51,7 +51,9 @@ cpc664.rom
 cpc6128.rom
 cpc_amsdos.rom
 tvc12_sys.rom
+tvc12_fast2_sys.rom
 tvc22_sys.rom
+tvc22_fast_sys.rom
 tvc12_ext.rom
 tvc22_ext.rom
 tvc_dos12c.rom
@@ -60,5 +62,5 @@ tvcfileio.rom
 tvc_sdext.rom
 tvcupm_c.rom
 tvcupm_d.rom
-tvc256-023.rom
+tvc256-024.rom
 tvc256-raminit.rom

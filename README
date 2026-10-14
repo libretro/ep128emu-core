@@ -167,8 +167,8 @@ Videoton TVC emulation
     selectable directory
   * SD card (SDEXT) emulation, this is an experimental feature based on
     code from LGB's Xep128 emulator
-  * TVC GameCard emulation in slot 2 for external joysticks 3 and 4
-  * TVC256++ card (SPRITEEXT) emulation - experimental feature
+  * TVC GameCard emulation in slot 3 for external joysticks 3 and 4
+  * TVC256++ card emulation in slot 2
 
 Installation
 ============
@@ -254,6 +254,8 @@ can be passed to scons:
       Disable SD card (SDEXT) emulation
   resid=0
       Disable SID card emulation
+  spriteext=0
+      Disable sprite extension card (TVC256++) emulation
   curl=0
       Do not use libcurl in epmakecfg for downloading the ROM package
   cflags="..."

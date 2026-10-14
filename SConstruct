@@ -222,13 +222,22 @@ if mingwCrossCompile:
     # mingw32 setup, invoking it through wine. All other options can use
     # sane defaults.
     if wineMinGWCrossCompile:
-        toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
-        ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw32/bin/ar.exe'
-        ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
-        ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp.exe'
-        ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++.exe'
-        ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++.exe'
-        ep128emuLibEnvironment['RANLIB'] = 'wine ~/.wine/drive_c/mingw32/bin/ranlib.exe'
+        if win64CrossCompile:
+          toolNamePrefix = 'wine ~/.wine/drive_c/mingw64/bin/x86_64-w64-mingw32-'
+          ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw64/bin/ar.exe'
+          ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
+          ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp.exe'
+          ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++.exe'
+          ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++.exe'
+          ep128emuLibEnvironment['RANLIB'] = 'wine ~/.wine/drive_c/mingw64/bin/ranlib.exe'
+        else:
+          toolNamePrefix = 'wine ~/.wine/drive_c/mingw32/bin/i686-w64-mingw32-'
+          ep128emuLibEnvironment['AR'] = 'wine ~/.wine/drive_c/mingw32/bin/ar.exe'
+          ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc.exe'
+          ep128emuLibEnvironment['CPP'] = toolNamePrefix + 'cpp.exe'
+          ep128emuLibEnvironment['CXX'] = toolNamePrefix + 'g++.exe'
+          ep128emuLibEnvironment['LINK'] = toolNamePrefix + 'g++.exe'
+          ep128emuLibEnvironment['RANLIB'] = 'wine ~/.wine/drive_c/mingw32/bin/ranlib.exe'
     else:
         ep128emuLibEnvironment['AR'] = toolNamePrefix + 'ar'
         ep128emuLibEnvironment['CC'] = toolNamePrefix + 'gcc'
@@ -556,13 +565,22 @@ else:
 
 if mingwCrossCompile:
     if wineMinGWCrossCompile:
-        ep128emuResourceObject = ep128emuEnvironment.Command(
-            'resource/resource.o',
-            ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
-             'resource/ep128emu.ico', 'resource/tvc64emu.ico',
-             'resource/zx128emu.ico'],
-            'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
-            + '-o $TARGET resource/ep128emu.rc')
+        if win64CrossCompile:
+            ep128emuResourceObject = ep128emuEnvironment.Command(
+                'resource/resource.o',
+                ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
+                 'resource/ep128emu.ico', 'resource/tvc64emu.ico',
+                 'resource/zx128emu.ico'],
+                'wine ~/.wine/drive_c/mingw64/bin/windres.exe -v --use-temp-file '
+                + '-o $TARGET resource/ep128emu.rc')
+        else:
+            ep128emuResourceObject = ep128emuEnvironment.Command(
+                'resource/resource.o',
+                ['resource/ep128emu.rc', 'resource/cpc464emu.ico',
+                 'resource/ep128emu.ico', 'resource/tvc64emu.ico',
+                 'resource/zx128emu.ico'],
+                'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
+                + '-o $TARGET resource/ep128emu.rc')
     else:
         ep128emuResourceObject = ep128emuEnvironment.Command(
             'resource/resource.o',
@@ -590,12 +608,20 @@ tapeeditSources = fluidCompile(['tapeutil/tapeedit.fl'])
 tapeeditSources += ['tapeutil/tapeio.cpp']
 if mingwCrossCompile:
     if wineMinGWCrossCompile:
-        tapeeditResourceObject = tapeeditEnvironment.Command(
-            'resource/te_resrc.o',
-            ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
-            'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
-#        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
-            + '-o $TARGET resource/tapeedit.rc')
+        if win64CrossCompile:
+            tapeeditResourceObject = tapeeditEnvironment.Command(
+                'resource/te_resrc.o',
+                ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
+                'wine ~/.wine/drive_c/mingw64/bin/windres.exe -v --use-temp-file '
+    #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
+                + '-o $TARGET resource/tapeedit.rc')
+        else:
+            tapeeditResourceObject = tapeeditEnvironment.Command(
+                'resource/te_resrc.o',
+                ['resource/tapeedit.rc', 'resource/tapeedit.ico'],
+                'wine ~/.wine/drive_c/mingw32/bin/windres.exe -v --use-temp-file '
+    #        + '--preprocessor="gcc.exe -E -xc -DRC_INVOKED" '
+                + '-o $TARGET resource/tapeedit.rc')
     else:
         tapeeditResourceObject = tapeeditEnvironment.Command(
             'resource/te_resrc.o',

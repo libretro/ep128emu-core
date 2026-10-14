@@ -609,21 +609,21 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             namedPortValues[portAddr] = value;
 
          // Update bits of combined registers separately
-         if (portAddr >= REG_SPRITE_FOREGROUND && portAddr < REG_SPRITE_FOREGROUND + SPRITEEXT_SPRITE_MAX)
+         if (portAddr >= REG_SPRITE_FOREGROUND && portAddr <= REG_SPRITE_FOREGROUND + SPRITEEXT_SPRITE_MAX)
          {
             if (portAddr < REG_SPRITE_FOREGROUND + 0x08)
                UPD_BIT(namedPortValues[REG_SPRITE_FOREGROUND_LOW ], portAddr - REG_SPRITE_FOREGROUND,        value);
             else
                UPD_BIT(namedPortValues[REG_SPRITE_FOREGROUND_HIGH], portAddr - REG_SPRITE_FOREGROUND - 0x08, value);
          }
-         else if (portAddr >= REG_SPRITE_ENABLE && portAddr < REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX)
+         else if (portAddr >= REG_SPRITE_ENABLE && portAddr <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX)
          {
             if (portAddr < REG_SPRITE_ENABLE     + 0x08)
                UPD_BIT(namedPortValues[REG_SPRITE_ENABLE_LOW     ], portAddr - REG_SPRITE_ENABLE,            value);
             else
                UPD_BIT(namedPortValues[REG_SPRITE_ENABLE_HIGH    ], portAddr - REG_SPRITE_ENABLE     - 0x08, value);
          }
-         else if (portAddr >= REG_SPRITE_COLORMODE && portAddr < REG_SPRITE_COLORMODE + SPRITEEXT_SPRITE_MAX)
+         else if (portAddr >= REG_SPRITE_COLORMODE && portAddr <= REG_SPRITE_COLORMODE + SPRITEEXT_SPRITE_MAX)
          {
             if (portAddr < REG_SPRITE_COLORMODE  + 0x08)
                UPD_BIT(namedPortValues[REG_SPRITE_COLORMODE_LOW  ], portAddr - REG_SPRITE_COLORMODE,         value);
@@ -702,10 +702,12 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
                       namedPortValues[REG_SPRITE_PHASE+spriteNum] * 0x40 +
                       spritePosY * 3;
            uint32_t spriteBits = hostMem->readRaw(spriteBaseAddr) << 16 | hostMem->readRaw(spriteBaseAddr+1) << 8 | hostMem->readRaw(spriteBaseAddr+2);
-           // what about transparent sprite color?
            if (spriteBits & (uint32_t)(1 << (23-spritePosX)))
            {
-              buf[j*2] = buf[j*2+1] = i4ToTVCRGB(namedPortValues[REG_SPRITE_COLOR+spriteNum], buf[j*2]);
+              // Treat transparent sprite color as black
+              buf[j*2] = buf[j*2+1] = i4ToTVCRGB(
+                 namedPortValues[REG_SPRITE_COLOR+spriteNum] == SPRITEEXT_TRANSPARENT_COLOR ? 0x0 : namedPortValues[REG_SPRITE_COLOR+spriteNum],
+                 buf[j*2]);
               SET_BIT(sprite_active_pixels[spriteNum],j*2  );
               SET_BIT(sprite_active_pixels[spriteNum],j*2+1);
            }
