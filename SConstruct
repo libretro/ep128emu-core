@@ -283,7 +283,7 @@ configurePackage(ep128emuGUIEnvironment, 'PortAudio')
 
 ep128emuGLGUIEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 disableOpenGL = 1
-if not wineMinGWCrossCompile and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
+if not enableDevtoolIntegration and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
     configure = ep128emuGLGUIEnvironment.Configure()
     if configure.CheckCHeader('GL/gl.h'):
         disableOpenGL = 0
