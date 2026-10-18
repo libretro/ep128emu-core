@@ -1,7 +1,44 @@
 #include <stdint.h>
 #include "2dfx_main.h"
+#include "twodfx_api.h"
 
 namespace TWODFX {
+
+// Soft 2DPT command-write session.
+//
+// A 2DPT slot command is started by writing 60h..7Fh for background or
+// E0h..FFh for foreground to F8h.  The following F9h bytes are collected here.
+// The first byte is always the 2DPB slot number; the remaining bytes are
+// command-specific arguments.  Once the expected number of bytes has been
+// received, the corresponding shadow_2dpt layer/slot is updated atomically
+// from the command interpreter's point of view.
+static bool    twod_write_active = false;
+static uint8_t twod_write_opcode = 0;
+static uint8_t twod_write_expected = 0;
+static uint8_t twod_write_index = 0;
+static bool twod_write_foreground = false;
+static uint8_t twod_write_args[8];
+
+// ============================================================
+// 2D PARAMETER TABLES / 2DPT
+// ============================================================
+//
+// The 2D renderer uses the same shadow/active philosophy as the sprite SPT:
+//
+//   shadow_2dpt[0]: background table modified by Enterprise OUT 60h..7Fh.
+//   shadow_2dpt[1]: foreground table modified by Enterprise OUT E0h..FFh.
+//   active_2dpt[]:  stable snapshots replayed by the renderer.
+//
+// At VSYNC, both shadow tables are copied to active if dirty.  This makes 2D
+// updates frame-synchronous and prevents the renderer from seeing a partially
+// updated command table.
+//
+// Each 2DPB is deliberately 8 bytes, remaining independent of SPB size.
+// Opcode 7Fh means RET: stop processing the selected 2DPT.  Opcode 60h means
+// NOP: do nothing and continue with the next 2DPB.
+static uint8_t shadow_2dpt[NUM_2DPT_LAYERS][NUM_2DPBS][SIZE_2DPB];
+static uint8_t active_2dpt[NUM_2DPT_LAYERS][NUM_2DPBS][SIZE_2DPB];
+static volatile bool twodpt_dirty = false;
 
 uint8_t nick_to_sprite_lut[256];
 uint8_t tvc_to_sprite_lut[256];

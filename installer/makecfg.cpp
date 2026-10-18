@@ -416,6 +416,7 @@ static const EP_ROM_File epROMFiles[61] = {
 #define TVC_ROM_TVC256_RAMINIT  (uint64_t(1) << 51)
 #define TVC_ROM_SYS12_FAST      (uint64_t(1) << 52)
 #define TVC_ROM_SYS22_FAST      (uint64_t(1) << 53)
+#define TVC_ROM_2DFX_PLACEHOLDER (uint64_t(1) << 54)
 
 #define IS_EP_CONFIG(x)         bool((x) & 0x0000FFFFUL)
 #define EP_RAM_SIZE(x)          epRAMSizeTable[(x) & 7UL]
@@ -804,6 +805,10 @@ static const EPMachineConfig machineConfigs[] = {
     TVC_RAM_128K | TVC_ROM_SYS12 | TVC_ROM_EXT12 | TVC_ROM_TVC256
     | TVC_ROM_TVC256_RAMINIT
   },
+  { "tvc/TVC_64k+_V12_2DFX.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS12 | TVC_ROM_EXT12 | TVC_ROM_FILEIO
+    | TVC_ROM_2DFX_PLACEHOLDER
+  },
   { "tvc/TVC_64k+_V22_TVC256.cfg",
     TVC_RAM_128K | TVC_ROM_SYS22 | TVC_ROM_EXT22 | TVC_ROM_TVC256
     | TVC_ROM_TVC256_RAMINIT
@@ -913,6 +918,10 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
         memory.rom[5].file = romDirectory + "tvc256-024.rom";
         spriteExtModel = 1;
         sidModel = 1;
+      }
+      if (machineConfig & TVC_ROM_2DFX_PLACEHOLDER)
+      {
+        spriteExtModel = 2;
       }
       if (machineConfig & TVC_ROM_TVC256_RAMINIT)
       {

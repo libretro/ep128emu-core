@@ -31,6 +31,7 @@
 extern "C" {
 #endif
 
+namespace TWODFX {
 /* ------------------------------------------------------------------------- */
 /* Boot-selected machine and practical geometry                              */
 /* ------------------------------------------------------------------------- */
@@ -1546,8 +1547,9 @@ bool twodfx_render_overrun_detected(void);
  */
 bool twodfx_raster_interrupt_pending(uint8_t interrupt_number);
 
+}
+
 #ifdef __cplusplus
 }
 #endif
-
 #endif /* TWODFX_API_H */
