@@ -663,17 +663,34 @@ namespace Ep128 {
 
   void Ep128VM::Nick_::drawLine(const uint8_t *buf, size_t nBytes)
   {
+
+#ifdef ENABLE_SPRITEEXT
+    size_t newnBytes = nBytes;
+    if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, 0, nullptr, vm.nick.getCurrentPalette());
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else
+    {
+#endif // ENABLE_SPRITEEXT
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(buf, nBytes);
     if (vm.videoCapture)
       vm.videoCapture->horizontalSync(buf, nBytes);
+#ifdef ENABLE_SPRITEEXT
+    }
+#endif // ENABLE_SPRITEEXT
+
 #ifdef ENABLE_SPRITEEXT
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
       vm.spriteext.hsync(0);
     }
 #endif // ENABLE_SPRITEEXT
-
   }
 
   void Ep128VM::Nick_::vsyncStateChange(bool newState,
@@ -1657,7 +1674,7 @@ namespace Ep128 {
       midiSavedStatus(0x00)
 #endif
 #ifdef ENABLE_SPRITEEXT
-
+      , spriteext(false)
 #endif
 
   {

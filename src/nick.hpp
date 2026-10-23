@@ -138,7 +138,6 @@ namespace Ep128 {
     uint8_t   lptFlags;
     uint8_t   *lineBuf;         // 57 slots = 912 pixels
     uint8_t   *lineBufPtr;
-    bool      vsyncFlag;
     uint8_t   port0Value;       // last value written to port 80h
     uint8_t   port3Value;       // last value written to port 83h
     // --------
@@ -178,6 +177,7 @@ namespace Ep128 {
      * (0 to 56).
      */
     virtual void vsyncStateChange(bool newState, unsigned int currentSlot_);
+    bool      vsyncFlag;
    public:
     Nick(Memory& m_);
     virtual ~Nick();
@@ -212,6 +212,10 @@ namespace Ep128 {
     void saveState(Ep128Emu::File&);
     void loadState(Ep128Emu::File::Buffer&);
     void registerChunkType(Ep128Emu::File&);
+    inline const uint8_t* getCurrentPalette() const
+    {
+      return &lpb.palette[0];
+    }
   };
 
 }       // namespace Ep128
