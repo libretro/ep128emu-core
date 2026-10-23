@@ -38,6 +38,9 @@
 #ifdef ENABLE_RESID
 #  include "resid/sid.hpp"
 #endif
+#ifdef ENABLE_SPRITEEXT
+#  include "spriteext.hpp"
+#endif
 
 #include <map>
 
@@ -242,6 +245,7 @@ namespace Ep128 {
     uint8_t   midiBuffer[256];
 #endif
 #ifdef ENABLE_SPRITEEXT
+    SpriteExt spriteext;
     bool      spriteExtEnabled;
     uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
 #endif
@@ -277,6 +281,12 @@ namespace Ep128 {
     static void midiPortWriteCallback(void *userData,
                                       uint16_t addr, uint8_t value);
     static uint8_t midiPortDebugReadCallback(void *userData, uint16_t addr);
+#endif
+#ifdef ENABLE_SPRITEEXT
+    static uint8_t spriteExtPortReadCallback(void *userData, uint16_t addr);
+    static void spriteExtPortWriteCallback(void *userData,
+                                      uint16_t addr, uint8_t value);
+    static uint8_t spriteExtPortDebugReadCallback(void *userData, uint16_t addr);
 #endif
     static uint8_t cmosMemoryIOReadCallback(void *userData, uint16_t addr);
     static void cmosMemoryIOWriteCallback(void *userData,

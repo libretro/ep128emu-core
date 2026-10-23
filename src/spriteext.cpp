@@ -49,6 +49,8 @@
    2DFX TVC:
    - check reset
    - save state
+   - generate configuration
+   - interrupt
    
    2DFX EP:
    - all
