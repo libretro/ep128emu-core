@@ -111,7 +111,7 @@ namespace Ep128 {
     void   write2dfxPort(uint8_t portIndex, uint8_t value);
     uint8_t read2dfxPortDebug(uint8_t portIndex);
     void   write2dfxPortDebug(uint8_t portIndex, uint8_t value);
-    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, size_t hsyncCnt, uint8_t *irqState, const uint8_t *nickPalette);
+    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState, const uint8_t *nickPalette);
     void hsync(int hsyncCnt);
 
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const

@@ -668,7 +668,7 @@ namespace Ep128 {
     size_t newnBytes = nBytes;
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, 0, nullptr, vm.nick.getCurrentPalette());
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, nullptr, vm.nick.getCurrentPalette());
       if (vm.getIsDisplayEnabled())
         vm.display.drawLine(newBuf, newnBytes);
       if (vm.videoCapture)

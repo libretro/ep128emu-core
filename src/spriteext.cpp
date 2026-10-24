@@ -53,7 +53,9 @@
    - interrupt
    
    2DFX EP:
-   - all
+   - interrupt
+   - quirk 1: single pixels will not appear
+   - quirk 2: after extc, one pixel will be black
 */
 
 #include "ep128emu.hpp"
@@ -1187,7 +1189,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      }
   }
 
-  const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, size_t hsyncCnt, uint8_t *irqState, const uint8_t* nickPalette)
+  const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState, const uint8_t* nickPalette)
   {
 
     const unsigned char *bufp = buf;

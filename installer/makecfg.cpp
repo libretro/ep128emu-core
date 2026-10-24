@@ -245,7 +245,7 @@ class Ep128EmuMachineConfiguration {
 // ----------------------------------------------------------------------------
 
 static const int epRAMSizeTable[8] = {
-    64,  128,  256,  320,  640, 1024, 2048, 3712
+    64,  128,  256,  320,  640, 128, 2048, 3712
 };
 
 #define EP_RAM_64K              uint64_t(0)
@@ -253,7 +253,7 @@ static const int epRAMSizeTable[8] = {
 #define EP_RAM_256K             uint64_t(2)
 #define EP_RAM_320K             uint64_t(3)
 #define EP_RAM_640K             uint64_t(4)
-#define EP_RAM_1024K            uint64_t(5)
+#define EP_RAM_128K_2DFX        uint64_t(5)
 #define EP_RAM_2048K            uint64_t(6)
 #define EP_RAM_3712K            uint64_t(7)
 
@@ -447,6 +447,10 @@ static const EPMachineConfig machineConfigs[] = {
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_BRD_04 | EP_ROM_BASIC21_05
     | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_BRD
   },
+  { "ep128brd/EP_128k_EXDOS_FileIO_2DFX.cfg",
+    EP_RAM_128K_2DFX | EP_ROM_EXOS21 | EP_ROM_BRD_04 | EP_ROM_BASIC21_05
+    | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_BRD
+  },
   { "ep128brd/EP_128k_EXDOS_FileIO_SpectrumEmulator.cfg",
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_BRD_04 | EP_ROM_BASIC21_05
     | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_BRD | EP_ROM_ZX41_UK
@@ -505,6 +509,10 @@ static const EPMachineConfig machineConfigs[] = {
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_ESP_04 | EP_ROM_BASIC21_05
     | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_ES
   },
+  { "ep128esp/EP_128k_EXDOS_FileIO_2DFX.cfg",
+    EP_RAM_128K_2DFX | EP_ROM_EXOS21 | EP_ROM_ESP_04 | EP_ROM_BASIC21_05
+    | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_ES
+  },
   { "ep128esp/EP_128k_EXDOS_FileIO_SpectrumEmulator.cfg",
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_ESP_04 | EP_ROM_BASIC21_05
     | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_ES | EP_ROM_ZX41_UK
@@ -561,6 +569,10 @@ static const EPMachineConfig machineConfigs[] = {
   },
   { "ep128hun/EP_128k_EXDOS_FileIO.cfg",
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_HUN_04 | EP_ROM_BASIC21_05
+    | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_HU
+  },
+  { "ep128hun/EP_128k_EXDOS_FileIO_2DFX.cfg",
+    EP_RAM_128K_2DFX | EP_ROM_EXOS21 | EP_ROM_HUN_04 | EP_ROM_BASIC21_05
     | EP_ROM_EPFILEIO | EP_ROM_EXDOS14I_HU
   },
   { "ep128hun/EP_128k_EXDOS_FileIO_SpectrumEmulator.cfg",
@@ -632,6 +644,10 @@ static const EPMachineConfig machineConfigs[] = {
   },
   { "ep128uk/EP_128k_EXDOS_FileIO.cfg",
     EP_RAM_128K | EP_ROM_EXOS21 | EP_ROM_BASIC21_04 | EP_ROM_EPFILEIO
+    | EP_ROM_EXDOS14I_UK
+  },
+  { "ep128uk/EP_128k_EXDOS_FileIO_2DFX.cfg",
+    EP_RAM_128K_2DFX | EP_ROM_EXOS21 | EP_ROM_BASIC21_04 | EP_ROM_EPFILEIO
     | EP_ROM_EXDOS14I_UK
   },
   { "ep128uk/EP_128k_EXDOS_FileIO_SpectrumEmulator.cfg",
@@ -805,7 +821,7 @@ static const EPMachineConfig machineConfigs[] = {
     TVC_RAM_128K | TVC_ROM_SYS12 | TVC_ROM_EXT12 | TVC_ROM_TVC256
     | TVC_ROM_TVC256_RAMINIT
   },
-  { "tvc/TVC_64k+_V12_2DFX.cfg",
+  { "tvc/TVC_64k+_V12_FileIO_2DFX.cfg",
     TVC_RAM_128K | TVC_ROM_SYS12 | TVC_ROM_EXT12 | TVC_ROM_FILEIO
     | TVC_ROM_2DFX_PLACEHOLDER
   },
@@ -820,6 +836,13 @@ static const EPMachineConfig machineConfigs[] = {
   { "tvc/TVC_64k+_V22_TVC256_fastboot.cfg",
     TVC_RAM_128K | TVC_ROM_SYS22_FAST | TVC_ROM_EXT22 | TVC_ROM_TVC256
     | TVC_ROM_TVC256_RAMINIT
+  },
+  { "tvc/TVC_64k+_V22_2DFX.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS22 | TVC_ROM_EXT22 | TVC_ROM_2DFX_PLACEHOLDER
+  },
+  { "tvc/TVC_64k+_V22_FileIO_2DFX.cfg",
+    TVC_RAM_128K | TVC_ROM_SYS22 | TVC_ROM_EXT22 | TVC_ROM_FILEIO
+    | TVC_ROM_2DFX_PLACEHOLDER
   },
   { (char *) 0,
     0UL
@@ -966,6 +989,8 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
         }
       }
     }
+    if ((machineConfig & 7) == EP_RAM_128K_2DFX)
+      spriteExtModel = 2;
     vm.soundClockFrequency = vm.cpuClockFrequency >> 3;
     vm.enableMemoryTimingEmulation = true;
     vm.enableFileIO =
