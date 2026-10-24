@@ -663,10 +663,34 @@ namespace Ep128 {
 
   void Ep128VM::Nick_::drawLine(const uint8_t *buf, size_t nBytes)
   {
+
+#ifdef ENABLE_SPRITEEXT
+    size_t newnBytes = nBytes;
+    if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, nullptr, vm.nick.getCurrentPalette());
+      if (vm.getIsDisplayEnabled())
+        vm.display.drawLine(newBuf, newnBytes);
+      if (vm.videoCapture)
+        vm.videoCapture->horizontalSync(newBuf, newnBytes);
+    }
+    else
+    {
+#endif // ENABLE_SPRITEEXT
     if (vm.getIsDisplayEnabled())
       vm.display.drawLine(buf, nBytes);
     if (vm.videoCapture)
       vm.videoCapture->horizontalSync(buf, nBytes);
+#ifdef ENABLE_SPRITEEXT
+    }
+#endif // ENABLE_SPRITEEXT
+
+#ifdef ENABLE_SPRITEEXT
+    if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      vm.spriteext.hsync(0);
+    }
+#endif // ENABLE_SPRITEEXT
   }
 
   void Ep128VM::Nick_::vsyncStateChange(bool newState,
@@ -1080,6 +1104,35 @@ namespace Ep128 {
       value = vm.midiBuffer[vm.midiBufferReadPos];
     }
     vm.midiBufferMutex.unlock();
+    return value;
+  }
+#endif
+
+#ifdef ENABLE_SPRITEEXT
+  uint8_t Ep128VM::spriteExtPortReadCallback(void *userData, uint16_t addr)
+  {
+    Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
+    uint8_t   value = 0xFF;
+    if (!(vm.isRecordingDemo | vm.isPlayingDemo)) {
+      value = vm.spriteext.read2dfxPort(addr);
+    }
+    return value;
+  }
+
+  void Ep128VM::spriteExtPortWriteCallback(void *userData,
+                                      uint16_t addr, uint8_t value)
+  {
+    Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
+    if (!(vm.isRecordingDemo | vm.isPlayingDemo)) {
+      vm.spriteext.write2dfxPort(addr, value);
+    }
+  }
+
+  uint8_t Ep128VM::spriteExtPortDebugReadCallback(void *userData, uint16_t addr)
+  {
+    Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
+    uint8_t   value = 0xFF;
+    value = vm.spriteext.read2dfxPort(addr);
     return value;
   }
 #endif
@@ -1620,6 +1673,10 @@ namespace Ep128 {
       midiDevFlags(0xFF),
       midiSavedStatus(0x00)
 #endif
+#ifdef ENABLE_SPRITEEXT
+      , spriteext(false)
+#endif
+
   {
 #ifdef ENABLE_SDEXT
     memory.setSDExtPtr(&sdext);
@@ -1687,6 +1744,13 @@ namespace Ep128 {
                                  &midiPortDebugReadCallback, this, 0xF6);
     ioPorts.setWriteCallback(0xF6, 0xF7, &midiPortWriteCallback, this, 0xF6);
 #endif
+#ifdef ENABLE_SPRITEEXT
+    ioPorts.setReadCallback(0xF8, 0xF9, &spriteExtPortReadCallback, this, 0x00);
+    ioPorts.setDebugReadCallback(0xF8, 0xF9,
+                                 &spriteExtPortDebugReadCallback, this, 0x00);
+    ioPorts.setWriteCallback(0xF8, 0xF9, &spriteExtPortWriteCallback, this, 0x00);
+#endif
+
     ioPorts.setReadCallback(0x7E, 0x7F, &cmosMemoryIOReadCallback, this, 0x7E);
     ioPorts.setDebugReadCallback(0x7E, 0x7F,
                                  &cmosMemoryIOReadCallback, this, 0x7E);
@@ -1836,6 +1900,9 @@ namespace Ep128 {
     midiSavedStatus = 0x00;
     midiBufferMutex.unlock();
 #endif
+#ifdef ENABLE_SPRITEEXT
+   spriteext.reset(int(isColdReset));
+#endif
   }
 
 #ifdef ENABLE_RESID
@@ -1870,13 +1937,14 @@ namespace Ep128 {
   void Ep128VM::setSpriteExtConfiguration(int model)
   {
     // for Enterprise, there is only 2DFX or none
-    if (model <= 0 || model == 1 || model > 2) {
-/*      if (sidEnabled) {
-        setCallback(&sidCallback, this, false);
-        sidEnabled = false;*/
-      }
-      model = 0;
-      spriteExtModel = (uint8_t) model;
+    if (model <= 1 || model > 2) {
+        spriteExtEnabled = false;
+        spriteExtModel = 0;
+    } else {
+        spriteExtEnabled = true;
+        spriteExtModel = (uint8_t) model;
+        spriteext.reset(2);
+    }
   }
 #endif
 

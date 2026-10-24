@@ -191,7 +191,7 @@ ep128emuLibEnvironment = Environment(ENV = { 'PATH' : os.environ['PATH'],
 if linux32CrossCompile:
     compilerFlags = ' -m32 ' + compilerFlags
 ep128emuLibEnvironment.Append(CCFLAGS = Split(compilerFlags))
-ep128emuLibEnvironment.Append(CPPPATH = ['.', './src','./deps'])
+ep128emuLibEnvironment.Append(CPPPATH = ['.', './src','./deps','./deps/2dfxemu/include','./deps/2dfxemu/assets','./deps/2dfxemu/firmware_eggs/portable'])
 if userFlags:
     ep128emuLibEnvironment.MergeFlags(userFlags)
 if not mingwCrossCompile:
@@ -286,7 +286,7 @@ configurePackage(ep128emuGUIEnvironment, 'PortAudio')
 
 ep128emuGLGUIEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 disableOpenGL = 1
-if not wineMinGWCrossCompile and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
+if not enableDevtoolIntegration and configurePackage(ep128emuGLGUIEnvironment, 'FLTK-GL'):
     configure = ep128emuGLGUIEnvironment.Configure()
     if configure.CheckCHeader('GL/gl.h'):
         disableOpenGL = 0
@@ -466,7 +466,33 @@ if enableSDExt:
 
 spriteextSources = []
 if enableSpriteExt:
-    spriteextSources = ['src/spriteext.cpp', 'deps/tvc-routines.cpp', 'deps/zx7Compress.cpp','deps/2dfx_main.cpp']
+    spriteextSources = ['src/spriteext.cpp', 'deps/tvc-routines.cpp', 'deps/zx7Compress.cpp',
+                        'deps/2dfxemu/core/twodfx_3d.c','deps/2dfxemu/core/twodfx_emu.c',
+                        'deps/2dfxemu/core/twodfx_raster.c','deps/2dfxemu/assets/logo_2dfx_asset.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C0_logo.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C1_benchmark.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C2_primitives.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C3_text.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C4_blit.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C5_pattern.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C6_tilemap.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C7_pong_basic.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C8_pong_wow.c',
+                        'deps/2dfxemu/firmware_eggs/egg_C9_wriggler.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CA_boulder.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CB_arcpie_benchmark.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CC_diag.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CD_blit_full.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CE_layer.c',
+                        'deps/2dfxemu/firmware_eggs/egg_CF_tvc_bitpattern.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D0_tvc_crisp_tearing.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D1_ruler.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D2_xy_offset.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D3_elite_showcase.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D4_3d_scope.c',
+                        'deps/2dfxemu/firmware_eggs/egg_D5_public_mesh.c',
+                        'deps/2dfxemu/firmware_eggs/egg_DF_graphics_test.c',
+                        'deps/2dfxemu/firmware_eggs/firmware_page.c' ]
 
 ep128Lib = ep128LibEnvironment.StaticLibrary('ep128', Split('''
     src/dave.cpp

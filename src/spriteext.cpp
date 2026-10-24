@@ -47,9 +47,15 @@
    - tvcfileio2 - file access via rst 30h - probably not needed
 
    2DFX TVC:
-   - decrease resolution (ignore 2nd pixels) if not in graphics 2
-   - finalize Y offset
-   - add zx1 lib
+   - check reset
+   - save state
+   - generate configuration
+   - interrupt
+   
+   2DFX EP:
+   - interrupt
+   - quirk 1: single pixels will not appear
+   - quirk 2: after extc, one pixel will be black
 */
 
 #include "ep128emu.hpp"
@@ -65,9 +71,6 @@
 #include "tvcmem.hpp"
 #include "ide.hpp"
 #include "tvc-routines.h"
-#include "2dfx_builtin_logo.h"
-#include "twodfx_api.h"
-#include "2dfx_main.h"
 
 #define BIT_IS_SET(p,n) (p) |  (1 << (n))
 #define SET_BIT(p,n) (p) |=  (1 << (n))
@@ -95,30 +98,11 @@ namespace Ep128 {
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,254,254, 254,254,254,254
 };
-  // Parameter count for the respective command
-  static const uint8_t namedPortParamCount_2dfx[256] = {
-      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
-      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
-      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
-      9,    9,    9,    9,   9,    9,    9,    9,   9,  9,  9,  9,   9,  9,  9,  9,
-      0,    0,    0,    0,   0,    0,    0,    0,   0,  0,  0,  0,   0,  0,  0,  0,
-      1,    1,    1,    0,   2,    2,    2,    2,   0,255,255,  5,   7,  4,  4,  7,
-      1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
-      8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
-      5,    5,    5,    6,   6,    6,  255,  255, 255,255,255,255, 255,255,  0,  0,
-      4,    0,    8,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
-    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
-    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
-    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
-    255,  255,  255,  255, 255,  255,  255,  255, 255,255,255,255, 255,255,255,255,
-      1,    2,    4,    6,   6,    4,    6,    6,   8,  8,  6,  6,   8,  8,  3,  2,
-      8,    5,    8,    8, 255,  255,  255,  255, 255,255,255,255, 255,255,255,  1,
-};
 
-
-  SpriteExt::SpriteExt()
+  SpriteExt::SpriteExt(bool isTVC)
     : hostMem(nullptr),
       hostVm(nullptr),
+      hostVmIsTVC(isTVC),
       spriteExt_enabled(false),
       anyGfxEnabled(false),
       spriteExtSegment(0xFFFFFFFFU),
@@ -163,7 +147,7 @@ namespace Ep128 {
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
     TVC256::init_routines();
-    TWODFX::build_source_conversion_luts();
+    twodfx_emu_instance = twodfx_emu_create(hostVmIsTVC ? TWODFX_EMU_TVC : TWODFX_EMU_ENTERPRISE);
     this->reset(1);
   }
 
@@ -180,6 +164,13 @@ namespace Ep128 {
     0xC0, 0xC3, 0xF0, 0xF3,
     // I1,R1 + B0,G0 - B1,G0 - B0,G1 - B1,G1
     0xCC, 0xCF, 0xFC, 0xFF };
+
+  static const uint8_t extcConvTable2DFX[16] = {
+    // Apply fixed table from 2dfx documentation
+    0x00, 0xC0, 0x0C, 0xCC,
+    0x30, 0xF0, 0x3C, 0xFC,
+    0x03, 0xC3, 0x0F, 0xCF,
+    0x33, 0xF3, 0x3F, 0xFF };
 
   // Convert one 4-bit 16-color value to a 8-bit TVCemu specific format
   // except when color is transparent - then fall back to provided value
@@ -239,8 +230,6 @@ namespace Ep128 {
     TVC256::currDir.str[1]   = 0;
     TVC256::currDir.str[254] = 0;
 
-    std::memset(&named2dfxPortValues[0], 0x00, 256*9);
-    named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9] = 1;
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -1143,124 +1132,30 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   {
     if (portIndex == TWODFX_COMMAND_PORT)
     {
-      selected2dfxPort = value;
-      sent2dfxParameters = 0;
-      if (namedPortParamCount_2dfx[selected2dfxPort] == 255)
-      {
-        printf("2DFX func err: %02x - unused port selected\n",
-               selected2dfxPort);
-        return;
-      }
+      twodfx_emu_write_f8(twodfx_emu_instance, value);
+      io_port_values[0] = value;
     }
     else if (portIndex == TWODFX_PARAMETER_PORT)
     {
-      if (namedPortParamCount_2dfx[selected2dfxPort] == 255)
-      {
-        printf("2DFX func err: %02x - param for unused port\n",
-               selected2dfxPort);
-        return;
-      }
-      if (uploadRemaining > 0)
-      {
-        uint32_t targetAddr = named2dfxPortValues[selected2dfxPort*9 + 0] + 
-                        256 * named2dfxPortValues[selected2dfxPort*9 + 1] +
-                  256 * 256 * named2dfxPortValues[selected2dfxPort*9 + 2];
-        targetAddr += named2dfxPortValues[selected2dfxPort*9 + 3] +
-                256 * named2dfxPortValues[selected2dfxPort*9 + 4] -
-                      uploadRemaining;
-        // Limit to 2 MB
-        targetAddr &= 0x1fffff;
-        targetAddr += (TVC256_SLOWRAM_START_SEGMENT)<<14;
-        if (selected2dfxPort == TWODFX_UPLOAD_RAW)
-        {
-          hostMem->writeRaw(targetAddr,value);  
-        }
-        else if (selected2dfxPort == TWODFX_UPLOAD_TVC)
-        {
-          hostMem->writeRaw(targetAddr,TWODFX::tvc_to_sprite_lut[value]);
-        }
-        else if (selected2dfxPort == TWODFX_UPLOAD_NICK)
-        {
-          hostMem->writeRaw(targetAddr,TWODFX::nick_to_sprite_lut[value]);
-        }
-        uploadRemaining--;
-        return;
-      }
-      else if (namedPortParamCount_2dfx[selected2dfxPort] <= sent2dfxParameters)
-      {
-        printf("2DFX func err: %02x - param overflow ( > %d)\n",
-               selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort]);
-        return;
-      }
-
-      named2dfxPortValues[selected2dfxPort*9 + sent2dfxParameters] = value;
-      sent2dfxParameters++;
-    }
-    if (sent2dfxParameters == namedPortParamCount_2dfx[selected2dfxPort])
-    {
-      printf("2DFX func call: %02x (%d) - %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-             selected2dfxPort, namedPortParamCount_2dfx[selected2dfxPort],
-             named2dfxPortValues[selected2dfxPort*9 + 0], named2dfxPortValues[selected2dfxPort*9 + 1],
-             named2dfxPortValues[selected2dfxPort*9 + 2], named2dfxPortValues[selected2dfxPort*9 + 3],
-             named2dfxPortValues[selected2dfxPort*9 + 4], named2dfxPortValues[selected2dfxPort*9 + 5],
-             named2dfxPortValues[selected2dfxPort*9 + 6], named2dfxPortValues[selected2dfxPort*9 + 7],
-             named2dfxPortValues[selected2dfxPort*9 + 8]);
-
-     uploadRemaining = 0;
-     switch (selected2dfxPort)
-     {
-       case TWODFX_SHOW_BUILTIN_LOGO:
-         named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9] = 255;
-         break;
-
-       case TWODFX_HIDE_BUILTIN_LOGO:
-         named2dfxPortValues[selected2dfxPort*9] = 0;
-         break;
-       case TWODFX_UPLOAD_RAW:
-       case TWODFX_UPLOAD_TVC:
-       case TWODFX_UPLOAD_NICK:
-         uploadRemaining = named2dfxPortValues[selected2dfxPort*9 + 3] + 256 * named2dfxPortValues[selected2dfxPort*9 + 4];
-         break;
-       case TWODFX_SET_TRANSPARENT_COLOR:
-       case 0x41:
-       case 0x42:
-       case 0x43:
-       case 0x44:
-       case 0x45:
-       case 0x46:
-       case 0x47:
-       case 0x48:
-       case 0x49:
-       case 0x4a:
-       case 0x4b:
-       case 0x4c:
-       case 0x4d:
-       case 0x4e:
-       case 0x4f:
-         // No additional parameter, lower 4 bits are used
-         named2dfxPortValues[TWODFX_SET_TRANSPARENT_COLOR*9] = selected2dfxPort - TWODFX_SET_TRANSPARENT_COLOR;
-         break;
-       /* No special action - parameters are recorded */
-       case TWODFX_SET_ENGINE_MODE:
-         break;
-       default:
-        break;
-     }
+      twodfx_emu_write_f9(twodfx_emu_instance, value);
+      io_port_values[1] = value;
     }
   }
 
   uint8_t SpriteExt::read2dfxPort(uint8_t portIndex)
   {
     if (portIndex == TWODFX_COMMAND_PORT)
-      return 0xFF & (~(1 << TWODFX_STATUS_BIT_2DFX_PRESENT));
+      return twodfx_emu_read_f8(twodfx_emu_instance);
     else
       return 0xFF;
   }
+
   uint8_t SpriteExt::read2dfxPortDebug(uint8_t portIndex)
   {
-     if (namedPortMasks[portIndex] == 0xfe)
-       return 0xFF;
-     return namedPortValues[portIndex];
+    if (portIndex == TWODFX_COMMAND_PORT)
+      return io_port_values[0];
+    else
+      return io_port_values[1];
   }
 
   void SpriteExt::write2dfxPortDebug(uint8_t portIndex, uint8_t value)
@@ -1268,105 +1163,70 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
 
   }
 
-  static uint8_t logoConv2dfx(uint8_t val, uint8_t transparent_val)
-  {
-    if (val == 0)
-      return transparent_val;
-    return val == 1 ? 0xFF : 0xCC;
-  }
-
-  static uint8_t logoBitOffs2dfx(uint16_t baseAddr, uint8_t bitOffs)
-  {
-    switch(bitOffs) {
-    case 0:
-      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x03);
-    case 1:
-      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x0C) >> 2;
-    case 2:
-      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0x30) >> 4;
-    default:
-      return (two_dfx_builtin_logo_2bpp[baseAddr] & 0xC0) >> 6;
-
-    }
-  }
-
-  static bool coordConv2dfx(uint16_t twodfxX, uint16_t twodfxY, uint16_t screenX, uint16_t screenY, uint16_t *x, uint16_t *y, uint8_t *bitOffset)
-  {
-    if (screenX < twodfxX || screenX >= twodfxX + *x)
-      return false;
-    if (screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y < twodfxY || screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y >= twodfxY + *y)
-      return false;
-
-    *x = screenX - twodfxX;
-    *y = screenY + TWODFX_TVC_BASIC_SAFE_MIN_Y - twodfxY;
-    div_t logoOffs = div(*x, 4);
-    *bitOffset = logoOffs.rem;
-    *x = logoOffs.quot;
-    return true;
-  }
-
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
-  void SpriteExt::updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot)
+  void SpriteExt::updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t* palette)
   {
-     uint8_t * buf = &overlayBuffer[0];
-     for (size_t i=0; i<16; i++)
+     uint8_t *buf = &buf_[outPos];
+     if (hostVmIsTVC)
      {
-        overlayBuffer[i] = 0x0;
-     }
-
-     // Show / hide builtin logo
-     if (named2dfxPortValues[TWODFX_HIDE_BUILTIN_LOGO*9])
-     {
-        uint16_t actualX = TWO_DFX_BUILTIN_LOGO_W;
-        uint16_t actualY = TWO_DFX_BUILTIN_LOGO_H;
-        uint8_t bitOffs = 4;
-
-        int firstPixel, lastPixel;
-        firstPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
-                       named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] - (currSlot * 16);
-        if (firstPixel < 0) firstPixel = 0;
-        lastPixel = ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 +
-                     (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1] + TWO_DFX_BUILTIN_LOGO_W) - (currSlot * 16);
-        if (lastPixel > 15) lastPixel = 15;
-
-        if (coordConv2dfx(
-              ((named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x06) >> 1) * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+1],
-               (named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9] & 0x01)       * 256 + named2dfxPortValues[TWODFX_SHOW_BUILTIN_LOGO*9+2],
-              currSlot * 16 + firstPixel, curLine,
-              &actualX,&actualY, &bitOffs))
-        {
-          uint16_t baseAddr = actualY * TWO_DFX_BUILTIN_LOGO_ROW_BYTES + actualX;
-          for (int i = firstPixel; i <= lastPixel ; i++)
-          {
-            buf[i] = logoConv2dfx(logoBitOffs2dfx(baseAddr, bitOffs), buf[i]);
-            if (++bitOffs > 3) {bitOffs = 0; baseAddr++;}
-          }
-        }
-     }
-
-     buf = &buf_[outPos];
-     for (size_t i=0; i<16; i++)
-     {
-       buf[i] = overlayBuffer[i] != 0 ? overlayBuffer[i] : buf[i];
+       for (size_t i=0; i<16; i+=2)
+       {
+         buf[i+1] = bufExtc[i+1] != 0 ? extcConvTable2DFX[bufOvl[i+1] & 0x0F] : buf[i+1];
+         if (hiRes)
+           buf[i]   = bufExtc[i] != 0 ? extcConvTable2DFX[bufOvl[i] & 0x0F] : buf[i];
+         else
+         {
+           buf[i] = buf[i+1];
+         }
+       }
+     } else {
+       for (size_t i=0; i<16; i+=2)
+       {
+         // TODO: Nick current LPT palette conversion
+         buf[i+1] = bufExtc[i+1] != 0 ? palette[bufOvl[i+1] & 0x0F] : buf[i+1];
+         buf[i]   = bufExtc[i]   != 0 ? palette[bufOvl[i]   & 0x0F] : buf[i];
+       }
      }
   }
 
-  const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState)
+  const uint8_t* SpriteExt::combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState, const uint8_t* nickPalette)
   {
 
     const unsigned char *bufp = buf;
     const uint8_t *endp = buf + *nBytes;
+    uint8_t colorBuf[800];
+    uint8_t extcBuf[800];
     size_t outPos = 0;
     size_t currSlotPlus = 0; // this is absolute slot in case of 2dfx, not only the visible area
+    size_t colorBufOffs;
+    memset(colorBuf,0,sizeof(colorBuf));
+    memset(extcBuf,0,sizeof(extcBuf));
+    if (hostVmIsTVC)
+      colorBufOffs = 2;
+    else
+      colorBufOffs = 28;
 
     if (vsyncCnt>0)
+    {
+      if (curLine > 0)
+        twodfx_emu_vsync(twodfx_emu_instance);
       curLine = 0;
+    }
     else 
       curLine++;
 
+    // Fixed offsets
+    if (hostVmIsTVC)
+    {
+      if (curLine >= 19)
+        twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-19,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);      
+    } else {
+      if (curLine >= 18)
+        twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-18,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);          
+    }
     // todo: screen height shortcuts
-    if (!(*nBytes) || named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9]==0)
-      return buf;
+    //if (!(*nBytes) || named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9]==0)
+      //return buf;
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
@@ -1393,20 +1253,52 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         break;
       case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes -- not used for TVC
         do {
-           std::memcpy(&(buf_[outPos]), bufp, 3);
-          bufp = bufp + 3;
-          outPos += 3;
-          currSlotPlus++;
+            currSlotPlus++;
+            buf_[outPos] = 0x09;
+            buf_[outPos +  1] = bufp[1];
+            buf_[outPos +  2] = bufp[1];
+            buf_[outPos +  3] = bufp[1];
+            buf_[outPos +  4] = bufp[1];
+            buf_[outPos +  5] = bufp[1];
+            buf_[outPos +  6] = bufp[1];
+            buf_[outPos +  7] = bufp[1];
+            buf_[outPos +  8] = bufp[1];
+            buf_[outPos +  9] = bufp[2];
+            buf_[outPos + 10] = bufp[2];
+            buf_[outPos + 11] = bufp[2];
+            buf_[outPos + 12] = bufp[2];
+            buf_[outPos + 13] = bufp[2];
+            buf_[outPos + 14] = bufp[2];
+            buf_[outPos + 15] = bufp[2];
+            buf_[outPos + 16] = bufp[2];
+
+            bufp = bufp + 3;
+            outPos  += 17;
+            *nBytes += 14;
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x02);
         break;
       case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
         do {
-           std::memcpy(&(buf_[outPos]), bufp, 4);
-          bufp = bufp + 4;
-          outPos += 4;
-          currSlotPlus++;
+            currSlotPlus++;
+            unsigned char c0 = bufp[1];
+            unsigned char c1 = bufp[2];
+            unsigned char b = bufp[3];
+            buf_[outPos] = 0x09;
+            buf_[outPos+ 1] = buf_[outPos+ 2] = (b & 0x80) ? c1 : c0;
+            buf_[outPos+ 3] = buf_[outPos+ 4] = (b & 0x40) ? c1 : c0;
+            buf_[outPos+ 5] = buf_[outPos+ 6] = (b & 0x20) ? c1 : c0;
+            buf_[outPos+ 7] = buf_[outPos+ 8] = (b & 0x10) ? c1 : c0;
+            buf_[outPos+ 9] = buf_[outPos+10] = (b & 0x08) ? c1 : c0;
+            buf_[outPos+11] = buf_[outPos+12] = (b & 0x04) ? c1 : c0;
+            buf_[outPos+13] = buf_[outPos+14] = (b & 0x02) ? c1 : c0;
+            buf_[outPos+15] = buf_[outPos+16] = (b & 0x01) ? c1 : c0;
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
+            bufp    +=  4;
+            outPos  += 17;
+            *nBytes += 13;
+
           if (bufp >= endp)
             break;
         } while (bufp[0] == 0x03);
@@ -1435,7 +1327,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[4];
             buf_[outPos + 16] = bufp[4];
             
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
             bufp    +=  5;
             outPos  += 17;
             *nBytes += 12;
@@ -1471,7 +1363,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos+15] = (b & 0x02) ? c1 : c0;
             buf_[outPos+16] = (b & 0x01) ? c1 : c0;
 
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], true, nickPalette);
             bufp    +=  7;
             outPos  += 17;
             *nBytes += 10;
@@ -1501,7 +1393,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[8];
             buf_[outPos + 16] = bufp[8];
             
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1);
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
             bufp    +=  9;
             outPos  += 17;
             *nBytes +=  8;
@@ -1517,7 +1409,13 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         break;
       }
     } while (bufp < endp && outPos < *nBytes);
+
     return &buf_[0];
+  }
+
+  void SpriteExt::hsync(int hsyncCnt)
+  {
+    twodfx_emu_hsync(twodfx_emu_instance, curLine);
   }
 
 

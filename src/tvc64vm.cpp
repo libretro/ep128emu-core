@@ -666,7 +666,7 @@ namespace TVC64 {
     }
     else if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState, nullptr);
       if (vm.getIsDisplayEnabled())
         vm.display.drawLine(newBuf, newnBytes);
       if (vm.videoCapture)
@@ -691,6 +691,12 @@ namespace TVC64 {
       vm.display.vsyncStateChange(newState, currentSlot_);
     if (vm.videoCapture)
       vm.videoCapture->vsyncStateChange(newState, currentSlot_);
+#ifdef ENABLE_SPRITEEXT
+    if (vm.spriteExtModel == SPRITEEXT_TWODFX)
+    {
+      vm.spriteext.hsync(vm.videoRenderer.hSyncCnt);
+    }
+#endif // ENABLE_SPRITEEXT
   }
 
   // --------------------------------------------------------------------------
@@ -1594,6 +1600,9 @@ namespace TVC64 {
       tapeSamplesPerCRTCCycle(0L),
       tapeSamplesRemaining(-1L),
       crtcFrequency(1562500)
+#ifdef ENABLE_SPRITEEXT
+      , spriteext(true)
+#endif // ENABLE_SPRITEEXT
 #ifdef ENABLE_RESID
       , sid((Ep128::SID *) 0),
       sidEnabled(false),

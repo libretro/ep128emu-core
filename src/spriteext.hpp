@@ -31,6 +31,7 @@
 #include "ep128emu.hpp"
 #include "tvcmem.hpp"
 #include "vm.hpp"
+#include "twodfx_emu.h"
 #include <vector>
 #include <dirent.h>
 
@@ -40,6 +41,7 @@ namespace Ep128 {
    protected:
     TVC64::Memory *hostMem;
     Ep128Emu::VirtualMachine *hostVm;
+    bool      hostVmIsTVC;
     bool      spriteExt_enabled;    // only used in temporaryDisable()
     bool      anyGfxEnabled;
     uint32_t  spriteExtSegment;
@@ -80,14 +82,14 @@ namespace Ep128 {
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
     uint16_t uploadRemaining;
-    
-    void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot);
+    twodfx_emu *twodfx_emu_instance;
+    void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t *palette);
 
    public:
     uint8_t io_port_values[16];
     float mouse_speed;
     DIR *fileIODir;
-    SpriteExt();
+    SpriteExt(bool isTVC);
     virtual ~SpriteExt();
     void setEnabled(bool isEnabled);
     // for demo recording/playback, calling with isDisabled == false
@@ -109,7 +111,8 @@ namespace Ep128 {
     void   write2dfxPort(uint8_t portIndex, uint8_t value);
     uint8_t read2dfxPortDebug(uint8_t portIndex);
     void   write2dfxPortDebug(uint8_t portIndex, uint8_t value);
-    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState);
+    const uint8_t *combineLine2dfx(const uint8_t *buf, size_t *nBytes, uint8_t vsyncCnt, uint8_t *irqState, const uint8_t *nickPalette);
+    void hsync(int hsyncCnt);
 
     EP128EMU_INLINE bool isSpriteExtSegment(uint8_t segment) const
     {
