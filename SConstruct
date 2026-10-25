@@ -273,6 +273,9 @@ configurePackage(ep128emuGUIEnvironment, 'FLTK')
 makecfgEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 configurePackage(ep128emuGUIEnvironment, 'sndfile')
 tapeeditEnvironment = copyEnvironment(ep128emuGUIEnvironment)
+tapeconvEnvironment = copyEnvironment(ep128emuGUIEnvironment)
+epdoc2txtEnvironment = copyEnvironment(ep128emuLibEnvironment)
+
 haveLua = 0
 haveSDL = 0
 if not disableLua:
@@ -388,6 +391,7 @@ ep128emuGUIEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 ep128emuGLGUIEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 makecfgEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 tapeeditEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
+tapeconvEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 
 def fluidCompile(flNames):
     cppNames = []
@@ -663,6 +667,15 @@ if sys.platform[:6] == 'darwin':
 # -----------------------------------------------------------------------------
 
 if buildUtilities:
+
+    tapeconvEnvironment.Prepend(LIBS = ['ep128emu'])
+    tapeconvSources = ['util/tapeconv/tape.cpp','util/tapeconv/tapeconv.cpp']
+    tapeconv = tapeconvEnvironment.Program('tapeconv', tapeconvSources)
+
+    epdoc2txtEnvironment.Prepend(LIBS = ['ep128emu'])
+    epdoc2txtSources = ['util/epdoc2txt/epdoc2txt.cpp']
+    epdoc2txt = epdoc2txtEnvironment.Program('epdoc2txt', epdoc2txtSources)
+
     compressLibEnvironment = copyEnvironment(ep128emuLibEnvironment)
     compressLibEnvironment.Append(CPPPATH = ['./util/epcompress/src'])
     compressLibEnvironment.Prepend(LIBS = [ep128emuLib])
