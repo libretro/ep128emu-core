@@ -1,6 +1,6 @@
 # Release procedure for ep128emu:
 
-
+- update NEWS
 - update licenses if needed for the code in deps/
 - bump version in ep128emu.hpp and resources/ep128emu.rc
 - add new configuration templates to makecfg.cpp if relevant
