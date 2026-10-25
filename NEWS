@@ -1,3 +1,8 @@
+Changes in version 2.0.12.8
+
+  * Restored support for new formats in epcompress (-m1, -m4, and -m6)
+  * epcompress -m2 is slightly more efficient but slower at -8 and above
+
 Changes in version 2.0.12.6
 
   * TVC256++ emulation (corresponding to 0.24 firmware version)
