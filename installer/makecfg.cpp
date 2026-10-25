@@ -941,6 +941,7 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
         memory.rom[5].file = romDirectory + "tvc256-024.rom";
         spriteExtModel = 1;
         sidModel = 1;
+        vm.enableFileIO = true;
       }
       if (machineConfig & TVC_ROM_2DFX_PLACEHOLDER)
       {

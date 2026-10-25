@@ -1159,6 +1159,24 @@ namespace Ep128Emu {
     uint8_t attr;
     uint32_t fsize;
     std::string fullDir(fileIOWorkingDirectory + fileIOWorkingSubDir);
+    // Invoke callback (file selector dialog) if there is no file name supplied.
+    if (fileName_.length() == 0) {
+      if (fileNameCallback)
+        fileNameCallback(fileNameCallbackUserData, fileName_);
+      if (fileName_.length() == 0)
+        return -2;                    // error: invalid file name
+#ifndef WIN32
+      size_t slashPos = fileName_.rfind("/",fileName_.length()-1);
+#else
+      size_t slashPos = fileName_.rfind("\\",fileName_.length()-1);
+#endif
+      // No slash - return to root
+      if (slashPos >= fileName_.length() || slashPos == 0)
+      {
+        return -2;
+      }
+      fileName_ = fileName_.substr(slashPos+1,fileName_.length());
+    }
     if (!sanitizeFileOrDirName(fileName_))
     {
       return -3;
