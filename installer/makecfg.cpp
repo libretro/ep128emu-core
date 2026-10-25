@@ -1017,24 +1017,28 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
     config.createKey("memory.rom.03.offset", memory.rom[0x03].offset);
     config.createKey("memory.rom.04.file", memory.rom[0x04].file);
     config.createKey("memory.rom.04.offset", memory.rom[0x04].offset);
-  }
-  if (!(IS_ZX_CONFIG(machineConfig) || IS_TVC_CONFIG(machineConfig))) {
     config.createKey("memory.rom.05.file", memory.rom[0x05].file);
     config.createKey("memory.rom.05.offset", memory.rom[0x05].offset);
     config.createKey("memory.rom.06.file", memory.rom[0x06].file);
     config.createKey("memory.rom.06.offset", memory.rom[0x06].offset);
+  }
+  if (!(IS_ZX_CONFIG(machineConfig) || IS_TVC_CONFIG(machineConfig))) {
     config.createKey("memory.rom.07.file", memory.rom[0x07].file);
     config.createKey("memory.rom.07.offset", memory.rom[0x07].offset);
+  }
+  if (!IS_ZX_CONFIG(machineConfig)) {
     config.createKey("memory.rom.10.file", memory.rom[0x10].file);
     config.createKey("memory.rom.10.offset", memory.rom[0x10].offset);
   }
-  if (IS_EP_CONFIG(machineConfig)) {
+  if (IS_EP_CONFIG(machineConfig) || IS_TVC_CONFIG(machineConfig)) {
     config.createKey("memory.rom.11.file", memory.rom[0x11].file);
     config.createKey("memory.rom.11.offset", memory.rom[0x11].offset);
     config.createKey("memory.rom.12.file", memory.rom[0x12].file);
     config.createKey("memory.rom.12.offset", memory.rom[0x12].offset);
     config.createKey("memory.rom.13.file", memory.rom[0x13].file);
     config.createKey("memory.rom.13.offset", memory.rom[0x13].offset);
+  }
+  if (IS_EP_CONFIG(machineConfig)) {
     config.createKey("memory.rom.20.file", memory.rom[0x20].file);
     config.createKey("memory.rom.20.offset", memory.rom[0x20].offset);
     config.createKey("memory.rom.21.file", memory.rom[0x21].file);
@@ -1060,18 +1064,6 @@ Ep128EmuMachineConfiguration::Ep128EmuMachineConfiguration(
     config.createKey("memory.rom.43.file", memory.rom[0x43].file);
     config.createKey("memory.rom.43.offset", memory.rom[0x43].offset);
     config.createKey("memory.configFile", memory.configFile);
-  }
-  if (IS_TVC_CONFIG(machineConfig) && spriteExtModel == SPRITEEXT_TVC256) {
-    config.createKey("memory.rom.05.file", memory.rom[0x05].file);
-    config.createKey("memory.rom.05.offset", memory.rom[0x05].offset);
-    config.createKey("memory.rom.10.file", memory.rom[0x10].file);
-    config.createKey("memory.rom.10.offset", memory.rom[0x10].offset);
-    config.createKey("memory.rom.11.file", memory.rom[0x11].file);
-    config.createKey("memory.rom.11.offset", memory.rom[0x11].offset);
-    config.createKey("memory.rom.12.file", memory.rom[0x12].file);
-    config.createKey("memory.rom.12.offset", memory.rom[0x12].offset);
-    config.createKey("memory.rom.13.file", memory.rom[0x13].file);
-    config.createKey("memory.rom.13.offset", memory.rom[0x13].offset);
   }
   if (IS_EP_CONFIG(machineConfig) || IS_TVC_CONFIG(machineConfig)) {
     config.createKey("sdext.romFile", sdext.romFile);

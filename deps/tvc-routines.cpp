@@ -1711,9 +1711,6 @@ uint8_t tvcfunc_open_file(uint8_t* bufferStart) {
 /*    TVC_ROM[0x1900] = bufferStart[0];   // open file mode
     TVC_ROM[0x1901] = bufferStart[1];   // file type, only for creating/rewriting*/
     uint8_t len = inBuf[2];       // filename length
-    if(len == 0) {
-        return (uint8_t)FR_INVALID_PARAMETER + 0x80; // Invalid filename length
-    }
     if (len + 2 > maxBufLen)
       printf("WARN: too long param for segment, lenght %02x vs. max %04x\n", len+2, maxBufLen);
 /*    // usb_printf("tvcfunc_open_file: filename length: %d, filename: %s, flag: %d\n", len, &bufferStart[3], SELECTED_DEVICE );main_loop_task();sleep_ms(50);
