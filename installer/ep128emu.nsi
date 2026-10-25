@@ -17,12 +17,12 @@
   !ifndef WIN64
   ;Name and file
   Name "ep128emu"
-  OutFile "ep128emu-2.0.12.7-x86.exe"
+  OutFile "ep128emu-2.0.12.8-x86.exe"
   ;Default installation folder
   InstallDir "$PROGRAMFILES\ep128emu2"
   !else
   Name "ep128emu (x64)"
-  OutFile "ep128emu-2.0.12.7-x64.exe"
+  OutFile "ep128emu-2.0.12.8-x64.exe"
   InstallDir "$PROGRAMFILES64\ep128emu2"
   !endif
 
@@ -85,6 +85,8 @@ Section "ep128emu binaries" SecMain
   File "..\ep128emu.exe"
   File "..\makecfg.exe"
   File "..\tapeedit.exe"
+  File "..\tapeconv.exe"
+  File "..\epdoc2txt.exe"
   !ifndef WIN64
   File "C:\mingw32\bin\libgcc_s_dw2-1.dll"
   File "C:\mingw32\bin\libsndfile-1.dll"
@@ -367,6 +369,11 @@ Section "ep128emu source code" SecSrc
 
   File "..\util\*.patch"
 
+  SetOutPath "$INSTDIR\src\util\dtf"
+
+  File "..\util\dtf\*.cpp"
+  File "..\util\dtf\*.s"
+
   SetOutPath "$INSTDIR\src\util\epcompress"
 
   SetOutPath "$INSTDIR\src\util\epcompress\src"
@@ -490,7 +497,7 @@ Section "Download and install ROM images" SecDLRoms
 
   SetOutPath "$INSTDIR\roms"
 
-  INetC::get "https://zoltanvb.github.io/ep128emu/ep128emu_roms-2.0.12.7.bin" "$INSTDIR\roms\ep128emu_roms-2.0.12.7.bin"
+  INetC::get "https://zoltanvb.github.io/ep128emu/ep128emu_roms-2.0.12.8.bin" "$INSTDIR\roms\ep128emu_roms-2.0.12.8.bin"
   Pop $R0
   StrCmp $R0 "OK" downloadDone 0
   StrCmp $R0 "Cancelled" downloadDone 0
@@ -514,6 +521,7 @@ Section "Install epimgconv and other utilities" SecUtils
 
   SetOutPath "$INSTDIR"
 
+  File /nonfatal "..\dtf.exe"
   File /nonfatal "..\epcompress.exe"
   File /nonfatal "..\epimgconv.exe"
   File /nonfatal "..\epimgconv_gui.exe"
@@ -619,6 +627,8 @@ Section "Uninstall"
   Delete "$INSTDIR\portaudio_x86.dll"
   Delete "$INSTDIR\SDL.dll"
   Delete "$INSTDIR\tapeedit.exe"
+  Delete "$INSTDIR\tapeconv.exe"
+  Delete "$INSTDIR\epdoc2txt.exe"
   Delete "$INSTDIR\config\EP_128k_EXDOS.cfg"
   Delete "$INSTDIR\config\EP_128k_EXDOS_FileIO.cfg"
   Delete "$INSTDIR\config\EP_128k_EXDOS_FileIO_SpectrumEmulator.cfg"
@@ -806,6 +816,7 @@ Section "Uninstall"
   Delete "$INSTDIR\roms\ep128emu_roms-2.0.12.5.bin"
   Delete "$INSTDIR\roms\ep128emu_roms-2.0.12.6.bin"
   Delete "$INSTDIR\roms\ep128emu_roms-2.0.12.7.bin"
+  Delete "$INSTDIR\roms\ep128emu_roms-2.0.12.8.bin"
   Delete "$INSTDIR\roms\ep_basic.rom"
   Delete "$INSTDIR\roms\epd17l12.rom"
   Delete "$INSTDIR\roms\epd17z12.rom"

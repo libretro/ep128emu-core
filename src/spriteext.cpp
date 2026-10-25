@@ -1271,6 +1271,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 14] = bufp[2];
             buf_[outPos + 15] = bufp[2];
             buf_[outPos + 16] = bufp[2];
+            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
 
             bufp = bufp + 3;
             outPos  += 17;

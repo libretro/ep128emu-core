@@ -276,6 +276,9 @@ configurePackage(ep128emuGUIEnvironment, 'FLTK')
 makecfgEnvironment = copyEnvironment(ep128emuGUIEnvironment)
 configurePackage(ep128emuGUIEnvironment, 'sndfile')
 tapeeditEnvironment = copyEnvironment(ep128emuGUIEnvironment)
+tapeconvEnvironment = copyEnvironment(ep128emuGUIEnvironment)
+epdoc2txtEnvironment = copyEnvironment(ep128emuLibEnvironment)
+
 haveLua = 0
 haveSDL = 0
 if not disableLua:
@@ -391,6 +394,7 @@ ep128emuGUIEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 ep128emuGLGUIEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 makecfgEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 tapeeditEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
+tapeconvEnvironment.MergeFlags(ep128emuLibEnvironment['CCFLAGS'])
 
 def fluidCompile(flNames):
     cppNames = []
@@ -666,15 +670,36 @@ if sys.platform[:6] == 'darwin':
 # -----------------------------------------------------------------------------
 
 if buildUtilities:
+
+    tapeconvEnvironment.Prepend(LIBS = ['ep128emu'])
+    tapeconvSources = ['util/tapeconv/tape.cpp','util/tapeconv/tapeconv.cpp']
+    tapeconv = tapeconvEnvironment.Program('tapeconv', tapeconvSources)
+
+    epdoc2txtEnvironment.Prepend(LIBS = ['ep128emu'])
+    epdoc2txtSources = ['util/epdoc2txt/epdoc2txt.cpp']
+    epdoc2txt = epdoc2txtEnvironment.Program('epdoc2txt', epdoc2txtSources)
+
     compressLibEnvironment = copyEnvironment(ep128emuLibEnvironment)
     compressLibEnvironment.Append(CPPPATH = ['./util/epcompress/src'])
     compressLibEnvironment.Prepend(LIBS = [ep128emuLib])
     compressLib = compressLibEnvironment.StaticLibrary(
                       'epcompress', Split('''
                           util/epcompress/src/archive.cpp
+                          util/epcompress/src/compress0.cpp
+                          util/epcompress/src/compress1.cpp
+                          util/epcompress/src/compress2.cpp
                           util/epcompress/src/compress3.cpp
+                          util/epcompress/src/compress4.cpp
+                          util/epcompress/src/compress5.cpp
+                          util/epcompress/src/compress6.cpp
                           util/epcompress/src/compress.cpp
+                          util/epcompress/src/decompress0.cpp
+                          util/epcompress/src/decompress1.cpp
+                          util/epcompress/src/decompress2.cpp
                           util/epcompress/src/decompress3.cpp
+                          util/epcompress/src/decompress4.cpp
+                          util/epcompress/src/decompress5.cpp
+                          util/epcompress/src/decompress6.cpp
                           util/epcompress/src/sfxcode.cpp
                           util/epcompress/src/sfxdecomp.cpp
                       '''))
@@ -686,6 +711,8 @@ if buildUtilities:
     epcompress = epcompressEnvironment.Program(
                      'epcompress', ['util/epcompress/src/main.cpp'])
     Depends(epcompress, compressLib)
+    dtf = epcompressEnvironment.Program('dtf', ['util/dtf/dtf.cpp'])
+    Depends(dtf, compressLib)
     iview2png = epcompressEnvironment.Program(
                     'iview2png', ['util/epimgconv/src/iview2png.cpp'])
     Depends(iview2png, compressLib)
@@ -771,7 +798,7 @@ if not mingwCrossCompile:
                                    ['ln -s -f ep128emu "' + prgName + '"'])
     if buildUtilities:
         makecfgEnvironment.Install(instBinDir,
-                                   [epcompress, epimgconv, iview2png])
+                                   [dtf, epcompress, epimgconv, iview2png])
     makecfgEnvironment.Install(instPixmapDir,
                                ["resource/cpc464emu.png",
                                 "resource/ep128emu.png",

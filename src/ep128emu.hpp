@@ -27,7 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#define EP128EMU_CURRENT_VERSION "2.0.12.7"
+#define EP128EMU_CURRENT_VERSION "2.0.12.8"
 #ifdef WIN32
 #  undef WIN32
 #endif

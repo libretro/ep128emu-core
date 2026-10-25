@@ -1,4 +1,21 @@
+Changes in version 2.0.12.8
+---------------------------
+
+  * Restored support for new formats in epcompress (-m1, -m4, and -m6)
+  * epcompress -m2 is slightly more efficient but slower at -8 and above
+  * Recovered tapeconv source from enterpriseforever forums, added as utility
+  * Recovered epdoc2txt source from enterpriseforever forums, added as utility
+  * Fixed FileIO file open selector when no file name is given
+  * Fixed 2DFX display over Enterprise 256-color screen
+
+Changes in version 2.0.12.7
+---------------------------
+
+  * 2DFX emulation for TVC and Enterprise using twodfx_emu component from Karoly Vaczko
+
+
 Changes in version 2.0.12.6
+---------------------------
 
   * TVC256++ emulation (corresponding to 0.24 firmware version)
   * 2DFX emulation (experimental, very limited)
