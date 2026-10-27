@@ -43,7 +43,7 @@
    
    TVC256++ others:
    - Delay for slow RAM paging
-   - Extend slow RAM to the real 8 MB instead of 2
+   - Extend slow RAM to the real 8 MB instead of 2 - move psram to something like sd_ext ram, keep fast ram pageable
    - tvcfileio2 - file access via rst 30h - probably not needed
 
    2DFX TVC:
@@ -153,6 +153,11 @@ namespace Ep128 {
 
   SpriteExt::~SpriteExt()
   {
+    if (twodfx_emu_instance)
+    {
+      twodfx_emu_destroy(twodfx_emu_instance);
+      twodfx_emu_instance = nullptr;
+    }
   }
 
   static const uint8_t i4ConvTable[16] = {
@@ -230,6 +235,8 @@ namespace Ep128 {
     TVC256::currDir.str[1]   = 0;
     TVC256::currDir.str[254] = 0;
 
+    if (twodfx_emu_instance)
+      twodfx_emu_power_cycle(twodfx_emu_instance);
   }
 
   void SpriteExt::setMemRef(TVC64::Memory *m)
@@ -1198,13 +1205,21 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     uint8_t extcBuf[800];
     size_t outPos = 0;
     size_t currSlotPlus = 0; // this is absolute slot in case of 2dfx, not only the visible area
-    size_t colorBufOffs;
+    size_t colorBufOffs, lineOffs, lineMax;
     memset(colorBuf,0,sizeof(colorBuf));
     memset(extcBuf,0,sizeof(extcBuf));
     if (hostVmIsTVC)
+    {
       colorBufOffs = 2;
+      lineOffs = 19;
+      lineMax = TWODFX_EMU_TVC_VIDEO_H + lineOffs;
+    }
     else
+    {
       colorBufOffs = 28;
+      lineOffs = 18;
+      lineMax =  TWODFX_EMU_VIDEO_H_MAX + lineOffs;
+    }
 
     if (vsyncCnt>0)
     {
@@ -1215,22 +1230,20 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     else 
       curLine++;
 
-    // Fixed offsets
-    if (hostVmIsTVC)
-    {
-      if (curLine >= 19)
-        twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-19,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);      
-    } else {
-      if (curLine >= 18)
-        twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-18,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);          
-    }
-    // todo: screen height shortcuts
-    //if (!(*nBytes) || named2dfxPortValues[TWODFX_SET_ENGINE_MODE*9]==0)
-      //return buf;
+    // TODO: twodfx_emu_is_active
+    if (!(*nBytes) ||
+        !(twodfx_emu_instance))
+      return buf;
+
+    // Fixed offsets, slightly different for TVC and EP
+   if (curLine >= lineOffs && curLine <= lineMax)
+     twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-lineOffs,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);
+
    // Note: line pixels are according to PAL (768).
     do {
       switch (bufp[0]) {
-      // Several modes do not occur in content area (or at all in case of TVC), those can be just copied
+      // Several modes do not occur in content area, those can be just copied
+      // Not calling updateLineWithGfx2dfx also ensures those areas stay intact, just as with hardware
       case 0x00:                        // 16 pixel blank coded on 1 byte
         do {
             buf_[outPos] = 0x00;
@@ -1251,7 +1264,10 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             break;
         } while (bufp[0] == 0x01);
         break;
-      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes -- not used for TVC
+      // To simplify the overlay logic, convert all content modes to a new mode 0x09 which can cover 
+      // all resolution with 256 colors (16 would be enough for TVC, but let's not complicate it)
+      // This way, overlay pixel calculation logic can be done only once for all modes.
+      case 0x02:                        // 2x8 pixels, 256 colors coded on 3 bytes
         do {
             currSlotPlus++;
             buf_[outPos] = 0x09;
@@ -1280,7 +1296,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             break;
         } while (bufp[0] == 0x02);
         break;
-      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes -- not used for TVC
+      case 0x03:                        // 8x2 pixels, 2 colors coded on 4 bytes
         do {
             currSlotPlus++;
             unsigned char c0 = bufp[1];
@@ -1304,10 +1320,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             break;
         } while (bufp[0] == 0x03);
         break;
-      // To simplify the overlay logic, convert all content modes to a new mode 0x09 which can cover 
-      // all resolution with 256 colors (16 would be enough for TVC, but let's not complicate it)
-      // This way, overlay pixel calculation logic can be done only once for all modes.
-      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes -- TVC 16 color mode
+      case 0x04:                        // 4x4 pixels, 256 colors coded on 5 bytes
         do {
             currSlotPlus++;
             buf_[outPos] = 0x09;
@@ -1337,7 +1350,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             break;
         } while (bufp[0] == 0x04);
         break;
-      case 0x06:                        // 2*8*2 pixels, 2*2 colors coded on 7 bytes -- TVC 2 color mode
+      case 0x06:                        // 2*8*2 pixels, 2*2 colors coded on 7 bytes
         do {
             currSlotPlus++;
             unsigned char c0 = bufp[1];
@@ -1373,7 +1386,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             break;
         } while (bufp[0] == 0x06);
         break;
-      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes -- TVC 4 color mode
+      case 0x08:                        // 8*2 pixels, 256 colors coded on 9 bytes
         do {
             currSlotPlus++;
             buf_[outPos] = 0x09;
@@ -1414,7 +1427,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     return &buf_[0];
   }
 
-  void SpriteExt::hsync(int hsyncCnt)
+  void SpriteExt::hsync()
   {
     twodfx_emu_hsync(twodfx_emu_instance, curLine);
   }

@@ -688,7 +688,7 @@ namespace Ep128 {
 #ifdef ENABLE_SPRITEEXT
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      vm.spriteext.hsync(0);
+      vm.spriteext.hsync();
     }
 #endif // ENABLE_SPRITEEXT
   }

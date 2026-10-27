@@ -694,7 +694,7 @@ namespace TVC64 {
 #ifdef ENABLE_SPRITEEXT
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      vm.spriteext.hsync(vm.videoRenderer.hSyncCnt);
+      vm.spriteext.hsync();
     }
 #endif // ENABLE_SPRITEEXT
   }
