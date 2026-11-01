@@ -54,7 +54,6 @@ namespace TVC64 {
    public:
 #ifdef ENABLE_SPRITEEXT
     uint8_t  spriteExtModel;
-    bool     spriteExtEnabled;
     uint8_t  spriteext_p2_reg;
     uint8_t  spriteext_p3_reg;
     uint16_t psram_p2_reg;

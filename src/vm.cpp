@@ -214,6 +214,7 @@ namespace Ep128Emu {
   void VirtualMachine::reset(bool isColdReset)
   {
     (void) isColdReset;
+    fileIOWorkingSubDir = "";
   }
 
   void VirtualMachine::resetMemoryConfiguration(size_t memSize)
@@ -1088,11 +1089,11 @@ namespace Ep128Emu {
         if (slashPos >= fileIOWorkingSubDir.length() || slashPos == 0)
         {
           fileIOWorkingSubDir = "";
-          subDirName = fileIOWorkingSubDir;
+          subDirName = fileIOWorkingSubDir.c_str();
           return 0;
         }
         fileIOWorkingSubDir = fileIOWorkingSubDir.substr(0, slashPos);
-        subDirName = fileIOWorkingSubDir;
+        subDirName = fileIOWorkingSubDir.c_str();
 #ifndef WIN32
         fileIOWorkingSubDir.append("/");
 #else
@@ -1106,7 +1107,7 @@ namespace Ep128Emu {
       if (attr & 0x10)
       {
         fileIOWorkingSubDir += subDirName;
-        subDirName = fileIOWorkingSubDir;
+        subDirName = fileIOWorkingSubDir.c_str();
 #ifndef WIN32
         fileIOWorkingSubDir.append("/");
 #else
@@ -1116,13 +1117,13 @@ namespace Ep128Emu {
       }
       else
       {
-        fileIOWorkingSubDir = prevSubdir;
+        fileIOWorkingSubDir = prevSubdir.c_str();
         return -1;
       }
     }
     else
     {
-      fileIOWorkingSubDir = prevSubdir;
+      fileIOWorkingSubDir = prevSubdir.c_str();
       return -1;
     }
   }

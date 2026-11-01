@@ -658,7 +658,7 @@ namespace TVC64 {
     // writing irqState directly is ugly
     if (vm.spriteExtModel == SPRITEEXT_TVC256)
     {
-      const uint8_t* newBuf = vm.spriteext.combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
+      const uint8_t* newBuf = vm.spriteext->combineLine(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState);
       if (vm.getIsDisplayEnabled())
         vm.display.drawLine(newBuf, newnBytes);
       if (vm.videoCapture)
@@ -666,7 +666,7 @@ namespace TVC64 {
     }
     else if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState, nullptr);
+      const uint8_t* newBuf = vm.spriteext->combineLine2dfx(buf, &newnBytes, vm.videoRenderer.vSyncCnt, &vm.irqState, nullptr);
       if (vm.getIsDisplayEnabled())
         vm.display.drawLine(newBuf, newnBytes);
       if (vm.videoCapture)
@@ -694,7 +694,7 @@ namespace TVC64 {
 #ifdef ENABLE_SPRITEEXT
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      vm.spriteext.hsync();
+      vm.spriteext->hsync();
     }
 #endif // ENABLE_SPRITEEXT
   }
@@ -794,32 +794,32 @@ namespace TVC64 {
     case 0x34:
     case 0x36:
       if (vm.spriteExtModel == SPRITEEXT_TVC256)
-         retval = vm.spriteext.io_port_values[addr-0x30];
+         retval = vm.spriteext->io_port_values[addr-0x30];
       break;
     case 0x31:
     case 0x35:
       if (vm.spriteExtModel == SPRITEEXT_TVC256) {
-         if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_DX)
+         if (vm.spriteext->io_port_values[addr-0x31] == REG_USB_MOUSE_DX)
          {
-           vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext.mouse_speed * -1.0f);
+           vm.mouseDeltaX = int(vm.mouseDeltaX * vm.spriteext->mouse_speed * -1.0f);
            retval = static_cast < uint8_t > (vm.mouseDeltaX);
            vm.mouseDeltaX = 0;
-           vm.spriteext.readNamedPort(addr == 0x35);
+           vm.spriteext->readNamedPort(addr == 0x35);
          }
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_DY)
+         else if (vm.spriteext->io_port_values[addr-0x31] == REG_USB_MOUSE_DY)
          {
-           vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext.mouse_speed * -1.0f);
+           vm.mouseDeltaY = int(vm.mouseDeltaY * vm.spriteext->mouse_speed * -1.0f);
            retval = static_cast < uint8_t > (vm.mouseDeltaY);
            vm.mouseDeltaY = 0;
-           vm.spriteext.readNamedPort(addr == 0x35);
+           vm.spriteext->readNamedPort(addr == 0x35);
          }
-         else if (vm.spriteext.io_port_values[addr-0x31] == REG_USB_MOUSE_BUTTONS)
+         else if (vm.spriteext->io_port_values[addr-0x31] == REG_USB_MOUSE_BUTTONS)
          {
            retval = vm.mouseButtonState;
-           vm.spriteext.readNamedPort(addr == 0x35);
+           vm.spriteext->readNamedPort(addr == 0x35);
          }
          else
-           retval = vm.spriteext.readNamedPort(addr == 0x35);
+           retval = vm.spriteext->readNamedPort(addr == 0x35);
       }
       break;
 #endif
@@ -915,7 +915,7 @@ namespace TVC64 {
     case 0xF8:
     case 0xF9:
       if (vm.spriteExtModel == SPRITEEXT_TWODFX)
-         retval = vm.spriteext.read2dfxPort(addr);
+         retval = vm.spriteext->read2dfxPort(addr);
       break;
 #endif // ENABLE_SPRITEEXT
     }
@@ -932,11 +932,12 @@ namespace TVC64 {
       vm.videoRenderer.setColor(4, value);
 #ifdef ENABLE_SPRITEEXT
       // IGRB double-bits -> IRGB 4-bit
-      vm.spriteext.writeNamedPortDebug(REG_SCREEN_BORDER_COLOR,  
-        ((value & 0x80)>>4) |
-        ((value & 0x20)>>4) |
-        ((value & 0x08)>>1) |
-        ((value & 0x02)>>1));
+      if (vm.spriteExtModel == SPRITEEXT_TVC256)
+        vm.spriteext->writeNamedPortDebug(REG_SCREEN_BORDER_COLOR,
+          ((value & 0x80)>>4) |
+          ((value & 0x20)>>4) |
+          ((value & 0x08)>>1) |
+          ((value & 0x02)>>1));
 #endif
       break;
     case 0x01:                          // printer data output (unimplemented)
@@ -1046,76 +1047,76 @@ namespace TVC64 {
     case 0x36:
       // Register select or register increment change: just record the write
       if (vm.spriteExtModel == SPRITEEXT_TVC256)
-        vm.spriteext.io_port_values[addr-0x30] = value;
+        vm.spriteext->io_port_values[addr-0x30] = value;
       break;
     case 0x31:
     case 0x35:
       if (vm.spriteExtModel == SPRITEEXT_TVC256) {
-      if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P2)
-        vm.memory.spriteext_p2_reg = value;
-      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_P3)
-        vm.memory.spriteext_p3_reg = value;
-      // TODO: delayed paging in case of slow ram
-      // Limitation: only 2MB available for now, so high reg is ignored
-      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
-      {
-        vm.memory.psram_p2_reg = value & 0x7F;
-        vm.memory.spriteext_p2_reg = 0x10;
-      }
-      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
-      {
-        vm.memory.psram_p3_reg = value & 0x7F;
-        vm.memory.spriteext_p3_reg = 0x11;
-      }
-      else if (vm.spriteext.io_port_values[addr-0x31] == REG_MEMORY_ROM_PAGE)
-      {
-        // Carry out "ROM paging": swap the appropriate 6(!)kB part
-        // to the start of the IOMEM area.
-        // Note that the prepared ROM is actually 6+2+6+2=16 kB large so that
-        // the 2 kB RAM area at the end of the IOMEM range is not overwritten.
-        uint8_t subPage = value & 7;
-        uint8_t* areaLow;
-        uint8_t tmp;
-        if (areaLow = (uint8_t*)vm.memory.getSegmentPtr(0x05)) {
-          uint8_t* areaHigh = areaLow + 0x2000;
-          if (subPage == 1 && areaLow[0] == 'M' && areaLow[1] == 'O' &&
-                              areaLow[2] == 'P' && areaLow[3] == 'S') {
-            // Low-performance naive swap routine. Still, it does not matter much
-            // as 2nd page is only used for "help" output.
-            for(int i=0;i<0x1800;i++)
-            {
-              tmp = areaLow[i];
-              areaLow[i] = areaHigh[i];
-              areaHigh[i] = tmp;
+        if (vm.spriteext->io_port_values[addr-0x31] == REG_MEMORY_P2)
+          vm.memory.spriteext_p2_reg = value;
+        else if (vm.spriteext->io_port_values[addr-0x31] == REG_MEMORY_P3)
+          vm.memory.spriteext_p3_reg = value;
+        // TODO: delayed paging in case of slow ram
+        // Limitation: only 2MB available for now, so high reg is ignored
+        else if (vm.spriteext->io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P2_LOW)
+        {
+          vm.memory.psram_p2_reg = value & 0x7F;
+          vm.memory.spriteext_p2_reg = 0x10;
+        }
+        else if (vm.spriteext->io_port_values[addr-0x31] == REG_MEMORY_MAP_8M_P3_LOW)
+        {
+          vm.memory.psram_p3_reg = value & 0x7F;
+          vm.memory.spriteext_p3_reg = 0x11;
+        }
+        else if (vm.spriteext->io_port_values[addr-0x31] == REG_MEMORY_ROM_PAGE)
+        {
+          // Carry out "ROM paging": swap the appropriate 6(!)kB part
+          // to the start of the IOMEM area.
+          // Note that the prepared ROM is actually 6+2+6+2=16 kB large so that
+          // the 2 kB RAM area at the end of the IOMEM range is not overwritten.
+          uint8_t subPage = value & 7;
+          uint8_t* areaLow;
+          uint8_t tmp;
+          if (areaLow = (uint8_t*)vm.memory.getSegmentPtr(0x05)) {
+            uint8_t* areaHigh = areaLow + 0x2000;
+            if (subPage == 1 && areaLow[0] == 'M' && areaLow[1] == 'O' &&
+                                areaLow[2] == 'P' && areaLow[3] == 'S') {
+              // Low-performance naive swap routine. Still, it does not matter much
+              // as 2nd page is only used for "help" output.
+              for(int i=0;i<0x1800;i++)
+              {
+                tmp = areaLow[i];
+                areaLow[i] = areaHigh[i];
+                areaHigh[i] = tmp;
+              }
             }
-          }
-          else if (subPage == 0 && areaHigh[0] == 'M' && areaHigh[1] == 'O' &&
-                                   areaHigh[2] == 'P' && areaHigh[3] == 'S') {
-            for(int i=0;i<0x1800;i++)
-            {
-              tmp = areaLow[i];
-              areaLow[i] = areaHigh[i];
-              areaHigh[i] = tmp;
+            else if (subPage == 0 && areaHigh[0] == 'M' && areaHigh[1] == 'O' &&
+                                     areaHigh[2] == 'P' && areaHigh[3] == 'S') {
+              for(int i=0;i<0x1800;i++)
+              {
+                tmp = areaLow[i];
+                areaLow[i] = areaHigh[i];
+                areaHigh[i] = tmp;
+              }
             }
           }
         }
-      }
 #ifdef ENABLE_RESID
-         else if (vm.spriteext.io_port_values[addr-0x31] >= REG_SID_BASE &&
-                  vm.spriteext.io_port_values[addr-0x31] <= REG_SID_LAST)
-         {
-          if (vm.sidModel)
-          {
-            if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
-              vm.setCallback(&TVC64VM::sidCallback, &vm, true);
-              vm.sidEnabled = true;
+           else if (vm.spriteext->io_port_values[addr-0x31] >= REG_SID_BASE &&
+                    vm.spriteext->io_port_values[addr-0x31] <= REG_SID_LAST)
+           {
+            if (vm.sidModel)
+            {
+              if (EP128EMU_UNLIKELY(!vm.sidEnabled)) {
+                vm.setCallback(&TVC64VM::sidCallback, &vm, true);
+                vm.sidEnabled = true;
+              }
+              vm.sid->write(vm.spriteext->io_port_values[addr-0x31] - REG_SID_BASE, value);
             }
-            vm.sid->write(vm.spriteext.io_port_values[addr-0x31] - REG_SID_BASE, value);
-          }
-         }
+           }
 #endif
          vm.memory.setPaging(vm.memory.getPaging());
-         vm.spriteext.writeNamedPort(addr == 0x35,value);
+         vm.spriteext->writeNamedPort(addr == 0x35,value);
       }
       break;
 #endif
@@ -1210,7 +1211,7 @@ namespace TVC64 {
     case 0xF8:
     case 0xF9:
       if (vm.spriteExtModel == SPRITEEXT_TWODFX)
-         vm.spriteext.write2dfxPort(addr, value);
+         vm.spriteext->write2dfxPort(addr, value);
       break;
 #endif // ENABLE_SPRITEEXT
 
@@ -1275,7 +1276,7 @@ namespace TVC64 {
     case 0x35:
     case 0x36:
       if (vm.spriteExtModel == SPRITEEXT_TVC256)
-         retval = vm.spriteext.io_port_values[addr-0x30];
+         retval = vm.spriteext->io_port_values[addr-0x30];
       break;
 #endif
 
@@ -1297,9 +1298,9 @@ namespace TVC64 {
       break;
     }
 #ifdef ENABLE_SPRITEEXT
-    if (vm.spriteExtEnabled) {
+    if (vm.spriteExtModel == SPRITEEXT_TVC256) {
        if (addr > 0xFF)
-         retval = vm.spriteext.readNamedPortDebug((uint8_t)(addr & 0xFF));
+         retval = vm.spriteext->readNamedPortDebug((uint8_t)(addr & 0xFF));
     }
 #endif // ENABLE_SPRITEEXT
     return retval;
@@ -1601,7 +1602,7 @@ namespace TVC64 {
       tapeSamplesRemaining(-1L),
       crtcFrequency(1562500)
 #ifdef ENABLE_SPRITEEXT
-      , spriteext(true)
+      , spriteext((Ep128::SpriteExt *) 0)
 #endif // ENABLE_SPRITEEXT
 #ifdef ENABLE_RESID
       , sid((Ep128::SID *) 0),
@@ -1750,9 +1751,12 @@ namespace TVC64 {
     }
 #endif
 #ifdef ENABLE_SPRITEEXT
-     spriteext.reset(int(isColdReset));
-     spriteext.setMemRef(&memory);
-     spriteext.setVmRef(this);
+     if (spriteext)
+     {
+       spriteext->setMemRef(&memory);
+       spriteext->setVmRef(this);
+       spriteext->reset(int(isColdReset));
+     }
 #endif
   }
 
@@ -2111,9 +2115,14 @@ namespace TVC64 {
     } else {
         spriteExtEnabled = true;
         spriteExtModel = (uint8_t) model;
-        spriteext.reset(2);
-        memory.spriteExtModel = spriteExtModel;
+        if (spriteext)
+          delete(spriteext);
+        spriteext = new Ep128::SpriteExt(true, model);
+        spriteext->reset(2);
     }
+    memory.spriteExtModel = spriteExtModel;
+    memory.setRAMSize(256);
+    this->reset(true);
   }
 #endif
 

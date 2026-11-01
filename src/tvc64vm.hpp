@@ -196,7 +196,7 @@ namespace TVC64 {
     Ep128::SDExt  sdext;
 #endif
 #ifdef ENABLE_SPRITEEXT
-    Ep128::SpriteExt  spriteext;
+    Ep128::SpriteExt  *spriteext;
     bool      spriteExtEnabled;
     uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
 #endif

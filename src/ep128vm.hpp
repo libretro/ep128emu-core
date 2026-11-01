@@ -245,7 +245,7 @@ namespace Ep128 {
     uint8_t   midiBuffer[256];
 #endif
 #ifdef ENABLE_SPRITEEXT
-    SpriteExt spriteext;
+    SpriteExt *spriteext;
     bool      spriteExtEnabled;
     uint8_t   spriteExtModel;           // 0: disabled, 1: TVC256++, 2: 2DFX
 #endif

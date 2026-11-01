@@ -320,26 +320,43 @@ namespace TVC64 {
 
   void Memory::setRAMSize(size_t n)
   {
-    totalRAMSegments = 5;
-    if (n < 64)
-      totalRAMSegments = 3;
-    else if (n >= 104)
-      totalRAMSegments = 8;
+    if (n != 256)
+    {
+      totalRAMSegments = 5;
+      if (n < 64)
+        totalRAMSegments = 3;
+      else if (n >= 104)
+        totalRAMSegments = 8;
+    }
     for (uint8_t i = 0xF8 + (totalRAMSegments - 1); i < 0xFC; i++)
       deleteSegment(i);
     for (uint8_t i = 0xF8; i < (0xF8 + (totalRAMSegments - 1)) && i < 0xFC; i++)
       allocateSegment(i, false);
 
 #ifdef ENABLE_SPRITEEXT
-    // Fixed memory configuration for TVC256++, reused for 2dfx : 
+    // Fixed memory configuration for TVC256++:
     //    256 kB fast RAM (0xE8..0xF7)
     //    2 MB PSRAM      (0x68..0xE7) -- should be 8 MB, maybe later if it is really required
-    for (uint8_t i = TVC256_SLOWRAM_START_SEGMENT; i < 0xF8; i++)
+    // Allocate fast ram always (due to ROM init reasons)
+    for (uint8_t i = TVC256_FASTRAM_START_SEGMENT; i < 0xF8; i++)
       allocateSegment(i, false);
+
+    if (spriteExtModel == SPRITEEXT_TVC256)
+    {
+      for (uint8_t i = TVC256_SLOWRAM_START_SEGMENT; i < TVC256_FASTRAM_START_SEGMENT; i++)
+        allocateSegment(i, false);
+    }
+    else
+    {
+      for (uint8_t i = TVC256_SLOWRAM_START_SEGMENT; i < TVC256_FASTRAM_START_SEGMENT; i++)
+        deleteSegment(i);
+    }
 #endif
 
     if (totalRAMSegments < 8)
       setPaging(currentPaging | 0x3F00);
+    else
+      setPaging(currentPaging);
   }
 
   void Memory::loadROMSegment(uint8_t segment,
@@ -378,10 +395,11 @@ namespace TVC64 {
                   &(segmentTable[segment][0]), dataSize);
     }
 
+
 #ifdef ENABLE_SPRITEEXT
     // Initialize fastRAM extension contents (first 64 kB starting from 0xE8)
     // with "ROM" segments 0x10-0x13
-    if ((segment >= 0x10 || segment <= 0x13) &&
+    if ((segment >= 0x10 && segment <= 0x13) &&
         dataSize > 0 && dataSize <= 16384) {
       std::memcpy(&(segmentTable[TVC256_FASTRAM_START_SEGMENT+segment-0x10][0]),
                   &(segmentTable[segment][0]), dataSize);

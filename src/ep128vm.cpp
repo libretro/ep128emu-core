@@ -668,7 +668,10 @@ namespace Ep128 {
     size_t newnBytes = nBytes;
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      const uint8_t* newBuf = vm.spriteext.combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, nullptr, vm.nick.getCurrentPalette());
+      uint8_t irqState = 0;
+      const uint8_t* newBuf = vm.spriteext->combineLine2dfx(buf, &newnBytes, vm.nick.vsyncFlag ? 1 : 0, &irqState, vm.nick.getCurrentPalette());
+      if (irqState)
+        vm.dave.setInt1State(int(true));
       if (vm.getIsDisplayEnabled())
         vm.display.drawLine(newBuf, newnBytes);
       if (vm.videoCapture)
@@ -688,7 +691,7 @@ namespace Ep128 {
 #ifdef ENABLE_SPRITEEXT
     if (vm.spriteExtModel == SPRITEEXT_TWODFX)
     {
-      vm.spriteext.hsync();
+      vm.spriteext->hsync();
     }
 #endif // ENABLE_SPRITEEXT
   }
@@ -1114,7 +1117,7 @@ namespace Ep128 {
     Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
     uint8_t   value = 0xFF;
     if (!(vm.isRecordingDemo | vm.isPlayingDemo)) {
-      value = vm.spriteext.read2dfxPort(addr);
+      value = vm.spriteext->read2dfxPort(addr);
     }
     return value;
   }
@@ -1124,7 +1127,7 @@ namespace Ep128 {
   {
     Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
     if (!(vm.isRecordingDemo | vm.isPlayingDemo)) {
-      vm.spriteext.write2dfxPort(addr, value);
+      vm.spriteext->write2dfxPort(addr, value);
     }
   }
 
@@ -1132,7 +1135,7 @@ namespace Ep128 {
   {
     Ep128VM&  vm = *(reinterpret_cast<Ep128VM *>(userData));
     uint8_t   value = 0xFF;
-    value = vm.spriteext.read2dfxPort(addr);
+    value = vm.spriteext->read2dfxPort(addr);
     return value;
   }
 #endif
@@ -1674,7 +1677,7 @@ namespace Ep128 {
       midiSavedStatus(0x00)
 #endif
 #ifdef ENABLE_SPRITEEXT
-      , spriteext(false)
+      , spriteext((SpriteExt *) 0)
 #endif
 
   {
@@ -1901,7 +1904,8 @@ namespace Ep128 {
     midiBufferMutex.unlock();
 #endif
 #ifdef ENABLE_SPRITEEXT
-   spriteext.reset(int(isColdReset));
+   if (spriteext)
+     spriteext->reset(int(isColdReset));
 #endif
   }
 
@@ -1943,8 +1947,12 @@ namespace Ep128 {
     } else {
         spriteExtEnabled = true;
         spriteExtModel = (uint8_t) model;
-        spriteext.reset(2);
+        if (spriteext)
+          delete(spriteext);
+        spriteext = new Ep128::SpriteExt(false, model);
+        spriteext->reset(2);
     }
+    this->reset(true);
   }
 #endif
 

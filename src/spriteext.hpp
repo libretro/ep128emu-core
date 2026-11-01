@@ -65,8 +65,8 @@ namespace Ep128 {
    // ----------------
     void updateMouseSpeed(uint8_t binValue);
     void updateAnyGfxEnabled();
-    void updateLineWithGfx(size_t outPos, uint8_t currSlot);
-    void updateLineWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum);
+    void updateSlotWithGfx(size_t outPos, uint8_t currSlot);
+    void updateSlotWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum);
     size_t curLine;
     size_t curLineOrig;
     size_t scrollX;
@@ -81,15 +81,15 @@ namespace Ep128 {
     uint8_t i4ToTVCRGB_coll(uint8_t val, uint8_t transparent_val, uint16_t *collision_mask, size_t collision_bit);
     void executeFunction(uint8_t funcCode, bool useIOMEM);
     void executeMultiFunction(uint8_t funcCount);
-    uint16_t uploadRemaining;
+    int model;
     twodfx_emu *twodfx_emu_instance;
-    void updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t *palette);
+    void updateSlotWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t *palette);
 
    public:
     uint8_t io_port_values[16];
     float mouse_speed;
     DIR *fileIODir;
-    SpriteExt(bool isTVC);
+    SpriteExt(bool isTVC, int model);
     virtual ~SpriteExt();
     void setEnabled(bool isEnabled);
     // for demo recording/playback, calling with isDisabled == false

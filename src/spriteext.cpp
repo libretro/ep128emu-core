@@ -26,6 +26,7 @@
    - State save/load support
    - Improve performance (also sid!)
    - tvcfileio to act as full vt-dos replacement (why?) - DISK id, extra 3 CAS functions
+   - decent change of spriteext model, do not init the unnecessary version (including tvcmem for tvc256++)
 
    TVC256++ gfx:
    - Ext graphics calculation delay from prev line
@@ -47,13 +48,9 @@
    - tvcfileio2 - file access via rst 30h - probably not needed
 
    2DFX TVC:
-   - check reset
    - save state
-   - generate configuration
-   - interrupt
    
    2DFX EP:
-   - interrupt
    - quirk 1: single pixels will not appear
    - quirk 2: after extc, one pixel will be black
 */
@@ -99,7 +96,7 @@ namespace Ep128 {
       0,    0,    0,    0,   0,    0,    0,    0,   0,  0,254,254, 254,254,254,254
 };
 
-  SpriteExt::SpriteExt(bool isTVC)
+  SpriteExt::SpriteExt(bool isTVC, int model)
     : hostMem(nullptr),
       hostVm(nullptr),
       hostVmIsTVC(isTVC),
@@ -113,7 +110,8 @@ namespace Ep128 {
       scrollY(0),
       scrollBorderX(false),
       scrollBorderY(false),
-      uploadRemaining(0)
+      model(model),
+      twodfx_emu_instance(nullptr)
   {
     for (int i = 0; i < 16; i++)
       io_port_values[i] = 0xFF;
@@ -146,8 +144,10 @@ namespace Ep128 {
     // TODO: these are probably not needed
     sd_ram_ext.resize(0x00001C00, 0xFF);
     sd_rom_ext.resize(0x00010000, 0xFF);
-    TVC256::init_routines();
-    twodfx_emu_instance = twodfx_emu_create(hostVmIsTVC ? TWODFX_EMU_TVC : TWODFX_EMU_ENTERPRISE);
+    if (model == SPRITEEXT_TVC256)
+      TVC256::init_routines();
+    else if (model == SPRITEEXT_TWODFX)
+      twodfx_emu_instance = twodfx_emu_create(hostVmIsTVC ? TWODFX_EMU_TVC : TWODFX_EMU_ENTERPRISE);
     this->reset(1);
   }
 
@@ -219,23 +219,28 @@ namespace Ep128 {
   {
     if (reset_level >= 2)
       std::memset(&(sd_ram_ext.front()), 0xFF, sd_ram_ext.size());
-    // Reset actions from developer guide
-    namedPortValues[REG_SCREEN_MAXY] = REG_SCREEN_MAXY_DEFAULT;
-    namedPortValues[REG_SCREEN_VIDEOMODE] = 0;
-    namedPortValues[REG_SCREEN_SCROLL_X]  = 0;
-    namedPortValues[REG_SCREEN_SCROLL_Y]  = 0;
-    namedPortValues[REG_SID_BASE + 24]    = 0;
-    for (int i = REG_SPRITE_ENABLE; i <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX; i++)
-      namedPortValues[i] = 0x00;
 
-    TVC256::emuMem = hostMem;
-    TVC256::emuVm = hostVm;
-    TVC256::currDir.len = 1;
-    TVC256::currDir.str[0]   = '/';
-    TVC256::currDir.str[1]   = 0;
-    TVC256::currDir.str[254] = 0;
+    if (model == SPRITEEXT_TVC256)
+    {
+      // Reset actions from developer guide
+      namedPortValues[REG_SCREEN_MAXY] = REG_SCREEN_MAXY_DEFAULT;
+      namedPortValues[REG_SCREEN_VIDEOMODE] = 0;
+      namedPortValues[REG_SCREEN_SCROLL_X]  = 0;
+      namedPortValues[REG_SCREEN_SCROLL_Y]  = 0;
+      namedPortValues[REG_SID_BASE + 24]    = 0;
+      for (int i = REG_SPRITE_ENABLE; i <= REG_SPRITE_ENABLE + SPRITEEXT_SPRITE_MAX; i++)
+        namedPortValues[i] = 0x00;
 
-    if (twodfx_emu_instance)
+      TVC256::init_routines();
+      TVC256::emuMem = hostMem;
+      TVC256::emuVm = hostVm;
+      TVC256::currDir.len = 1;
+      TVC256::currDir.str[0]   = '/';
+      TVC256::currDir.str[1]   = 0;
+      TVC256::currDir.str[254] = 0;
+    }
+
+    if (model == SPRITEEXT_TWODFX && twodfx_emu_instance)
       twodfx_emu_power_cycle(twodfx_emu_instance);
   }
 
@@ -678,7 +683,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   // Sprite handling. Note that "slot" consists of 16 pixels, but in the full PAL resolution
   // to process transparency correctly also in case of graphics 2,
   // while sprites only support vertical 256 pixels, so each result pixel is doubled
-  void SpriteExt::updateLineWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum)
+  void SpriteExt::updateSlotWithSprite(uint8_t *buf, uint8_t currSlot, size_t spriteNum)
   {
      for (size_t j=0; j<8; j++)
      {
@@ -726,7 +731,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   }
 
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
-  void SpriteExt::updateLineWithGfx(size_t outPos, uint8_t currSlot)
+  void SpriteExt::updateSlotWithGfx(size_t outPos, uint8_t currSlot)
   {
      // can be maybe simplified later as transparency can be handled once
      uint8_t * buf = &overlayBuffer[0];
@@ -755,7 +760,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && !namedPortValues[REG_SPRITE_FOREGROUND+i])
         {
-           updateLineWithSprite(buf, currSlot, i);
+           updateSlotWithSprite(buf, currSlot, i);
         }
         else
         {
@@ -873,7 +878,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
      {
         if (namedPortValues[REG_SPRITE_ENABLE+i] && namedPortValues[REG_SPRITE_FOREGROUND+i])
         {
-           updateLineWithSprite(buf, currSlot, i);
+           updateSlotWithSprite(buf, currSlot, i);
         }
      }
 
@@ -1050,7 +1055,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[4];
             buf_[outPos + 16] = bufp[4];
             
-            updateLineWithGfx(outPos+1, currSlotPlus - 1);
+            updateSlotWithGfx(outPos+1, currSlotPlus - 1);
             bufp    +=  5;
             outPos  += 17;
             *nBytes += 12;
@@ -1086,7 +1091,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos+15] = (b & 0x02) ? c1 : c0;
             buf_[outPos+16] = (b & 0x01) ? c1 : c0;
 
-            updateLineWithGfx(outPos+1, currSlotPlus - 1);
+            updateSlotWithGfx(outPos+1, currSlotPlus - 1);
             bufp    +=  7;
             outPos  += 17;
             *nBytes += 10;
@@ -1116,7 +1121,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[8];
             buf_[outPos + 16] = bufp[8];
             
-            updateLineWithGfx(outPos+1, currSlotPlus - 1);
+            updateSlotWithGfx(outPos+1, currSlotPlus - 1);
             bufp    +=  9;
             outPos  += 17;
             *nBytes +=  8;
@@ -1171,7 +1176,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
   }
 
   // Handle one slot (16 PAL "pixels"), in-place overwrite pixels with overlay content where needed.
-  void SpriteExt::updateLineWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t* palette)
+  void SpriteExt::updateSlotWithGfx2dfx(size_t outPos, uint8_t currSlot, uint8_t *bufOvl, uint8_t *bufExtc, bool hiRes, const uint8_t* palette)
   {
      uint8_t *buf = &buf_[outPos];
      if (hostVmIsTVC)
@@ -1235,6 +1240,10 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
         !(twodfx_emu_instance))
       return buf;
 
+    // Set interrupt if needed. IRQ arrives from TVC slot 2, same as with TVC256++
+    if (irqState && twodfx_emu_irq_asserted(twodfx_emu_instance))
+      *irqState |= 1<<3;
+
     // Fixed offsets, slightly different for TVC and EP
    if (curLine >= lineOffs && curLine <= lineMax)
      twodfx_emu_overlay_line(twodfx_emu_instance,0,curLine-lineOffs,&colorBuf[colorBufOffs], &extcBuf[colorBufOffs], 768);
@@ -1243,7 +1252,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
     do {
       switch (bufp[0]) {
       // Several modes do not occur in content area, those can be just copied
-      // Not calling updateLineWithGfx2dfx also ensures those areas stay intact, just as with hardware
+      // Not calling updateSlotWithGfx2dfx also ensures those areas stay intact, just as with hardware
       case 0x00:                        // 16 pixel blank coded on 1 byte
         do {
             buf_[outPos] = 0x00;
@@ -1287,7 +1296,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 14] = bufp[2];
             buf_[outPos + 15] = bufp[2];
             buf_[outPos + 16] = bufp[2];
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
+            updateSlotWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
 
             bufp = bufp + 3;
             outPos  += 17;
@@ -1311,7 +1320,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos+11] = buf_[outPos+12] = (b & 0x04) ? c1 : c0;
             buf_[outPos+13] = buf_[outPos+14] = (b & 0x02) ? c1 : c0;
             buf_[outPos+15] = buf_[outPos+16] = (b & 0x01) ? c1 : c0;
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
+            updateSlotWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
             bufp    +=  4;
             outPos  += 17;
             *nBytes += 13;
@@ -1341,7 +1350,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[4];
             buf_[outPos + 16] = bufp[4];
             
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
+            updateSlotWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
             bufp    +=  5;
             outPos  += 17;
             *nBytes += 12;
@@ -1377,7 +1386,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos+15] = (b & 0x02) ? c1 : c0;
             buf_[outPos+16] = (b & 0x01) ? c1 : c0;
 
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], true, nickPalette);
+            updateSlotWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], true, nickPalette);
             bufp    +=  7;
             outPos  += 17;
             *nBytes += 10;
@@ -1407,7 +1416,7 @@ A HSYNC után az 21, aztán minden látható sorban növekszik egyel. Az első s
             buf_[outPos + 15] = bufp[8];
             buf_[outPos + 16] = bufp[8];
             
-            updateLineWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
+            updateSlotWithGfx2dfx(outPos+1, currSlotPlus - 1, &colorBuf[(currSlotPlus-1)*16], &extcBuf[(currSlotPlus-1)*16], false, nickPalette);
             bufp    +=  9;
             outPos  += 17;
             *nBytes +=  8;
